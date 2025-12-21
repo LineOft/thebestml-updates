@@ -432,12 +432,14 @@
     function applyUpdate() {
         showToast('🔄 Güncelleme uygulanıyor...');
         
-        // Cache'i temizle
-        localStorage.removeItem('thebestml_app_cache');
+        // TÜM cache'leri temizle - doğru key isimleri
+        localStorage.removeItem('thebestml_app_html');
         localStorage.removeItem('thebestml_app_version');
+        localStorage.removeItem('thebestml_config');
+        localStorage.removeItem('thebestml_app_cache');
         localStorage.removeItem('thebestml_config_cache');
         
-        // Tüm cache'leri temizlemeye çalış
+        // Service Worker cache'lerini temizle
         if ('caches' in window) {
             caches.keys().then(names => {
                 names.forEach(name => caches.delete(name));
