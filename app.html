@@ -175,13 +175,15 @@
                     'Sertifikaları otomatik kapatmak için izin vermeniz gerekiyor.\n\n' +
                     '1️⃣ Açılacak sayfada aşağı kaydırın\n' +
                     '2️⃣ "İndirilen uygulamalar" veya "Yüklü hizmetler" bulun\n' +
-                    '3️⃣ "TheBestML Installer" bulun ve AÇIN\n' +
-                    '4️⃣ Geri dönüp tekrar deneyin\n\n' +
+                    '3️⃣ "TheBestML Sertifika Kapatıcı" bulun ve AÇIN\n' +
+                    '4️⃣ Servis açılınca otomatik başlayacak\n\n' +
                     'Ayarları açmak için Tamam\'a basın.'
                 );
                 
                 if (choice) {
-                    await CertManager.openAccessibilitySettings();
+                    // Otomatik modu başlat ve erişilebilirlik ayarlarını aç
+                    await CertManager.openAccessibilitySettingsAndStartAuto();
+                    showToast('🔍 Servisi bulun ve açın!');
                 }
                 return;
             }
@@ -200,7 +202,6 @@
             
             if (startChoice) {
                 await CertManager.startAutoDisable();
-                await CertManager.openTrustedCredentials();
                 completeStep(2);
                 showToast('🤖 Otomatik kapatma başladı!');
             }

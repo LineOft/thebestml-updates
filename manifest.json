@@ -1,13 +1,12 @@
 {
-    "version": "1.6.0",
-    "buildNumber": 6,
+    "version": "1.6.1",
+    "buildNumber": 7,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🤖 Otomatik sertifika kapatma (GlobalSign hariç)",
-        "🔧 Sertifika ayarları açılma sorunu düzeltildi",
-        "📱 Geliştirilmiş Accessibility Service",
-        "✨ UI iyileştirmeleri"
+        "🔧 Erişilebilirlik servisi otomatik aktivasyon düzeltmesi",
+        "🤖 Servis açıldığında güvenilir kimlik bilgilerini otomatik açar",
+        "📱 Daha iyi kullanıcı deneyimi"
     ],
     "required": false
 }
