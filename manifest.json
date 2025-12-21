@@ -1,0 +1,12 @@
+{
+    "version": "1.3.0",
+    "buildNumber": 3,
+    "minBuildNumber": 1,
+    "releaseDate": "2025-12-22",
+    "changelog": [
+        "OTA güncelleme sistemi eklendi",
+        "Sertifika ayarları rehberi geliştirildi",
+        "Performans iyileştirmeleri"
+    ],
+    "required": false
+}
