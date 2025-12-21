@@ -1,12 +1,12 @@
 {
-    "version": "1.7.0",
-    "buildNumber": 16,
+    "version": "1.7.1",
+    "buildNumber": 17,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Super hizli OTA guncelleme",
-        "Paralel indirme ile 3x hiz",
-        "Cache-Control headers eklendi"
+        "Baglanti hatasi duzeltildi",
+        "5 saniye timeout eklendi",
+        "Daha iyi hata yonetimi"
     ],
     "required": false
 }
