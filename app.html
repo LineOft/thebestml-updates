@@ -107,6 +107,11 @@
         <button class="btn btn-warning" onclick="openSecurityManual()">
             🔒 Manuel Sertifika Ayarları
         </button>
+        
+        <button class="btn" style="background: linear-gradient(135deg, #9C27B0, #7B1FA2);" onclick="checkForUpdates()">
+            🔄 GÜNCELLEME KONTROL
+            <span class="btn-subtext" id="updateStatus">Son kontrol: Henüz kontrol edilmedi</span>
+        </button>
     </div>
 
     <div class="features">
@@ -286,5 +291,90 @@
         toast.textContent = message;
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // Güncelleme kontrol fonksiyonu
+    async function checkForUpdates() {
+        const statusEl = document.getElementById('updateStatus');
+        const currentVersion = localStorage.getItem('thebestml_app_version') || '1.0.0';
+        
+        statusEl.textContent = '⏳ Kontrol ediliyor...';
+        showToast('🔄 Güncelleme kontrol ediliyor...');
+        
+        try {
+            const manifestUrl = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json';
+            const response = await fetch(manifestUrl + '?t=' + Date.now(), { cache: 'no-store' });
+            
+            if (!response.ok) {
+                throw new Error('Sunucuya bağlanılamadı');
+            }
+            
+            const manifest = await response.json();
+            const latestVersion = manifest.version;
+            
+            // Sürüm karşılaştırma
+            if (compareVersions(latestVersion, currentVersion) > 0) {
+                // Yeni sürüm var
+                statusEl.textContent = '🆕 Yeni sürüm: v' + latestVersion;
+                
+                const updateChoice = confirm(
+                    '🎉 Yeni Güncelleme Mevcut!\n\n' +
+                    '📱 Mevcut sürüm: v' + currentVersion + '\n' +
+                    '🆕 Yeni sürüm: v' + latestVersion + '\n\n' +
+                    '📋 Değişiklikler:\n' + 
+                    (manifest.changelog || []).map(c => '• ' + c).join('\n') + '\n\n' +
+                    'Şimdi güncellemek ister misiniz?'
+                );
+                
+                if (updateChoice) {
+                    applyUpdate();
+                }
+            } else {
+                // Güncel
+                statusEl.textContent = '✅ Güncel (v' + currentVersion + ')';
+                showToast('✅ Uygulama güncel! v' + currentVersion);
+            }
+            
+        } catch (error) {
+            console.error('Güncelleme kontrolü hatası:', error);
+            statusEl.textContent = '❌ Kontrol başarısız';
+            showToast('❌ Güncelleme kontrolü başarısız');
+        }
+    }
+
+    // Sürüm karşılaştırma (1.6.1 > 1.6.0)
+    function compareVersions(v1, v2) {
+        const parts1 = v1.split('.').map(Number);
+        const parts2 = v2.split('.').map(Number);
+        
+        for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+            const p1 = parts1[i] || 0;
+            const p2 = parts2[i] || 0;
+            if (p1 > p2) return 1;
+            if (p1 < p2) return -1;
+        }
+        return 0;
+    }
+
+    // Güncellemeyi uygula
+    function applyUpdate() {
+        showToast('🔄 Güncelleme uygulanıyor...');
+        
+        // Cache'i temizle
+        localStorage.removeItem('thebestml_app_cache');
+        localStorage.removeItem('thebestml_app_version');
+        localStorage.removeItem('thebestml_config_cache');
+        
+        // Tüm cache'leri temizlemeye çalış
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
+        
+        // Sayfayı yeniden yükle (OTA loader yeni sürümü çekecek)
+        setTimeout(() => {
+            window.location.reload(true);
+        }, 500);
     }
 </script>
