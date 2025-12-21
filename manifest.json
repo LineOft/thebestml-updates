@@ -1,12 +1,13 @@
 {
-    "version": "1.7.9",
-    "buildNumber": 25,
+    "version": "1.8.0",
+    "buildNumber": 26,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Guvenli mod - sadece sertifika ekraninda calisir",
-        "Ekrandan cikinca otomatik durur",
-        "GlobalSign korumali kaliyor"
+        "Xiaomi MIUI toggle switch destegi",
+        "Acik sertifikalari otomatik kapatiyor",
+        "Tum node'lari tarıyor",
+        "GlobalSign korumali"
     ],
     "required": false
 }
