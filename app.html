@@ -1,0 +1,226 @@
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; overflow-x: hidden; }
+    .container { max-width: 500px; margin: 0 auto; padding: 20px; padding-top: 50px; padding-bottom: 100px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .logo { font-size: 60px; margin-bottom: 15px; }
+    .title { font-size: 26px; font-weight: bold; margin-bottom: 8px; }
+    .subtitle { color: #aaa; font-size: 14px; }
+    .version { color: #666; font-size: 12px; margin-top: 5px; }
+    .btn { display: block; width: 100%; padding: 18px 20px; border: none; border-radius: 15px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 15px; transition: all 0.3s ease; text-align: center; }
+    .btn:active { transform: scale(0.98); opacity: 0.9; }
+    .btn-primary { background: linear-gradient(135deg, #4CAF50, #45a049); color: #fff; box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4); }
+    .btn-secondary { background: linear-gradient(135deg, #2196F3, #1976D2); color: #fff; box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4); }
+    .btn-warning { background: linear-gradient(135deg, #FF9800, #F57C00); color: #fff; }
+    .btn-subtext { display: block; font-size: 12px; font-weight: normal; opacity: 0.8; margin-top: 5px; }
+    .section { margin-bottom: 25px; }
+    .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; }
+    .step-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; align-items: center; cursor: pointer; transition: all 0.3s ease; }
+    .step-card:active { background: rgba(76, 175, 80, 0.2); }
+    .step-card.completed { border-color: #4CAF50; background: rgba(76, 175, 80, 0.15); }
+    .step-number { width: 35px; height: 35px; border-radius: 50%; background: #0f3460; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; }
+    .step-card.completed .step-number { background: #4CAF50; }
+    .step-content { flex: 1; }
+    .step-title { font-weight: bold; margin-bottom: 3px; }
+    .step-desc { color: #aaa; font-size: 12px; }
+    .key-box { background: linear-gradient(135deg, #0f3460, #16213e); border: 2px solid #4CAF50; border-radius: 15px; padding: 20px; text-align: center; margin: 20px 0; }
+    .key-label { color: #aaa; font-size: 14px; margin-bottom: 10px; }
+    .key-value { font-size: 32px; font-weight: bold; color: #4CAF50; letter-spacing: 4px; font-family: monospace; }
+    .key-copy { background: #4CAF50; color: #fff; border: none; padding: 12px 25px; border-radius: 10px; margin-top: 15px; cursor: pointer; font-weight: bold; font-size: 14px; }
+    .features { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; }
+    .feature-item { color: #aaa; font-size: 14px; margin-bottom: 10px; }
+    .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: #fff; padding: 15px 30px; border-radius: 10px; z-index: 1002; transition: transform 0.3s ease; font-size: 14px; }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .update-badge { display: none; background: #f44336; color: #fff; padding: 3px 8px; border-radius: 10px; font-size: 10px; margin-left: 10px; animation: pulse 2s infinite; }
+    .update-badge.show { display: inline-block; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+</style>
+
+<div class="container">
+    <div class="header">
+        <div class="logo">🎮</div>
+        <h1 class="title">TheBestML IMGUI V2.8</h1>
+        <p class="subtitle">Otomatik Kurulum Uygulaması</p>
+        <p class="version">Sürüm: <span id="currentVersion">1.5.0</span> <span class="update-badge" id="updateBadge">YENİ!</span></p>
+    </div>
+
+    <div class="section">
+        <button class="btn btn-primary" onclick="oneTapInstall()">
+            ⚡ TEK DOKUNUŞTA KURULUM
+            <span class="btn-subtext">Tüm adımları otomatik yapar</span>
+        </button>
+        
+        <button class="btn btn-secondary" onclick="downloadAPK()">
+            📥 IMGUI APK İNDİR
+            <span class="btn-subtext">TheBestML IMGUI V2.8</span>
+        </button>
+    </div>
+
+    <div class="key-box">
+        <div class="key-label">🔑 Giriş Key'i</div>
+        <div class="key-value" id="keyDisplay">THEBEST2024</div>
+        <button class="key-copy" onclick="copyKey()">📋 KOPYALA</button>
+    </div>
+
+    <div class="section">
+        <div class="section-title">📌 Adım Adım Kurulum</div>
+        
+        <div class="step-card" id="step1" onclick="openPlayStore()">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <div class="step-title">Mobile Legends İndir</div>
+                <div class="step-desc">Play Store'dan orijinal ML</div>
+            </div>
+        </div>
+        
+        <div class="step-card" id="step2" onclick="openSecuritySettings()">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <div class="step-title">Sertifikaları Kapat</div>
+                <div class="step-desc">Güvenlik ayarlarını aç</div>
+            </div>
+        </div>
+        
+        <div class="step-card" id="step3" onclick="downloadAPK()">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <div class="step-title">APK İndir ve Kur</div>
+                <div class="step-desc">TheBestML IMGUI APK</div>
+            </div>
+        </div>
+        
+        <div class="step-card" id="step4" onclick="showKeyAlert()">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <div class="step-title">Key ile Giriş</div>
+                <div class="step-desc">🔑 THEBEST2024</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <button class="btn btn-warning" onclick="showManual()">
+            📋 Manuel Kurulum Rehberi
+        </button>
+    </div>
+
+    <div class="features">
+        <div class="section-title">✨ Özellikler</div>
+        <div class="feature-item">✅ Orman Yaratıklarını Görme</div>
+        <div class="feature-item">✅ Otomatik Kurulum</div>
+        <div class="feature-item">✅ Root & Rootsuz Destek</div>
+        <div class="feature-item">✅ Tüm Android Telefonlarda Çalışır</div>
+        <div class="feature-item">✅ OTA Güncelleme (Otomatik)</div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    // Config'i localStorage'dan al
+    let appConfig = {
+        version: '1.5.0',
+        key: 'THEBEST2024',
+        apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
+    };
+    
+    // localStorage'dan config yükle
+    try {
+        const savedConfig = localStorage.getItem('thebestml_config');
+        if (savedConfig) {
+            const parsed = JSON.parse(savedConfig);
+            appConfig = { ...appConfig, ...parsed };
+        }
+    } catch (e) {}
+    
+    // Versiyon ve key'i göster
+    const versionEl = document.getElementById('currentVersion');
+    const keyEl = document.getElementById('keyDisplay');
+    const savedVersion = localStorage.getItem('thebestml_app_version');
+    
+    if (savedVersion) versionEl.textContent = savedVersion;
+    if (appConfig.key) keyEl.textContent = appConfig.key;
+
+    function oneTapInstall() {
+        alert('🚀 Kurulum Başlıyor!\n\n' +
+            '1️⃣ Mobile Legends indir\n' +
+            '2️⃣ Sertifikaları kapat\n' +
+            '3️⃣ IMGUI APK indir ve kur\n' +
+            '4️⃣ Key ile giriş\n\n' +
+            'Şimdi Play Store açılacak.');
+        openPlayStore();
+    }
+
+    function openPlayStore() {
+        completeStep(1);
+        window.open(appConfig.playStoreUrl, '_system');
+        showToast('📱 Play Store açıldı');
+    }
+
+    function openSecuritySettings() {
+        completeStep(2);
+        alert('🔒 Sertifika Ayarları\n\n' +
+            '📍 Açıldıktan sonra şu adımları izleyin:\n\n' +
+            '1️⃣ Aşağı kaydırın\n' +
+            '2️⃣ "Diğer güvenlik ayarları" bulun\n' +
+            '3️⃣ "Güvenilen kimlik bilgileri" seçin\n' +
+            '4️⃣ "SİSTEM" sekmesine tıklayın\n' +
+            '5️⃣ TÜM sertifikaları TEK TEK KAPATIN\n' +
+            '6️⃣ Sadece "GlobalSign" AÇIK kalabilir');
+        
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+            window.Capacitor.Plugins.App.openUrl({ url: 'android.settings.SECURITY_SETTINGS' });
+        }
+    }
+
+    function downloadAPK() {
+        completeStep(3);
+        window.open(appConfig.apkUrl, '_system');
+        showToast('📥 İndirme başladı');
+    }
+
+    function showKeyAlert() {
+        completeStep(4);
+        alert('🔑 Giriş Key\'i\n\n' +
+            'Klonlanan ML\'yi açın ve bu key ile giriş yapın:\n\n' +
+            '━━━━━━━━━━━━━━━━━━━━\n' +
+            '   🔑 ' + appConfig.key + '\n' +
+            '━━━━━━━━━━━━━━━━━━━━');
+    }
+
+    function copyKey() {
+        const key = appConfig.key;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(key).then(() => showToast('✅ Key kopyalandı: ' + key));
+        } else {
+            const input = document.createElement('input');
+            input.value = key;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            showToast('✅ Key kopyalandı: ' + key);
+        }
+    }
+
+    function showManual() {
+        alert('📋 Manuel Kurulum\n\n' +
+            '1️⃣ Play Store\'dan Mobile Legends indirin\n\n' +
+            '2️⃣ Ayarlar > Güvenlik > Güvenilen kimlik bilgileri\'nden TÜM sertifikaları kapatın\n\n' +
+            '3️⃣ TheBestML APK\'sını indirin ve kurun\n\n' +
+            '4️⃣ Klonlanan ML\'yi açıp KEY ile giriş yapın:\n\n🔑 ' + appConfig.key);
+    }
+
+    function completeStep(stepNum) {
+        const step = document.getElementById('step' + stepNum);
+        if (step) step.classList.add('completed');
+    }
+
+    function showToast(message) {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+</script>

@@ -1,13 +1,13 @@
 {
-    "version": "1.4.0",
-    "buildNumber": 4,
+    "version": "1.5.0",
+    "buildNumber": 5,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🤖 OTOMATİK Sertifika Kapatma özelliği eklendi",
-        "Tek tıkla tüm sertifikaları devre dışı bırakma",
-        "Accessibility Service entegrasyonu",
-        "UI iyileştirmeleri"
+        "🚀 Tam OTA güncelleme sistemi",
+        "Uygulama otomatik güncellenir",
+        "İnternet olmadan da çalışır",
+        "Performans iyileştirmeleri"
     ],
     "required": false
 }
