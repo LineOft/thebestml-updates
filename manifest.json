@@ -1,12 +1,12 @@
 {
-    "version": "1.6.6",
-    "buildNumber": 12,
+    "version": "1.6.7",
+    "buildNumber": 13,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Tüm paketler dinleniyor (packageNames null)",
-        "Gelismis sertifika algılama",
-        "Debug logları eklendi"
+        "Guncelleme kontrol sistemi duzeltildi",
+        "Versiyon artik dogru gosteriliyor",
+        "OTA guncelleme iyilestirildi"
     ],
     "required": false
 }
