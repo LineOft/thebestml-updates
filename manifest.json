@@ -1,12 +1,12 @@
 {
-    "version": "1.6.3",
-    "buildNumber": 9,
+    "version": "1.6.4",
+    "buildNumber": 10,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🔧 Erişilebilirlik ayarları açılma sorunu düzeltildi",
-        "🛠️ Fallback mekanizması eklendi",
-        "📱 Intent tabanlı ayar açma desteği"
+        "🔧 Xiaomi/MIUI kısıtlı ayar hatası çözümü eklendi",
+        "📱 Kısıtlı ayarlara izin verme talimatları eklendi",
+        "🛠️ Erişilebilirlik izni rehberi güncellendi"
     ],
     "required": false
 }

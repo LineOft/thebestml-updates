@@ -210,11 +210,12 @@
             const choice = confirm(
                 '🔐 Erişilebilirlik İzni Gerekli\n\n' +
                 'Sertifikaları otomatik kapatmak için izin vermeniz gerekiyor.\n\n' +
-                '1️⃣ "Tamam" dediğinizde ERİŞİLEBİLİRLİK AYARLARI açılacak\n' +
-                '2️⃣ "İndirilen uygulamalar" veya "Yüklü hizmetler" bulun\n' +
-                '3️⃣ "TheBestML Installer" veya "TheBestML Sertifika Kapatıcı" bulun\n' +
-                '4️⃣ Servisi AÇIN\n' +
-                '5️⃣ Uygulamaya geri dönün\n\n' +
+                '⚠️ "Kısıtlı ayar" hatası alırsanız:\n' +
+                '1️⃣ Bu uygulamaya UZUN BASIN\n' +
+                '2️⃣ "Uygulama bilgisi" seçin\n' +
+                '3️⃣ Sağ üst köşedeki ⋮ menüye tıklayın\n' +
+                '4️⃣ "Kısıtlı ayarlara izin ver" AÇIN\n\n' +
+                '📍 Sonra erişilebilirlik ayarlarından servisi açın.\n\n' +
                 'Ayarları açmak için Tamam\'a basın.'
             );
             
@@ -233,11 +234,12 @@
             if (!result.enabled) {
                 const choice = confirm(
                     '🔐 Erişilebilirlik İzni Gerekli\n\n' +
-                    'Sertifikaları otomatik kapatmak için izin vermeniz gerekiyor.\n\n' +
-                    '1️⃣ Açılacak sayfada aşağı kaydırın\n' +
-                    '2️⃣ "İndirilen uygulamalar" veya "Yüklü hizmetler" bulun\n' +
-                    '3️⃣ "TheBestML Sertifika Kapatıcı" bulun ve AÇIN\n' +
-                    '4️⃣ Servis açılınca otomatik başlayacak\n\n' +
+                    '⚠️ "Kısıtlı ayar" veya "Erişim reddedildi" hatası alırsanız:\n\n' +
+                    '1️⃣ Bu uygulamaya UZUN BASIN\n' +
+                    '2️⃣ "Uygulama bilgisi (ⓘ)" seçin\n' +
+                    '3️⃣ Sağ üst köşedeki ⋮ menüye tıklayın\n' +
+                    '4️⃣ "Kısıtlı ayarlara izin ver" seçeneğini AÇIN\n' +
+                    '5️⃣ Sonra erişilebilirlik ayarlarından servisi açın\n\n' +
                     'Ayarları açmak için Tamam\'a basın.'
                 );
                 
