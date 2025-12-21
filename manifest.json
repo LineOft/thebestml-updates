@@ -1,12 +1,12 @@
 {
-    "version": "1.6.7",
-    "buildNumber": 13,
+    "version": "1.6.8",
+    "buildNumber": 14,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Guncelleme kontrol sistemi duzeltildi",
-        "Versiyon artik dogru gosteriliyor",
-        "OTA guncelleme iyilestirildi"
+        "Sadece sertifika ekraninda calisiyor",
+        "Gereksiz tiklamalar duzeltildi",
+        "Daha guvenli calisma"
     ],
     "required": false
 }
