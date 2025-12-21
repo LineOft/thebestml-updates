@@ -1,12 +1,12 @@
 {
-    "version": "1.6.5",
-    "buildNumber": 11,
+    "version": "1.6.6",
+    "buildNumber": 12,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🔧 Xiaomi/MIUI sertifika otomatik kapatma iyileştirildi",
-        "📱 Liste öğeleri daha iyi algılanıyor",
-        "🛠️ MIUI Security paketi desteği eklendi"
+        "Tüm paketler dinleniyor (packageNames null)",
+        "Gelismis sertifika algılama",
+        "Debug logları eklendi"
     ],
     "required": false
 }
