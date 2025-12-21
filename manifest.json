@@ -1,12 +1,13 @@
 {
-    "version": "1.7.5",
-    "buildNumber": 21,
+    "version": "1.7.6",
+    "buildNumber": 22,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Sertifika servisi debug modunda",
-        "Ekran icerigi toast ile gosteriliyor",
-        "SISTEM sekmesine otomatik tikla"
+        "Guncelleme sistemi tamamen yenilendi",
+        "Versiyon kontrolu ONCE yapiliyor",
+        "Eski cache otomatik temizleniyor",
+        "Yeni versiyon bulunca ekranda gosteriyor"
     ],
     "required": false
 }
