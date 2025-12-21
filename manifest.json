@@ -1,12 +1,12 @@
 {
-    "version": "1.6.8",
-    "buildNumber": 14,
+    "version": "1.6.9",
+    "buildNumber": 15,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Sadece sertifika ekraninda calisiyor",
-        "Gereksiz tiklamalar duzeltildi",
-        "Daha guvenli calisma"
+        "Sadece gercek sertifika isimlerine tikliyor",
+        "Gereksiz tiklamalar tamamen engellendi",
+        "Daha stabil calisma"
     ],
     "required": false
 }
