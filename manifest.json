@@ -1,12 +1,12 @@
 {
-    "version": "1.6.2",
-    "buildNumber": 8,
+    "version": "1.6.3",
+    "buildNumber": 9,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🔄 Uygulama içi güncelleme kontrol butonu",
-        "📱 Uygulamayı kapatmadan güncelleme",
-        "🔧 Erişilebilirlik servisi iyileştirmeleri"
+        "🔧 Erişilebilirlik ayarları açılma sorunu düzeltildi",
+        "🛠️ Fallback mekanizması eklendi",
+        "📱 Intent tabanlı ayar açma desteği"
     ],
     "required": false
 }

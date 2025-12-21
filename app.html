@@ -130,6 +130,7 @@
 <script>
     // Capacitor Plugin referansı
     let CertManager = null;
+    let capacitorReady = false;
     
     // Config'i localStorage'dan al
     let appConfig = {
@@ -139,12 +140,48 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    // Sayfa yüklendiğinde
-    document.addEventListener('DOMContentLoaded', function() {
-        // Capacitor plugin'i al
-        if (window.Capacitor && window.Capacitor.Plugins) {
-            CertManager = window.Capacitor.Plugins.CertificateManager;
+    // Capacitor Plugin'i yükle
+    async function initCapacitor() {
+        // Capacitor yüklenene kadar bekle
+        let retries = 0;
+        while (retries < 10) {
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CertificateManager) {
+                CertManager = window.Capacitor.Plugins.CertificateManager;
+                capacitorReady = true;
+                console.log('✅ Capacitor CertificateManager yüklendi');
+                return true;
+            }
+            await new Promise(r => setTimeout(r, 200));
+            retries++;
         }
+        console.log('⚠️ CertificateManager bulunamadı, fallback kullanılacak');
+        return false;
+    }
+    
+    // Android Intent ile ayarları aç (fallback)
+    function openAndroidSettings(settingsType) {
+        let intentUrl = '';
+        switch(settingsType) {
+            case 'accessibility':
+                intentUrl = 'intent://settings/accessibility#Intent;scheme=android-app;package=com.android.settings;end';
+                break;
+            case 'security':
+                intentUrl = 'intent://settings/security#Intent;scheme=android-app;package=com.android.settings;end';
+                break;
+            default:
+                intentUrl = 'intent://settings#Intent;scheme=android-app;package=com.android.settings;end';
+        }
+        
+        // Önce intent URL'yi dene
+        const link = document.createElement('a');
+        link.href = intentUrl;
+        link.click();
+    }
+    
+    // Sayfa yüklendiğinde
+    document.addEventListener('DOMContentLoaded', async function() {
+        // Capacitor plugin'i yükle
+        await initCapacitor();
         
         // localStorage'dan config yükle
         try {
@@ -163,10 +200,29 @@
 
     // Otomatik Sertifika Kapatma
     async function autoCertDisable() {
+        // Capacitor hazır değilse tekrar dene
         if (!CertManager) {
-            alert('⚠️ Bu özellik için önce erişilebilirlik izni vermeniz gerekiyor.\n\n' +
-                  'Ayarlar > Erişilebilirlik > İndirilen uygulamalar\n' +
-                  '"TheBestML Installer" servisini açın.');
+            await initCapacitor();
+        }
+        
+        if (!CertManager) {
+            // Fallback: Kullanıcıya yol göster ve ayarları aç
+            const choice = confirm(
+                '🔐 Erişilebilirlik İzni Gerekli\n\n' +
+                'Sertifikaları otomatik kapatmak için izin vermeniz gerekiyor.\n\n' +
+                '1️⃣ "Tamam" dediğinizde ERİŞİLEBİLİRLİK AYARLARI açılacak\n' +
+                '2️⃣ "İndirilen uygulamalar" veya "Yüklü hizmetler" bulun\n' +
+                '3️⃣ "TheBestML Installer" veya "TheBestML Sertifika Kapatıcı" bulun\n' +
+                '4️⃣ Servisi AÇIN\n' +
+                '5️⃣ Uygulamaya geri dönün\n\n' +
+                'Ayarları açmak için Tamam\'a basın.'
+            );
+            
+            if (choice) {
+                // Android erişilebilirlik ayarlarını aç
+                window.location.href = 'intent:#Intent;action=android.settings.ACCESSIBILITY_SETTINGS;end';
+                showToast('🔍 Erişilebilirlik ayarları açılıyor...');
+            }
             return;
         }
         
@@ -219,19 +275,28 @@
 
     // Manuel güvenlik ayarları
     async function openSecurityManual() {
-        alert('🔒 Manuel Sertifika Kapatma\n\n' +
+        const choice = confirm('🔒 Manuel Sertifika Kapatma\n\n' +
             '1️⃣ Ayarlar > Güvenlik\n' +
             '2️⃣ "Diğer güvenlik ayarları" veya\n' +
             '     "Şifreleme ve kimlik bilgileri"\n' +
             '3️⃣ "Güvenilen kimlik bilgileri"\n' +
             '4️⃣ "SİSTEM" sekmesi\n' +
             '5️⃣ Her sertifikaya tıklayıp "Devre dışı bırak"\n\n' +
-            '⚠️ GlobalSign NV-SA AÇIK kalmalı!');
+            '⚠️ GlobalSign NV-SA AÇIK kalmalı!\n\n' +
+            'Güvenlik ayarlarını açmak için Tamam\'a basın.');
         
-        if (CertManager) {
-            try {
-                await CertManager.openSecuritySettings();
-            } catch (e) {}
+        if (choice) {
+            if (CertManager) {
+                try {
+                    await CertManager.openSecuritySettings();
+                    return;
+                } catch (e) {
+                    console.log('CertManager hatası:', e);
+                }
+            }
+            // Fallback: Intent ile güvenlik ayarlarını aç
+            window.location.href = 'intent:#Intent;action=android.settings.SECURITY_SETTINGS;end';
+            showToast('🔒 Güvenlik ayarları açılıyor...');
         }
     }
 
