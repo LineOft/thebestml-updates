@@ -1,12 +1,12 @@
 {
-    "version": "1.6.9",
-    "buildNumber": 15,
+    "version": "1.7.0",
+    "buildNumber": 16,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Sadece gercek sertifika isimlerine tikliyor",
-        "Gereksiz tiklamalar tamamen engellendi",
-        "Daha stabil calisma"
+        "Super hizli OTA guncelleme",
+        "Paralel indirme ile 3x hiz",
+        "Cache-Control headers eklendi"
     ],
     "required": false
 }
