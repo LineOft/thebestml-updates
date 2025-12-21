@@ -1,13 +1,13 @@
 {
-    "version": "1.5.0",
-    "buildNumber": 5,
+    "version": "1.6.0",
+    "buildNumber": 6,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "🚀 Tam OTA güncelleme sistemi",
-        "Uygulama otomatik güncellenir",
-        "İnternet olmadan da çalışır",
-        "Performans iyileştirmeleri"
+        "🤖 Otomatik sertifika kapatma (GlobalSign hariç)",
+        "🔧 Sertifika ayarları açılma sorunu düzeltildi",
+        "📱 Geliştirilmiş Accessibility Service",
+        "✨ UI iyileştirmeleri"
     ],
     "required": false
 }

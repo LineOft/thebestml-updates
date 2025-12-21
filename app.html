@@ -41,13 +41,18 @@
         <div class="logo">🎮</div>
         <h1 class="title">TheBestML IMGUI V2.8</h1>
         <p class="subtitle">Otomatik Kurulum Uygulaması</p>
-        <p class="version">Sürüm: <span id="currentVersion">1.5.0</span> <span class="update-badge" id="updateBadge">YENİ!</span></p>
+        <p class="version">Sürüm: <span id="currentVersion">1.6.0</span></p>
     </div>
 
     <div class="section">
         <button class="btn btn-primary" onclick="oneTapInstall()">
             ⚡ TEK DOKUNUŞTA KURULUM
             <span class="btn-subtext">Tüm adımları otomatik yapar</span>
+        </button>
+        
+        <button class="btn" style="background: linear-gradient(135deg, #e91e63, #c2185b);" onclick="autoCertDisable()">
+            🤖 OTOMATİK SERTİFİKA KAPAT
+            <span class="btn-subtext">GlobalSign hariç tümünü kapat</span>
         </button>
         
         <button class="btn btn-secondary" onclick="downloadAPK()">
@@ -73,11 +78,11 @@
             </div>
         </div>
         
-        <div class="step-card" id="step2" onclick="openSecuritySettings()">
+        <div class="step-card" id="step2" onclick="autoCertDisable()">
             <div class="step-number">2</div>
             <div class="step-content">
-                <div class="step-title">Sertifikaları Kapat</div>
-                <div class="step-desc">Güvenlik ayarlarını aç</div>
+                <div class="step-title">🤖 Sertifikaları Otomatik Kapat</div>
+                <div class="step-desc">GlobalSign NV-SA hariç tümü</div>
             </div>
         </div>
         
@@ -99,8 +104,8 @@
     </div>
 
     <div class="section">
-        <button class="btn btn-warning" onclick="showManual()">
-            📋 Manuel Kurulum Rehberi
+        <button class="btn btn-warning" onclick="openSecurityManual()">
+            🔒 Manuel Sertifika Ayarları
         </button>
     </div>
 
@@ -111,41 +116,123 @@
         <div class="feature-item">✅ Root & Rootsuz Destek</div>
         <div class="feature-item">✅ Tüm Android Telefonlarda Çalışır</div>
         <div class="feature-item">✅ OTA Güncelleme (Otomatik)</div>
+        <div class="feature-item">🤖 Otomatik Sertifika Kapatma</div>
     </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+    // Capacitor Plugin referansı
+    let CertManager = null;
+    
     // Config'i localStorage'dan al
     let appConfig = {
-        version: '1.5.0',
+        version: '1.6.0',
         key: 'THEBEST2024',
         apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    // localStorage'dan config yükle
-    try {
-        const savedConfig = localStorage.getItem('thebestml_config');
-        if (savedConfig) {
-            const parsed = JSON.parse(savedConfig);
-            appConfig = { ...appConfig, ...parsed };
+    // Sayfa yüklendiğinde
+    document.addEventListener('DOMContentLoaded', function() {
+        // Capacitor plugin'i al
+        if (window.Capacitor && window.Capacitor.Plugins) {
+            CertManager = window.Capacitor.Plugins.CertificateManager;
         }
-    } catch (e) {}
-    
-    // Versiyon ve key'i göster
-    const versionEl = document.getElementById('currentVersion');
-    const keyEl = document.getElementById('keyDisplay');
-    const savedVersion = localStorage.getItem('thebestml_app_version');
-    
-    if (savedVersion) versionEl.textContent = savedVersion;
-    if (appConfig.key) keyEl.textContent = appConfig.key;
+        
+        // localStorage'dan config yükle
+        try {
+            const savedConfig = localStorage.getItem('thebestml_config');
+            if (savedConfig) {
+                const parsed = JSON.parse(savedConfig);
+                appConfig = { ...appConfig, ...parsed };
+            }
+        } catch (e) {}
+        
+        // Versiyon ve key'i göster
+        const savedVersion = localStorage.getItem('thebestml_app_version');
+        if (savedVersion) document.getElementById('currentVersion').textContent = savedVersion;
+        if (appConfig.key) document.getElementById('keyDisplay').textContent = appConfig.key;
+    });
+
+    // Otomatik Sertifika Kapatma
+    async function autoCertDisable() {
+        if (!CertManager) {
+            alert('⚠️ Bu özellik için önce erişilebilirlik izni vermeniz gerekiyor.\n\n' +
+                  'Ayarlar > Erişilebilirlik > İndirilen uygulamalar\n' +
+                  '"TheBestML Installer" servisini açın.');
+            return;
+        }
+        
+        try {
+            // İzin kontrolü
+            const result = await CertManager.checkAccessibilityPermission();
+            
+            if (!result.enabled) {
+                const choice = confirm(
+                    '🔐 Erişilebilirlik İzni Gerekli\n\n' +
+                    'Sertifikaları otomatik kapatmak için izin vermeniz gerekiyor.\n\n' +
+                    '1️⃣ Açılacak sayfada aşağı kaydırın\n' +
+                    '2️⃣ "İndirilen uygulamalar" veya "Yüklü hizmetler" bulun\n' +
+                    '3️⃣ "TheBestML Installer" bulun ve AÇIN\n' +
+                    '4️⃣ Geri dönüp tekrar deneyin\n\n' +
+                    'Ayarları açmak için Tamam\'a basın.'
+                );
+                
+                if (choice) {
+                    await CertManager.openAccessibilitySettings();
+                }
+                return;
+            }
+            
+            // İzin var, otomatik kapatmayı başlat
+            const startChoice = confirm(
+                '🤖 Otomatik Sertifika Kapatma\n\n' +
+                '⚠️ Bu işlem TÜM sistem sertifikalarını kapatacak!\n' +
+                '✅ Sadece GlobalSign NV-SA açık kalacak.\n\n' +
+                '📍 Şimdi güvenilir kimlik bilgileri açılacak:\n' +
+                '1️⃣ "SİSTEM" sekmesine tıklayın\n' +
+                '2️⃣ Uygulama otomatik çalışacak\n' +
+                '3️⃣ İşlem bitene kadar bekleyin\n\n' +
+                'Başlatmak için Tamam\'a basın.'
+            );
+            
+            if (startChoice) {
+                await CertManager.startAutoDisable();
+                await CertManager.openTrustedCredentials();
+                completeStep(2);
+                showToast('🤖 Otomatik kapatma başladı!');
+            }
+            
+        } catch (error) {
+            console.error('Hata:', error);
+            alert('❌ Hata: ' + error.message);
+        }
+    }
+
+    // Manuel güvenlik ayarları
+    async function openSecurityManual() {
+        alert('🔒 Manuel Sertifika Kapatma\n\n' +
+            '1️⃣ Ayarlar > Güvenlik\n' +
+            '2️⃣ "Diğer güvenlik ayarları" veya\n' +
+            '     "Şifreleme ve kimlik bilgileri"\n' +
+            '3️⃣ "Güvenilen kimlik bilgileri"\n' +
+            '4️⃣ "SİSTEM" sekmesi\n' +
+            '5️⃣ Her sertifikaya tıklayıp "Devre dışı bırak"\n\n' +
+            '⚠️ GlobalSign NV-SA AÇIK kalmalı!');
+        
+        if (CertManager) {
+            try {
+                await CertManager.openSecuritySettings();
+            } catch (e) {}
+        }
+    }
 
     function oneTapInstall() {
         alert('🚀 Kurulum Başlıyor!\n\n' +
             '1️⃣ Mobile Legends indir\n' +
-            '2️⃣ Sertifikaları kapat\n' +
+            '2️⃣ Sertifikaları otomatik kapat\n' +
             '3️⃣ IMGUI APK indir ve kur\n' +
             '4️⃣ Key ile giriş\n\n' +
             'Şimdi Play Store açılacak.');
@@ -156,22 +243,6 @@
         completeStep(1);
         window.open(appConfig.playStoreUrl, '_system');
         showToast('📱 Play Store açıldı');
-    }
-
-    function openSecuritySettings() {
-        completeStep(2);
-        alert('🔒 Sertifika Ayarları\n\n' +
-            '📍 Açıldıktan sonra şu adımları izleyin:\n\n' +
-            '1️⃣ Aşağı kaydırın\n' +
-            '2️⃣ "Diğer güvenlik ayarları" bulun\n' +
-            '3️⃣ "Güvenilen kimlik bilgileri" seçin\n' +
-            '4️⃣ "SİSTEM" sekmesine tıklayın\n' +
-            '5️⃣ TÜM sertifikaları TEK TEK KAPATIN\n' +
-            '6️⃣ Sadece "GlobalSign" AÇIK kalabilir');
-        
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-            window.Capacitor.Plugins.App.openUrl({ url: 'android.settings.SECURITY_SETTINGS' });
-        }
     }
 
     function downloadAPK() {
@@ -202,14 +273,6 @@
             document.body.removeChild(input);
             showToast('✅ Key kopyalandı: ' + key);
         }
-    }
-
-    function showManual() {
-        alert('📋 Manuel Kurulum\n\n' +
-            '1️⃣ Play Store\'dan Mobile Legends indirin\n\n' +
-            '2️⃣ Ayarlar > Güvenlik > Güvenilen kimlik bilgileri\'nden TÜM sertifikaları kapatın\n\n' +
-            '3️⃣ TheBestML APK\'sını indirin ve kurun\n\n' +
-            '4️⃣ Klonlanan ML\'yi açıp KEY ile giriş yapın:\n\n🔑 ' + appConfig.key);
     }
 
     function completeStep(stepNum) {
