@@ -1,13 +1,13 @@
 {
-    "version": "1.7.7",
-    "buildNumber": 23,
+    "version": "1.7.8",
+    "buildNumber": 24,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "Guncelleme sistemi tamamen yenilendi",
-        "Versiyon kontrolu ONCE yapiliyor",
-        "Eski cache otomatik temizleniyor",
-        "Yeni versiyon bulunca ekranda gosteriyor"
+        "Sertifika kapatma sistemi tamamen yenilendi",
+        "Hizli otomatik kapatma - 200ms",
+        "GlobalSign korumali - acik kaliyor",
+        "Devre disi birak butonu otomatik tiklaniyor"
     ],
     "required": false
 }
