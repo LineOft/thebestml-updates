@@ -1,12 +1,12 @@
 {
-    "version": "1.7.3",
-    "buildNumber": 19,
+    "version": "1.7.4",
+    "buildNumber": 20,
     "minBuildNumber": 1,
     "releaseDate": "2025-12-22",
     "changelog": [
-        "OTA guncelleme tamamen duzeltildi",
-        "Her acilista sunucudan cekiyor",
-        "Cache sadece offline'da kullaniliyor"
+        "Sertifika servisi debug modunda",
+        "Ekran icerigi toast ile gosteriliyor",
+        "SISTEM sekmesine otomatik tikla"
     ],
     "required": false
 }
