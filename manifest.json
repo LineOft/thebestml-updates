@@ -1,10 +1,11 @@
 ﻿{
     "changelog":  [
-                      "Blob URL kaldirildi - Firebase baglantisi duzeltildi"
+                      "OTA bypass - Dogrudan uygulama yukleme",
+                      "Firebase Firestore baglanti sorunu cozuldu"
                   ],
-    "version":  "3.14.85",
-    "minBuildNumber":  234,
+    "version":  "3.14.86",
+    "minBuildNumber":  235,
     "required":  true,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  234
+    "buildNumber":  235
 }
