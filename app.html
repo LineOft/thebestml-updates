@@ -11415,6 +11415,22 @@
         }
         return 0;
     }
+
+    // Eski OTA cache'ini temizle (örn. 3.14.81 kalmışsa)
+    (function clearStaleOtaCache() {
+        try {
+            const cachedVersion = localStorage.getItem('ota_app_version');
+            if (!cachedVersion) return;
+            const cmp = compareVersions(APP_VERSION, cachedVersion);
+            if (cmp > 0) {
+                localStorage.removeItem('ota_app_html');
+                localStorage.removeItem('ota_app_version');
+                console.log('[OTA] Stale cache temizlendi:', cachedVersion, '->', APP_VERSION);
+            }
+        } catch (e) {
+            console.log('[OTA] Cache temizleme hatası:', e.message);
+        }
+    })();
     
     async function checkForUpdates() {
         try {
