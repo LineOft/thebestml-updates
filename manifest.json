@@ -1,10 +1,10 @@
 ﻿{
-    "version": "3.14.82",
-    "buildNumber": 231,
-    "minBuildNumber": 231,
-    "releaseDate": "2025-12-25",
-    "changelog": [
-        "Stabil yedek geri yüklendi"
-    ],
-    "required": false
+    "changelog":  [
+                      "R2 entegrasyonu kaldirildi - Stabil surum"
+                  ],
+    "version":  "3.14.83",
+    "minBuildNumber":  232,
+    "required":  false,
+    "releaseDate":  "2025-12-25",
+    "buildNumber":  232
 }
