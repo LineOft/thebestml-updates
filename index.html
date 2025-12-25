@@ -6,22 +6,27 @@
     <title>Game Store</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 100%);
-            min-height: 100vh;
+        }
+        #loader {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             color: #fff;
-            padding: 20px;
+            z-index: 9999;
+            background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 100%);
         }
-        .container { text-align: center; max-width: 350px; width: 100%; }
         .logo {
             width: 100px; height: 100px;
             background: linear-gradient(135deg, #4CAF50, #45a049);
             border-radius: 25px;
-            margin: 0 auto 20px;
+            margin-bottom: 20px;
             display: flex; align-items: center; justify-content: center;
             font-size: 50px;
             box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
@@ -37,13 +42,13 @@
             border: 4px solid rgba(76, 175, 80, 0.2);
             border-top: 4px solid #4CAF50;
             border-radius: 50%;
-            margin: 0 auto 20px;
+            margin-bottom: 20px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         #status { color: #aaa; font-size: 14px; }
         .progress-bar {
-            width: 100%; height: 6px;
+            width: 250px; height: 6px;
             background: rgba(255,255,255,0.1);
             border-radius: 3px;
             margin-top: 20px;
@@ -55,147 +60,110 @@
             width: 0%;
             transition: width 0.3s;
         }
-        #errorBox {
+        #appFrame {
+            width: 100%;
+            height: 100%;
+            border: none;
             display: none;
-            background: rgba(255,255,255,0.05);
-            border-radius: 20px;
-            padding: 25px;
-            border: 1px solid rgba(244,67,54,0.3);
         }
-        #errorBox h3 { color: #f44336; margin-bottom: 10px; }
-        #errorBox p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+        .error-box {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .error-box h3 { color: #f44336; margin-bottom: 15px; }
+        .error-box p { color: #888; margin-bottom: 20px; }
         .btn {
-            background: linear-gradient(135deg, #FF9800, #F57C00);
+            background: linear-gradient(135deg, #4CAF50, #45a049);
             color: #fff; border: none;
             padding: 12px 30px; border-radius: 20px;
-            font-size: 14px; cursor: pointer; width: 100%;
-            margin-bottom: 10px;
+            font-size: 14px; cursor: pointer;
+            margin: 5px;
         }
-        .btn-secondary {
-            background: rgba(255,255,255,0.1);
-            color: #aaa;
-        }
-        .debug { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 10px; color: #444; }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div id="loader">
         <div class="logo">🎮</div>
         <h1>Game Store</h1>
         <p class="subtitle">Oyun Modları & Kurulum Rehberleri</p>
+        <div class="spinner"></div>
+        <p id="status">Başlatılıyor...</p>
+        <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
         
-        <div id="loader">
-            <div class="spinner"></div>
-            <p id="status">Başlatılıyor...</p>
-            <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
-        </div>
-        
-        <div id="errorBox">
+        <div class="error-box" id="errorBox">
             <h3>⚠️ Bağlantı Hatası</h3>
             <p id="errorMsg">Sunucuya bağlanılamadı</p>
             <button class="btn" onclick="location.reload()">🔄 Tekrar Dene</button>
-            <button class="btn btn-secondary" onclick="loadCached()">📦 Çevrimdışı Aç</button>
         </div>
     </div>
     
-    <div class="debug" id="debug"></div>
+    <iframe id="appFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"></iframe>
 
     <script>
-        var GITHUB_BASE = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
+        var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
         var CACHE_KEY = 'ota_app_html';
         var VERSION_KEY = 'ota_app_version';
-        var BUNDLED_VERSION = '3.14.88';
         
-        // Sonsuz döngü koruması
-        var OTA_FLAG = 'ota_loading';
-        
-        function log(m) { 
-            console.log('[OTA] ' + m); 
-            var d = document.getElementById('debug');
-            if (d) d.textContent = m; 
-        }
-        
-        function status(t) { 
-            var s = document.getElementById('status');
-            if (s) s.textContent = t; 
-        }
-        
-        function progress(p) { 
-            var pr = document.getElementById('progress');
-            if (pr) pr.style.width = p + '%'; 
-        }
+        function status(t) { document.getElementById('status').textContent = t; }
+        function progress(p) { document.getElementById('progress').style.width = p + '%'; }
         
         function showError(msg) {
-            document.getElementById('loader').style.display = 'none';
+            document.querySelector('.spinner').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
+            document.querySelector('.progress-bar').style.display = 'none';
             document.getElementById('errorBox').style.display = 'block';
             document.getElementById('errorMsg').textContent = msg;
         }
         
-        // Cache'den yükle
-        function loadCached() {
-            var html = localStorage.getItem(CACHE_KEY);
-            if (html && html.length > 5000) {
-                loadApp(html);
-            } else {
-                showError('Çevrimdışı veri bulunamadı');
-            }
-        }
-        
-        // Uygulamayı yükle - document.write ile
         function loadApp(html) {
-            log('Uygulama yükleniyor...');
+            console.log('[OTA] Uygulama yükleniyor...');
             progress(100);
-            
-            // Sonsuz döngü koruması - flag set et
-            sessionStorage.setItem(OTA_FLAG, 'true');
+            status('Yükleniyor...');
             
             setTimeout(function() {
-                try {
-                    document.open();
-                    document.write(html);
-                    document.close();
-                } catch(e) {
-                    console.error('LoadApp hatası:', e);
-                    showError('Yükleme hatası: ' + e.message);
-                }
+                var frame = document.getElementById('appFrame');
+                frame.srcdoc = html;
+                
+                frame.onload = function() {
+                    console.log('[OTA] Frame yüklendi');
+                    document.getElementById('loader').style.display = 'none';
+                    frame.style.display = 'block';
+                };
+                
+                // 5 saniye timeout
+                setTimeout(function() {
+                    if (document.getElementById('loader').style.display !== 'none') {
+                        document.getElementById('loader').style.display = 'none';
+                        frame.style.display = 'block';
+                    }
+                }, 5000);
             }, 300);
         }
         
-        // Versiyon karşılaştır
         function isNewer(v1, v2) {
-            var p1 = v1.split('.').map(Number);
-            var p2 = v2.split('.').map(Number);
+            var p1 = (v1 || '0').split('.').map(Number);
+            var p2 = (v2 || '0').split('.').map(Number);
             for (var i = 0; i < Math.max(p1.length, p2.length); i++) {
-                var a = p1[i] || 0;
-                var b = p2[i] || 0;
+                var a = p1[i] || 0, b = p2[i] || 0;
                 if (a > b) return true;
                 if (a < b) return false;
             }
             return false;
         }
         
-        // Ana başlatma
         function init() {
-            // Sonsuz döngü koruması - zaten yükleme yapıldıysa cache'den aç
-            if (sessionStorage.getItem(OTA_FLAG) === 'true') {
-                log('OTA zaten tamamlandı, cache kullanılıyor');
-                sessionStorage.removeItem(OTA_FLAG);
-                var cached = localStorage.getItem(CACHE_KEY);
-                if (cached && cached.length > 5000) {
-                    loadApp(cached);
-                    return;
-                }
-            }
-            
-            log('OTA başlatılıyor...');
+            console.log('[OTA] Başlatılıyor...');
             status('Güncelleme kontrol ediliyor...');
             progress(10);
             
             var cachedVersion = localStorage.getItem(VERSION_KEY) || '0';
-            log('Önbellek: v' + cachedVersion);
+            var cachedHtml = localStorage.getItem(CACHE_KEY);
             
-            // Manifest kontrol et
-            fetch(GITHUB_BASE + 'manifest.json?t=' + Date.now(), { cache: 'no-store' })
+            console.log('[OTA] Cache versiyonu:', cachedVersion);
+            
+            // Manifest kontrol
+            fetch(GITHUB + 'manifest.json?t=' + Date.now(), { cache: 'no-store' })
                 .then(function(r) { 
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json(); 
@@ -203,55 +171,51 @@
                 .then(function(manifest) {
                     progress(30);
                     var serverVersion = manifest.version || '0';
-                    log('Sunucu: v' + serverVersion);
+                    console.log('[OTA] Sunucu versiyonu:', serverVersion);
                     status('Sunucu: v' + serverVersion);
                     
-                    // Güncelleme gerekli mi?
-                    var needsUpdate = isNewer(serverVersion, cachedVersion);
-                    
-                    if (needsUpdate) {
-                        log('Güncelleme mevcut!');
+                    if (isNewer(serverVersion, cachedVersion)) {
+                        // Güncelleme var
+                        console.log('[OTA] Güncelleme mevcut!');
                         status('Güncelleme indiriliyor...');
                         progress(50);
                         
-                        // app.html indir
-                        fetch(GITHUB_BASE + 'app.html?t=' + Date.now(), { cache: 'no-store' })
+                        fetch(GITHUB + 'app.html?t=' + Date.now(), { cache: 'no-store' })
                             .then(function(r) { 
                                 if (!r.ok) throw new Error('HTTP ' + r.status);
                                 return r.text(); 
                             })
                             .then(function(html) {
                                 progress(80);
-                                
-                                if (html && html.length > 5000 && html.indexOf('APP_VERSION') !== -1) {
-                                    // Cache'e kaydet
+                                if (html && html.length > 5000) {
                                     localStorage.setItem(CACHE_KEY, html);
                                     localStorage.setItem(VERSION_KEY, serverVersion);
-                                    log('Cache güncellendi: v' + serverVersion);
-                                    
-                                    // Yükle
+                                    console.log('[OTA] Cache güncellendi: v' + serverVersion);
                                     loadApp(html);
                                 } else {
                                     throw new Error('Geçersiz içerik');
                                 }
                             })
                             .catch(function(e) {
-                                log('İndirme hatası: ' + e.message);
-                                loadCached();
+                                console.error('[OTA] İndirme hatası:', e);
+                                if (cachedHtml && cachedHtml.length > 5000) {
+                                    loadApp(cachedHtml);
+                                } else {
+                                    showError('İndirme hatası: ' + e.message);
+                                }
                             });
                     } else {
-                        // Güncel - cache'den yükle
-                        log('Uygulama güncel');
+                        // Güncel
+                        console.log('[OTA] Uygulama güncel');
                         status('Yükleniyor...');
                         progress(80);
                         
-                        var cached = localStorage.getItem(CACHE_KEY);
-                        if (cached && cached.length > 5000) {
-                            loadApp(cached);
+                        if (cachedHtml && cachedHtml.length > 5000) {
+                            loadApp(cachedHtml);
                         } else {
-                            // Cache boş - GitHub'dan indir
+                            // Cache boş, indir
                             status('İlk yükleme...');
-                            fetch(GITHUB_BASE + 'app.html?t=' + Date.now(), { cache: 'no-store' })
+                            fetch(GITHUB + 'app.html?t=' + Date.now(), { cache: 'no-store' })
                                 .then(function(r) { return r.text(); })
                                 .then(function(html) {
                                     if (html && html.length > 5000) {
@@ -263,26 +227,24 @@
                                     }
                                 })
                                 .catch(function(e) {
-                                    showError('Bağlantı hatası: ' + e.message);
+                                    showError('Yükleme hatası: ' + e.message);
                                 });
                         }
                     }
                 })
                 .catch(function(e) {
-                    log('Manifest hatası: ' + e.message);
+                    console.error('[OTA] Manifest hatası:', e);
                     status('Çevrimdışı mod...');
                     
-                    // Offline - cache'den yükle
-                    var cached = localStorage.getItem(CACHE_KEY);
-                    if (cached && cached.length > 5000) {
-                        loadApp(cached);
+                    if (cachedHtml && cachedHtml.length > 5000) {
+                        loadApp(cachedHtml);
                     } else {
                         showError('İnternet bağlantısı gerekli');
                     }
                 });
         }
         
-        // Sayfa yüklenince başlat
+        // Başlat
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {

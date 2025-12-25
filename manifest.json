@@ -1,12 +1,11 @@
 ﻿{
     "changelog":  [
-                      "OTA sistemi geri getirildi",
-                      "Sonsuz dongu korumasi eklendi",
-                      "Firebase long polling aktif"
+                      "iframe ile OTA yukleme",
+                      "Firebase SDK duzgun yukleniyor"
                   ],
-    "version":  "3.14.88",
-    "minBuildNumber":  237,
+    "version":  "3.14.89",
+    "minBuildNumber":  238,
     "required":  true,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  237
+    "buildNumber":  238
 }
