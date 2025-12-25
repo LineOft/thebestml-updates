@@ -1,11 +1,10 @@
 ﻿{
-    "changelog":  [
-                      "Eski cache otomatik temizleme",
-                      "iframe OTA yukleme"
-                  ],
-    "version":  "3.14.90",
-    "minBuildNumber":  239,
-    "required":  true,
+    "version":  "3.14.59",
+    "buildNumber":  230,
+    "minBuildNumber":  230,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  239
+    "changelog":  [
+                      "GÃ¼ncelleme"
+                  ],
+    "required":  false
 }
