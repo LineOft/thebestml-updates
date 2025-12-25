@@ -104,6 +104,29 @@
         var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
         var CACHE_KEY = 'ota_app_html';
         var VERSION_KEY = 'ota_app_version';
+        var MIN_VERSION = '3.14.90'; // Bu versiyondan düşükse cache temizle
+        
+        // Eski cache temizleme
+        (function() {
+            var cached = localStorage.getItem(VERSION_KEY);
+            if (cached) {
+                var cp = cached.split('.').map(Number);
+                var mp = MIN_VERSION.split('.').map(Number);
+                var needsClear = false;
+                
+                for (var i = 0; i < Math.max(cp.length, mp.length); i++) {
+                    var c = cp[i] || 0, m = mp[i] || 0;
+                    if (c < m) { needsClear = true; break; }
+                    if (c > m) break;
+                }
+                
+                if (needsClear) {
+                    console.log('[OTA] Eski cache temizleniyor: v' + cached);
+                    localStorage.removeItem(CACHE_KEY);
+                    localStorage.removeItem(VERSION_KEY);
+                }
+            }
+        })();
         
         function status(t) { document.getElementById('status').textContent = t; }
         function progress(p) { document.getElementById('progress').style.width = p + '%'; }

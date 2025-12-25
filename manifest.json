@@ -1,11 +1,11 @@
 ﻿{
     "changelog":  [
-                      "iframe ile OTA yukleme",
-                      "Firebase SDK duzgun yukleniyor"
+                      "Eski cache otomatik temizleme",
+                      "iframe OTA yukleme"
                   ],
-    "version":  "3.14.89",
-    "minBuildNumber":  238,
+    "version":  "3.14.90",
+    "minBuildNumber":  239,
     "required":  true,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  238
+    "buildNumber":  239
 }
