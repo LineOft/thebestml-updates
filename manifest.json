@@ -1,10 +1,11 @@
-﻿{
-    "version":  "3.14.59",
-    "buildNumber":  230,
-    "minBuildNumber":  230,
-    "releaseDate":  "2025-12-25",
-    "changelog":  [
-                      "GÃ¼ncelleme"
-                  ],
-    "required":  false
+{
+    "version": "3.13.8",
+    "buildNumber": 171,
+    "minBuildNumber": 150,
+    "releaseDate": "2025-12-23",
+    "changelog": [
+        "🔧 Stabilite düzeltmeleri",
+        "✅ Oyun yükleme sorunu çözüldü"
+    ],
+    "required": true
 }
