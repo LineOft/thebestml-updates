@@ -35,6 +35,21 @@
                 firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
                 db = firebase.firestore();
+                
+                // Offline persistence'ı kapat - sadece online mod
+                db.settings({
+                    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                    experimentalForceLongPolling: true,
+                    merge: true
+                });
+                
+                // Network'ü zorla etkinleştir
+                db.enableNetwork().then(function() {
+                    console.log('✅ Firestore network etkinleştirildi');
+                }).catch(function(e) {
+                    console.warn('⚠️ Network etkinleştirme hatası:', e);
+                });
+                
                 firebaseReady = true;
                 console.log('✅ Firebase başlatıldı');
             } else {
@@ -2729,7 +2744,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '3.14.86';
+    const APP_VERSION = '3.14.87';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8466,7 +8481,8 @@
                 throw new Error('Firestore bağlantısı yok');
             }
             
-            const doc = await db.collection('settings').doc('gamesData').get();
+            // Sunucudan veri çek (cache'den değil)
+            const doc = await db.collection('settings').doc('gamesData').get({ source: 'server' });
             if (doc.exists && doc.data().games) {
                 gamesData = doc.data().games;
                 console.log('Oyunlar yüklendi:', Object.keys(gamesData));
