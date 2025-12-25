@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Game Store</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            padding: 20px;
+            padding-top: env(safe-area-inset-top, 0px);
+            padding-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        .container { text-align: center; max-width: 350px; width: 100%; }
+        .logo {
+            width: 100px; height: 100px;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            border-radius: 25px;
+            margin: 0 auto 20px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 50px;
+            box-shadow: 0 10px 30px rgba(76, 175, 80, 0.3);
+        }
+        h1 {
+            font-size: 28px; margin-bottom: 5px;
+            background: linear-gradient(135deg, #4CAF50, #8BC34A);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: #888; font-size: 14px; margin-bottom: 30px; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(76, 175, 80, 0.2);
+            border-top: 4px solid #4CAF50;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #status { color: #aaa; font-size: 14px; }
+        .progress-bar {
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        #errorBox {
+            display: none;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(244,67,54,0.3);
+        }
+        #errorBox h3 { color: #f44336; margin-bottom: 10px; }
+        #errorBox p { color: #aaa; font-size: 14px; margin-bottom: 20px; }
+        .btn {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            color: #fff; border: none;
+            padding: 12px 30px; border-radius: 20px;
+            font-size: 14px; cursor: pointer; width: 100%;
+            margin-bottom: 10px;
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: #aaa;
+        }
+        .debug { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 10px; color: #444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎮</div>
+        <h1>Game Store</h1>
+        <p class="subtitle">Oyun Modları & Kurulum Rehberleri</p>
+        
+        <div id="loader">
+            <div class="spinner"></div>
+            <p id="status">Başlatılıyor...</p>
+            <div class="progress-bar"><div class="progress-fill" id="progress"></div></div>
+        </div>
+        
+        <div id="errorBox">
+            <h3>⚠️ Bağlantı Hatası</h3>
+            <p id="errorMsg">Sunucuya bağlanılamadı</p>
+            <button class="btn" onclick="start()">🔄 Tekrar Dene</button>
+            <button class="btn btn-secondary" onclick="loadOffline()">📦 Çevrimdışı Aç</button>
+        </div>
+    </div>
+    
+    <div class="debug" id="debug"></div>
+
+    <script>
+        var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
+        var CACHE_KEY = 'ota_app_html';
+        var VERSION_KEY = 'ota_app_version';
+        var BUNDLED = '3.14.83';
+        
+        // ⚠️ Eski/bozuk cache temizliği - 3.14.81 sorununu çözer
+        (function() {
+            var cv = localStorage.getItem(VERSION_KEY);
+            if (cv && (cv.indexOf('3.14.81') !== -1 || cv.indexOf('3.14.82') !== -1)) {
+                localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(VERSION_KEY);
+                console.log('[OTA] Eski cache temizlendi: ' + cv);
+            }
+        })();
+        
+        function log(m) { console.log('[OTA] ' + m); document.getElementById('debug').textContent = m; }
+        function status(t) { document.getElementById('status').textContent = t; }
+        function progress(p) { document.getElementById('progress').style.width = p + '%'; }
+        
+        function showError(msg) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('errorBox').style.display = 'block';
+            document.getElementById('errorMsg').textContent = msg;
+        }
+        
+        function loadApp(html) {
+            log('Uygulama yükleniyor...');
+            progress(100);
+            setTimeout(function() {
+                try {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                } catch(e) {
+                    window.location.reload(true);
+                }
+            }, 200);
+        }
+        
+        function loadOffline() {
+            var cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                log('Cache yükleniyor...');
+                loadApp(cached);
+            } else {
+                log('Yerel uygulama yükleniyor...');
+                window.location.href = 'app.html';
+            }
+        }
+        
+        function fetchUrl(url, timeout) {
+            return new Promise(function(resolve, reject) {
+                var xhr = new XMLHttpRequest();
+                xhr.timeout = timeout || 15000;
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error('HTTP ' + xhr.status));
+                    }
+                };
+                xhr.ontimeout = function() { reject(new Error('Timeout')); };
+                xhr.onerror = function() { reject(new Error('Network')); };
+                xhr.open('GET', url + '?_=' + Date.now(), true);
+                xhr.send();
+            });
+        }
+        
+        async function start() {
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('errorBox').style.display = 'none';
+            
+            status('Sunucuya bağlanılıyor...');
+            progress(10);
+            log('Başlatılıyor...');
+            
+            try {
+                // 1. Manifest kontrolü
+                status('Güncelleme kontrol ediliyor...');
+                progress(20);
+                
+                var manifestText = await fetchUrl(GITHUB + 'manifest.json', 8000);
+                var manifest = JSON.parse(manifestText);
+                log('Manifest: v' + manifest.version);
+                progress(30);
+                
+                // 2. Cache'deki versiyonu kontrol et
+                var cachedVersion = localStorage.getItem(VERSION_KEY) || BUNDLED;
+                var cachedApp = localStorage.getItem(CACHE_KEY);
+                
+                // 3. Versiyon karşılaştır
+                var manifestParts = manifest.version.split('.').map(Number);
+                var cachedParts = cachedVersion.split('.').map(Number);
+                var needsUpdate = false;
+                
+                for (var i = 0; i < 3; i++) {
+                    if ((manifestParts[i] || 0) > (cachedParts[i] || 0)) {
+                        needsUpdate = true;
+                        break;
+                    } else if ((manifestParts[i] || 0) < (cachedParts[i] || 0)) {
+                        break;
+                    }
+                }
+                
+                // 4. Güncelleme gerekiyorsa veya cache yoksa indir
+                if (needsUpdate || !cachedApp) {
+                    status('Güncelleme indiriliyor: v' + manifest.version);
+                    progress(40);
+                    log('İndiriliyor: v' + manifest.version);
+                    
+                    var html = await fetchUrl(GITHUB + 'app.html', 30000);
+                    progress(80);
+                    
+                    // Validasyon
+                    if (html.length < 5000 || html.indexOf('APP_VERSION') === -1) {
+                        throw new Error('Geçersiz içerik');
+                    }
+                    
+                    // Versiyonu çıkar
+                    var match = html.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+                    var downloadedVersion = match ? match[1] : manifest.version;
+                    
+                    // Cache'e kaydet
+                    try {
+                        localStorage.setItem(CACHE_KEY, html);
+                        localStorage.setItem(VERSION_KEY, downloadedVersion);
+                        log('Kaydedildi: v' + downloadedVersion);
+                    } catch(e) {
+                        log('Cache hatası');
+                    }
+                    
+                    status('Yükleniyor...');
+                    progress(90);
+                    loadApp(html);
+                    
+                } else {
+                    // Cache güncel, direkt yükle
+                    status('Uygulama başlatılıyor...');
+                    progress(80);
+                    log('Cache güncel: v' + cachedVersion);
+                    loadApp(cachedApp);
+                }
+                
+            } catch(e) {
+                log('Hata: ' + e.message);
+                
+                // Hata durumunda cache veya yerel dosyadan yükle
+                var cached = localStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    status('Çevrimdışı mod...');
+                    progress(80);
+                    log('Çevrimdışı yükleniyor...');
+                    setTimeout(function() { loadApp(cached); }, 500);
+                } else {
+                    // Cache de yoksa yerel app.html
+                    status('Yerel dosyadan yükleniyor...');
+                    log('Yerel app.html yükleniyor...');
+                    setTimeout(function() { window.location.href = 'app.html'; }, 500);
+                }
+            }
+        }
+        
+        // Sayfa yüklendiğinde başlat
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', start);
+        } else {
+            start();
+        }
+    </script>
+</body>
+</html>
