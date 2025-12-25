@@ -95,8 +95,8 @@
         <div id="errorBox">
             <h3>⚠️ Bağlantı Hatası</h3>
             <p id="errorMsg">Sunucuya bağlanılamadı</p>
-            <button class="btn" onclick="start()">🔄 Tekrar Dene</button>
-            <button class="btn btn-secondary" onclick="loadOffline()">📦 Çevrimdışı Aç</button>
+            <button class="btn" onclick="location.reload()">🔄 Tekrar Dene</button>
+            <button class="btn btn-secondary" onclick="loadLocal()">📦 Çevrimdışı Aç</button>
         </div>
     </div>
     
@@ -106,51 +106,52 @@
         var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
         var CACHE_KEY = 'ota_app_html';
         var VERSION_KEY = 'ota_app_version';
-        var BUNDLED = '3.14.83';
+        var BUNDLED = '3.14.84';
         
-        // ⚠️ Eski/bozuk cache temizliği - 3.14.81 sorununu çözer
-        (function() {
-            var cv = localStorage.getItem(VERSION_KEY);
-            if (cv && (cv.indexOf('3.14.81') !== -1 || cv.indexOf('3.14.82') !== -1)) {
-                localStorage.removeItem(CACHE_KEY);
-                localStorage.removeItem(VERSION_KEY);
-                console.log('[OTA] Eski cache temizlendi: ' + cv);
-            }
-        })();
-        
-        function log(m) { console.log('[OTA] ' + m); document.getElementById('debug').textContent = m; }
-        function status(t) { document.getElementById('status').textContent = t; }
-        function progress(p) { document.getElementById('progress').style.width = p + '%'; }
-        
-        function showError(msg) {
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('errorBox').style.display = 'block';
-            document.getElementById('errorMsg').textContent = msg;
+        function log(m) { 
+            console.log('[OTA] ' + m); 
+            var d = document.getElementById('debug');
+            if (d) d.textContent = m; 
+        }
+        function status(t) { 
+            var s = document.getElementById('status');
+            if (s) s.textContent = t; 
+        }
+        function progress(p) { 
+            var pr = document.getElementById('progress');
+            if (pr) pr.style.width = p + '%'; 
         }
         
+        function showError(msg) {
+            var loader = document.getElementById('loader');
+            var errorBox = document.getElementById('errorBox');
+            var errorMsg = document.getElementById('errorMsg');
+            if (loader) loader.style.display = 'none';
+            if (errorBox) errorBox.style.display = 'block';
+            if (errorMsg) errorMsg.textContent = msg;
+        }
+        
+        function loadLocal() {
+            window.location.replace('app.html');
+        }
+        
+        // Güvenli uygulama yükleme - blob URL kullanarak
         function loadApp(html) {
             log('Uygulama yükleniyor...');
             progress(100);
+            
             setTimeout(function() {
                 try {
-                    document.open();
-                    document.write(html);
-                    document.close();
+                    // Blob URL oluştur ve yönlendir
+                    var blob = new Blob([html], { type: 'text/html' });
+                    var url = URL.createObjectURL(blob);
+                    window.location.replace(url);
                 } catch(e) {
-                    window.location.reload(true);
+                    console.error('LoadApp hatası:', e);
+                    // Hata durumunda yerel dosyaya git
+                    window.location.replace('app.html');
                 }
-            }, 200);
-        }
-        
-        function loadOffline() {
-            var cached = localStorage.getItem(CACHE_KEY);
-            if (cached) {
-                log('Cache yükleniyor...');
-                loadApp(cached);
-            } else {
-                log('Yerel uygulama yükleniyor...');
-                window.location.href = 'app.html';
-            }
+            }, 100);
         }
         
         function fetchUrl(url, timeout) {
@@ -172,8 +173,10 @@
         }
         
         async function start() {
-            document.getElementById('loader').style.display = 'block';
-            document.getElementById('errorBox').style.display = 'none';
+            var loader = document.getElementById('loader');
+            var errorBox = document.getElementById('errorBox');
+            if (loader) loader.style.display = 'block';
+            if (errorBox) errorBox.style.display = 'none';
             
             status('Sunucuya bağlanılıyor...');
             progress(10);
@@ -260,7 +263,7 @@
                     // Cache de yoksa yerel app.html
                     status('Yerel dosyadan yükleniyor...');
                     log('Yerel app.html yükleniyor...');
-                    setTimeout(function() { window.location.href = 'app.html'; }, 500);
+                    setTimeout(function() { window.location.replace('app.html'); }, 500);
                 }
             }
         }
