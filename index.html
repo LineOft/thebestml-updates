@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -15,8 +15,6 @@
             justify-content: center;
             color: #fff;
             padding: 20px;
-            padding-top: env(safe-area-inset-top, 0px);
-            padding-bottom: env(safe-area-inset-bottom, 0px);
         }
         .container { text-align: center; max-width: 350px; width: 100%; }
         .logo {
@@ -96,160 +94,190 @@
             <h3>⚠️ Bağlantı Hatası</h3>
             <p id="errorMsg">Sunucuya bağlanılamadı</p>
             <button class="btn" onclick="location.reload()">🔄 Tekrar Dene</button>
-            <button class="btn btn-secondary" onclick="loadLocal()">📦 Çevrimdışı Aç</button>
+            <button class="btn btn-secondary" onclick="loadCached()">📦 Çevrimdışı Aç</button>
         </div>
     </div>
     
     <div class="debug" id="debug"></div>
 
     <script>
-        var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
+        var GITHUB_BASE = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
         var CACHE_KEY = 'ota_app_html';
         var VERSION_KEY = 'ota_app_version';
-        var BUNDLED = '3.14.85';
+        var BUNDLED_VERSION = '3.14.88';
+        
+        // Sonsuz döngü koruması
+        var OTA_FLAG = 'ota_loading';
         
         function log(m) { 
             console.log('[OTA] ' + m); 
             var d = document.getElementById('debug');
             if (d) d.textContent = m; 
         }
+        
         function status(t) { 
             var s = document.getElementById('status');
             if (s) s.textContent = t; 
         }
+        
         function progress(p) { 
             var pr = document.getElementById('progress');
             if (pr) pr.style.width = p + '%'; 
         }
         
         function showError(msg) {
-            var loader = document.getElementById('loader');
-            var errorBox = document.getElementById('errorBox');
-            var errorMsg = document.getElementById('errorMsg');
-            if (loader) loader.style.display = 'none';
-            if (errorBox) errorBox.style.display = 'block';
-            if (errorMsg) errorMsg.textContent = msg;
-        }
-        
-        function loadLocal() {
-            window.location.href = 'app.html';
-        }
-        
-        // Güvenli uygulama yükleme - GitHub raw URL'ye yönlendir
-        function loadApp(html, version) {
-            log('Uygulama yükleniyor v' + version);
-            progress(100);
-            
-            // HTML'i cache'e kaydet
-            try {
-                localStorage.setItem(CACHE_KEY, html);
-                localStorage.setItem(VERSION_KEY, version);
-                log('Cache güncellendi: v' + version);
-            } catch(e) {
-                console.error('Cache kayıt hatası:', e);
-            }
-            
-            // Direkt GitHub'dan app.html'e yönlendir
-            setTimeout(function() {
-                window.location.href = GITHUB + 'app.html?v=' + version + '&t=' + Date.now();
-            }, 500);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('errorBox').style.display = 'block';
+            document.getElementById('errorMsg').textContent = msg;
         }
         
         // Cache'den yükle
-        function loadFromCache() {
-            var cached = localStorage.getItem(CACHE_KEY);
-            var version = localStorage.getItem(VERSION_KEY) || 'cache';
+        function loadCached() {
+            var html = localStorage.getItem(CACHE_KEY);
+            if (html && html.length > 5000) {
+                loadApp(html);
+            } else {
+                showError('Çevrimdışı veri bulunamadı');
+            }
+        }
+        
+        // Uygulamayı yükle - document.write ile
+        function loadApp(html) {
+            log('Uygulama yükleniyor...');
+            progress(100);
             
-            if (cached && cached.length > 1000) {
-                log('Cache\'den yükleniyor v' + version);
-                progress(100);
-                
-                // Cache varsa GitHub'dan app.html'e yönlendir
-                setTimeout(function() {
-                    window.location.href = GITHUB + 'app.html?v=' + version + '&t=' + Date.now();
-                }, 500);
-                return true;
+            // Sonsuz döngü koruması - flag set et
+            sessionStorage.setItem(OTA_FLAG, 'true');
+            
+            setTimeout(function() {
+                try {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                } catch(e) {
+                    console.error('LoadApp hatası:', e);
+                    showError('Yükleme hatası: ' + e.message);
+                }
+            }, 300);
+        }
+        
+        // Versiyon karşılaştır
+        function isNewer(v1, v2) {
+            var p1 = v1.split('.').map(Number);
+            var p2 = v2.split('.').map(Number);
+            for (var i = 0; i < Math.max(p1.length, p2.length); i++) {
+                var a = p1[i] || 0;
+                var b = p2[i] || 0;
+                if (a > b) return true;
+                if (a < b) return false;
             }
             return false;
         }
         
-        // Versiyon karşılaştırma
-        function compareVersions(v1, v2) {
-            var p1 = v1.split('.').map(Number);
-            var p2 = v2.split('.').map(Number);
-            for (var i = 0; i < Math.max(p1.length, p2.length); i++) {
-                var n1 = p1[i] || 0;
-                var n2 = p2[i] || 0;
-                if (n1 > n2) return 1;
-                if (n1 < n2) return -1;
-            }
-            return 0;
-        }
-        
         // Ana başlatma
         function init() {
+            // Sonsuz döngü koruması - zaten yükleme yapıldıysa cache'den aç
+            if (sessionStorage.getItem(OTA_FLAG) === 'true') {
+                log('OTA zaten tamamlandı, cache kullanılıyor');
+                sessionStorage.removeItem(OTA_FLAG);
+                var cached = localStorage.getItem(CACHE_KEY);
+                if (cached && cached.length > 5000) {
+                    loadApp(cached);
+                    return;
+                }
+            }
+            
             log('OTA başlatılıyor...');
             status('Güncelleme kontrol ediliyor...');
             progress(10);
             
             var cachedVersion = localStorage.getItem(VERSION_KEY) || '0';
-            log('Mevcut: v' + cachedVersion);
+            log('Önbellek: v' + cachedVersion);
             
-            // Manifest kontrol
-            fetch(GITHUB + 'manifest.json?t=' + Date.now())
+            // Manifest kontrol et
+            fetch(GITHUB_BASE + 'manifest.json?t=' + Date.now(), { cache: 'no-store' })
                 .then(function(r) { 
-                    if (!r.ok) throw new Error('Manifest HTTP ' + r.status);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json(); 
                 })
-                .then(function(m) {
+                .then(function(manifest) {
                     progress(30);
-                    var serverVersion = m.version || '0';
+                    var serverVersion = manifest.version || '0';
                     log('Sunucu: v' + serverVersion);
-                    status('Sunucu versiyonu: ' + serverVersion);
+                    status('Sunucu: v' + serverVersion);
                     
-                    // Versiyon karşılaştır
-                    if (compareVersions(serverVersion, cachedVersion) > 0) {
+                    // Güncelleme gerekli mi?
+                    var needsUpdate = isNewer(serverVersion, cachedVersion);
+                    
+                    if (needsUpdate) {
                         log('Güncelleme mevcut!');
                         status('Güncelleme indiriliyor...');
                         progress(50);
                         
-                        // Yeni app.html'i indir
-                        fetch(GITHUB + 'app.html?t=' + Date.now())
+                        // app.html indir
+                        fetch(GITHUB_BASE + 'app.html?t=' + Date.now(), { cache: 'no-store' })
                             .then(function(r) { 
-                                if (!r.ok) throw new Error('App HTTP ' + r.status);
+                                if (!r.ok) throw new Error('HTTP ' + r.status);
                                 return r.text(); 
                             })
                             .then(function(html) {
                                 progress(80);
-                                if (html && html.length > 1000) {
-                                    loadApp(html, serverVersion);
+                                
+                                if (html && html.length > 5000 && html.indexOf('APP_VERSION') !== -1) {
+                                    // Cache'e kaydet
+                                    localStorage.setItem(CACHE_KEY, html);
+                                    localStorage.setItem(VERSION_KEY, serverVersion);
+                                    log('Cache güncellendi: v' + serverVersion);
+                                    
+                                    // Yükle
+                                    loadApp(html);
                                 } else {
-                                    throw new Error('Geçersiz HTML');
+                                    throw new Error('Geçersiz içerik');
                                 }
                             })
                             .catch(function(e) {
                                 log('İndirme hatası: ' + e.message);
-                                if (!loadFromCache()) {
-                                    loadLocal();
-                                }
+                                loadCached();
                             });
                     } else {
-                        // Güncel, direkt GitHub'a yönlendir
+                        // Güncel - cache'den yükle
                         log('Uygulama güncel');
                         status('Yükleniyor...');
-                        progress(100);
-                        setTimeout(function() {
-                            window.location.href = GITHUB + 'app.html?v=' + cachedVersion + '&t=' + Date.now();
-                        }, 500);
+                        progress(80);
+                        
+                        var cached = localStorage.getItem(CACHE_KEY);
+                        if (cached && cached.length > 5000) {
+                            loadApp(cached);
+                        } else {
+                            // Cache boş - GitHub'dan indir
+                            status('İlk yükleme...');
+                            fetch(GITHUB_BASE + 'app.html?t=' + Date.now(), { cache: 'no-store' })
+                                .then(function(r) { return r.text(); })
+                                .then(function(html) {
+                                    if (html && html.length > 5000) {
+                                        localStorage.setItem(CACHE_KEY, html);
+                                        localStorage.setItem(VERSION_KEY, serverVersion);
+                                        loadApp(html);
+                                    } else {
+                                        throw new Error('Geçersiz içerik');
+                                    }
+                                })
+                                .catch(function(e) {
+                                    showError('Bağlantı hatası: ' + e.message);
+                                });
+                        }
                     }
                 })
                 .catch(function(e) {
                     log('Manifest hatası: ' + e.message);
                     status('Çevrimdışı mod...');
                     
-                    // Cache'den yükle veya local'e git
-                    if (!loadFromCache()) {
-                        loadLocal();
+                    // Offline - cache'den yükle
+                    var cached = localStorage.getItem(CACHE_KEY);
+                    if (cached && cached.length > 5000) {
+                        loadApp(cached);
+                    } else {
+                        showError('İnternet bağlantısı gerekli');
                     }
                 });
         }

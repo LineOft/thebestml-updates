@@ -1,12 +1,12 @@
 ﻿{
     "changelog":  [
-                      "Firebase long polling aktif",
-                      "Firestore network zorla etkinlestirildi",
-                      "Server source ile veri cekme"
+                      "OTA sistemi geri getirildi",
+                      "Sonsuz dongu korumasi eklendi",
+                      "Firebase long polling aktif"
                   ],
-    "version":  "3.14.87",
-    "minBuildNumber":  236,
+    "version":  "3.14.88",
+    "minBuildNumber":  237,
     "required":  true,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  236
+    "buildNumber":  237
 }
