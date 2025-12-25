@@ -1,10 +1,10 @@
 ﻿{
     "changelog":  [
-                      "Firestore baglanti kontrolu eklendi"
+                      "Blob URL kaldirildi - Firebase baglantisi duzeltildi"
                   ],
-    "version":  "3.14.84",
-    "minBuildNumber":  233,
-    "required":  false,
+    "version":  "3.14.85",
+    "minBuildNumber":  234,
+    "required":  true,
     "releaseDate":  "2025-12-25",
-    "buildNumber":  233
+    "buildNumber":  234
 }
