@@ -8460,6 +8460,12 @@
     // Firestore'dan oyun/hile verilerini yükle
     async function loadGamesAndCheats() {
         try {
+            // db kontrolü
+            if (typeof db === 'undefined' || !db) {
+                console.error('❌ Firestore db tanımlı değil!');
+                throw new Error('Firestore bağlantısı yok');
+            }
+            
             const doc = await db.collection('settings').doc('gamesData').get();
             if (doc.exists && doc.data().games) {
                 gamesData = doc.data().games;
