@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.8';
+    const APP_VERSION = '4.0.9';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10340,10 +10340,13 @@
             const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
             
             html += `
-                <div class="sort-game-card" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; cursor: move; transition: all 0.2s;">
+                <div class="sort-game-card" data-game-id="${gameId}" data-sort-order="${game.sortOrder ?? 999}" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span class="drag-handle" style="color: #9C27B0; font-size: 18px; cursor: grab; user-select: none; padding: 5px;">☰</span>
-                        <div class="game-info-area" onclick="toggleSortGameCheats('${gameId}')" style="display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <button onclick="moveGameUp('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">▲</button>
+                            <button onclick="moveGameDown('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">▼</button>
+                        </div>
+                        <div onclick="toggleSortGameCheats('${gameId}')" style="display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;">
                             ${game.image ? `<img src="${game.image}" style="width: 45px; height: 45px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                             <div style="flex: 1;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -10352,13 +10355,13 @@
                                 </div>
                                 <div style="font-size: 12px; color: #888; margin-top: 2px;">${game.desc || 'Açıklama yok'}</div>
                             </div>
-                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">▼</span>
+                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">▶</span>
                         </div>
                     </div>
                     
                     <!-- Hileler (başlangıçta gizli) -->
                     <div id="sortCheats${gameId}" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;">
-                        <div style="padding-left: 30px; margin-top: 10px; border-left: 2px solid rgba(156, 39, 176, 0.3);">
+                        <div style="padding-left: 40px; margin-top: 10px; border-left: 2px solid rgba(156, 39, 176, 0.3);">
                             <div id="sortCheatList${gameId}">
                                 <!-- Hileler buraya gelecek -->
                             </div>
@@ -10369,9 +10372,6 @@
         });
         
         container.innerHTML = html;
-        
-        // Drag and drop event listeners ekle
-        initSortDragAndDrop();
     }
     
     // Oyun kartının hilelerini aç/kapat
@@ -10642,6 +10642,71 @@
         }
         
         sortDraggedElement = null;
+    }
+    
+    // Oyunu yukarı taşı
+    async function moveGameUp(gameId) {
+        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        
+        const sortedGames = Object.entries(gamesData)
+            .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
+        
+        const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
+        
+        if (currentIndex > 0) {
+            const prevGameId = sortedGames[currentIndex - 1][0];
+            await swapGameOrders(gameId, prevGameId);
+            showToast('✅ Oyun yukarı taşındı');
+        } else {
+            showToast('⚠️ Bu oyun zaten en üstte');
+        }
+    }
+    
+    // Oyunu aşağı taşı
+    async function moveGameDown(gameId) {
+        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        
+        const sortedGames = Object.entries(gamesData)
+            .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
+        
+        const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
+        
+        if (currentIndex < sortedGames.length - 1) {
+            const nextGameId = sortedGames[currentIndex + 1][0];
+            await swapGameOrders(gameId, nextGameId);
+            showToast('✅ Oyun aşağı taşındı');
+        } else {
+            showToast('⚠️ Bu oyun zaten en altta');
+        }
+    }
+    
+    // İki oyunun sırasını değiştir
+    async function swapGameOrders(gameId1, gameId2) {
+        try {
+            const order1 = gamesData[gameId1].sortOrder ?? 999;
+            const order2 = gamesData[gameId2].sortOrder ?? 999;
+            
+            gamesData[gameId1].sortOrder = order2;
+            gamesData[gameId2].sortOrder = order1;
+            
+            await Promise.all([
+                db.collection('games').doc(gameId1).update({ sortOrder: order2 }),
+                db.collection('games').doc(gameId2).update({ sortOrder: order1 })
+            ]);
+            
+            // Listeleri güncelle
+            loadGameCheatList();
+            renderHomeGames();
+            
+            // Sıralama modal açıksa güncelle
+            const sortModal = document.getElementById('sortModal');
+            if (sortModal && sortModal.classList.contains('active')) {
+                renderSortModal();
+            }
+        } catch(e) {
+            console.error('Oyun sıralama hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
     }
     
     // Oyun yerlerini değiştir (Sıralama modal'dan)

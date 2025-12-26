@@ -1,12 +1,12 @@
 {
-    "version": "4.0.8",
-    "buildNumber": 238,
+    "version": "4.0.9",
+    "buildNumber": 239,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-26",
     "changelog": [
-        "🔧 Sürükle-bırak sistemi tamamen yeniden yazıldı",
-        "✅ Drag ve click eventleri artık çakışmıyor",
-        "🎯 Oyun kartlarını sürükleyerek sıralayın",
+        "⬆️⬇️ Yukarı/Aşağı butonları ile sıralama",
+        "🎮 Oyunları kolay sıralayın",
+        "✅ Mobil ve desktop uyumlu",
         "⬍ Ayrı Sıralama Ekranı eklendi",
         "👋 Sıralama butonuyla özel modal açılır",
         "🎮 Oyun kartına tıklayarak hilelerini sırala",
