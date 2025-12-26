@@ -2923,10 +2923,10 @@
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     
-                    // Max boyut 300x300
+                    // Max boyut 200x200 (daha küçük)
                     let width = img.width;
                     let height = img.height;
-                    const maxSize = 300;
+                    const maxSize = 200;
                     
                     if (width > height) {
                         if (width > maxSize) {
@@ -2944,8 +2944,8 @@
                     canvas.height = height;
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // JPEG olarak %70 kalitede kaydet
-                    const base64 = canvas.toDataURL('image/jpeg', 0.7);
+                    // JPEG olarak %50 kalitede kaydet (daha düşük)
+                    const base64 = canvas.toDataURL('image/jpeg', 0.5);
                     resolve(base64);
                 };
                 img.onerror = reject;
@@ -8478,217 +8478,134 @@
     let currentDynamicCheat = null; // Şu an açık olan dinamik hile
     let selectedDynamicPrice = null; // Seçili fiyat
     
-    // Firestore'dan oyun/hile verilerini yükle
+    // Firestore'dan oyun/hile verilerini yükle (her oyun ayrı dökümanda)
     async function loadGamesAndCheats() {
         try {
-            const doc = await db.collection('settings').doc('gamesData').get();
-            if (doc.exists && doc.data().games) {
-                gamesData = doc.data().games;
-                console.log('Oyunlar yüklendi:', Object.keys(gamesData));
-                
-                // ============ KURULUM ADIMLARI MİGRATION ============
-                // Mevcut veride setupSteps boşsa otomatik olarak doldur
-                let needsUpdate = false;
-                
-                // TheBestML IMGUI için kurulum adımları
-                if (gamesData.mobile_legends?.cheats?.thebestml) {
-                    const imgui = gamesData.mobile_legends.cheats.thebestml;
-                    if (!imgui.setupSteps || imgui.setupSteps.length === 0) {
-                        imgui.setupSteps = [
-                            {
-                                title: '1️⃣ Orijinal ML İndirin',
-                                description: 'Playstoreden Mobile Legends orijinal sürümünü indirin. Otomatik güncellemeleri kapatmayı unutmayın!',
-                                actionType: 'playstore'
-                            },
-                            {
-                                title: '2️⃣ Sertifikaları Kapatın',
-                                description: 'Bypass korumasının sorunsuz çalışabilmesi için videoda gösterildiği gibi sertifikaları kapatın. Bu adım ÇOK ÖNEMLİ!',
-                                actionType: 'modal',
-                                modalId: 'imguiModal'
-                            },
-                            {
-                                title: '3️⃣ IMGUI APK İndirin',
-                                description: 'TheBestML IMGUI V2.8 APK dosyasını indirin ve telefonunuza kurun.',
-                                actionType: 'download',
-                                downloadUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html'
-                            },
-                            {
-                                title: '4️⃣ Spa Dosyasını Çalıştırın',
-                                description: 'İndirdiğiniz TheBestML Spa dosyasını çalıştırın. Karşınıza çıkan ekrandan gerekli izinleri verin.',
-                                actionType: 'none'
-                            },
-                            {
-                                title: '5️⃣ Mobile Legends Klonlayın',
-                                description: 'Uygulama içinden Mobile Legends\'ı seçin ve "Klon" yazısına tıklayın. Klonlama işlemi birkaç dakika sürebilir.',
-                                actionType: 'none'
-                            },
-                            {
-                                title: '6️⃣ Klonlanan ML\'yi Başlatın',
-                                description: 'Klonladığınız ML sürümünü başlatın. Key giriş ekranında hesabım kısmındaki KEY\'inizi kopyalayıp yapıştırın. IMGUI menüsü oyun içinde görünecektir!',
-                                actionType: 'none'
-                            }
-                        ];
-                        // apkUrl ve features'ı da güncelle
-                        imgui.apkUrl = imgui.apkUrl || 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html';
-                        imgui.features = imgui.features || ['👁 Oyuncu Görünümü', '❤️ Düşman HP', '🗺 Harita Hilesi', '📦 Kutulama', '🌲 Orman Yaratıklarını Görme'];
-                        needsUpdate = true;
-                        console.log('TheBestML IMGUI kurulum adımları güncellendi');
-                    }
-                }
-                
-                // TheBestML Pro için kurulum adımları
-                if (gamesData.mobile_legends?.cheats?.thebestml_pro) {
-                    const pro = gamesData.mobile_legends.cheats.thebestml_pro;
-                    if (!pro.setupSteps || pro.setupSteps.length === 0) {
-                        pro.setupSteps = [
-                            {
-                                title: '1️⃣ Orijinal ML İndirin',
-                                description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
-                                actionType: 'playstore'
-                            },
-                            {
-                                title: '2️⃣ TheBestML Pro APK İndirin',
-                                description: 'TheBestML Pro APK dosyasını indirin ve kurun.',
-                                actionType: 'download',
-                                downloadUrl: ''
-                            },
-                            {
-                                title: '3️⃣ Oyuna Giriş Yapın',
-                                description: 'Oyuna giriş yapın, key giriş ekranına geldiğinizde hesabım kısmındaki KEY\'inizi kopyalayıp yapıştırın.',
-                                actionType: 'none'
-                            }
-                        ];
-                        needsUpdate = true;
-                        console.log('TheBestML Pro kurulum adımları güncellendi');
-                    }
-                }
-                
-                // Değişiklik varsa Firestore'a kaydet
-                if (needsUpdate) {
-                    try {
-                        await db.collection('settings').doc('gamesData').set({ games: gamesData });
-                        console.log('✅ Kurulum adımları Firestore\'a kaydedildi!');
-                    } catch(e) {
-                        console.error('Kurulum adımları kaydetme hatası:', e);
-                    }
-                }
-                // ============ MİGRATION SONU ============
-                
+            // Her oyunu games/{gameId} koleksiyonundan yükle
+            const gamesSnapshot = await db.collection('games').get();
+            gamesData = {};
+            
+            gamesSnapshot.forEach(doc => {
+                gamesData[doc.id] = doc.data();
+            });
+            
+            console.log('Oyunlar yüklendi:', Object.keys(gamesData));
             } else {
                 console.log('Firestore\'da oyun verisi yok, varsayılan oluşturuluyor...');
-                // Varsayılan veri yapısı
-                gamesData = {
-                    'mobile_legends': {
-                        name: 'Mobile Legends',
-                        image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/mobile-legends-icon.jpg', 
-                        desc: 'Mobil MOBA oyunu',
-                        playStore: 'https://play.google.com/store/apps/details?id=com.mobile.legends',
-                        status: 'active',
-                        cheats: {
-                            'thebestml': {
-                                name: 'TheBestML IMGUI',
-                                image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
-                                version: 'V2.8',
-                                desc: 'Gelişmiş IMGUI modu • ESP, Map Hack ve daha fazlası',
-                                apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
-                                videoUrl: '',
-                                features: ['👁 Oyuncu Görünümü', '❤️ Düşman HP', '🗺 Harita Hilesi', '📦 Kutulama', '🌲 Orman Yaratıklarını Görme'],
-                                prices: [
-                                    { days: '1', label: '1 Gün', price: '220₺' },
-                                    { days: '30', label: '30 Gün', price: '850₺' },
-                                    { days: '90', label: '90 Gün', price: '1800₺' },
-                                    { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
-                                ],
-                                status: 'active',
-                                setupSteps: [
-                                    {
-                                        title: 'Orijinal ML İndirin',
-                                        description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
-                                        actionType: 'playstore'
-                                    },
-                                    {
-                                        title: 'Sertifikaları Kapatın',
-                                        description: 'Bypass korumasının çalışabilmesi için sertifikaları kapatın. Aşağıdaki butona tıklayarak video rehberi izleyin.',
-                                        actionType: 'modal',
-                                        modalId: 'imguiModal'
-                                    },
-                                    {
-                                        title: 'IMGUI APK İndirin',
-                                        description: 'TheBestML IMGUI APK dosyasını indirin ve kurun.',
-                                        actionType: 'download',
-                                        downloadUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html'
-                                    },
-                                    {
-                                        title: 'Spa Dosyasını Çalıştırın',
-                                        description: 'İndirdiğiniz TheBestML Spa dosyasını çalıştırın ve karşınıza çıkan ekrandan izinleri verin.',
-                                        actionType: 'none'
-                                    },
-                                    {
-                                        title: 'ML Klonlayın',
-                                        description: 'Listeden Mobile Legends\'ı seçin ve "Klon" yazısına tıklayın.',
-                                        actionType: 'none'
-                                    },
-                                    {
-                                        title: 'Klonlanan ML\'yi Başlatın',
-                                        description: 'Klonladığınız ML sürümünü başlatın ve hesabım kısmındaki KEY\'iniz ile giriş yapın.',
-                                        actionType: 'none'
-                                    }
-                                ]
-                            },
-                            'thebestml_pro': {
-                                name: 'TheBestML Pro',
-                                image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
-                                version: 'YENİ',
-                                desc: 'Full Map • Auto Combo • Auto Aim • Rootlu/Rootsuz',
-                                apkUrl: '',
-                                videoUrl: '',
-                                features: [
-                                    '🗺️ Full Map',
-                                    '🐾 Oto Pençe',
-                                    '⚔️ Ling Oto Combo',
-                                    '🌟 Julian Oto Combo',
-                                    '🗡️ Arlott Oto Combo',
-                                    '💀 Gusion Oto Combo',
-                                    '🔫 Granger Oto Ulti',
-                                    '🧲 Franco Mıknatıs Hook',
-                                    '🎯 Xavier Oto Ulti',
-                                    '🚀 Tigreal Oto Işınlanma + Ulti',
-                                    '👊 Chou Oto Combo',
-                                    '🪓 Balmond Oto Ulti',
-                                    '⚡ Martis Oto Ulti',
-                                    '🎯 Full Auto Aim'
-                                ],
-                                prices: [
-                                    { days: '1', label: '1 Gün', price: '220₺' },
-                                    { days: '30', label: '30 Gün', price: '850₺' },
-                                    { days: '90', label: '90 Gün', price: '1800₺' },
-                                    { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
-                                ],
-                                status: 'active',
-                                setupSteps: [
-                                    {
-                                        title: 'Orijinal ML İndirin',
-                                        description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
-                                        actionType: 'playstore'
-                                    },
-                                    {
-                                        title: 'TheBestML Pro APK İndirin',
-                                        description: 'TheBestML Pro APK dosyasını indirin ve kurun.',
-                                        actionType: 'download',
-                                        downloadUrl: ''
-                                    },
-                                    {
-                                        title: 'Oyuna Giriş Yapın',
-                                        description: 'Oyuna giriş yapın, key giriş ekranına geldiğinizde hesabım kısmındaki KEY\'inizi kopyalayıp yapıştırın.',
-                                        actionType: 'none'
-                                    }
-                                ]
-                            }
+                // Varsayılan oyun verisi
+                const defaultGame = {
+                    name: 'Mobile Legends',
+                    image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/mobile-legends-icon.jpg', 
+                    desc: 'Mobil MOBA oyunu',
+                    playStore: 'https://play.google.com/store/apps/details?id=com.mobile.legends',
+                    status: 'active',
+                    cheats: {
+                        'thebestml': {
+                            name: 'TheBestML IMGUI',
+                            image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
+                            version: 'V2.8',
+                            desc: 'Gelişmiş IMGUI modu • ESP, Map Hack ve daha fazlası',
+                            apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
+                            videoUrl: '',
+                            features: ['👁 Oyuncu Görünümü', '❤️ Düşman HP', '🗺 Harita Hilesi', '📦 Kutulama', '🌲 Orman Yaratıklarını Görme'],
+                            prices: [
+                                { days: '1', label: '1 Gün', price: '220₺' },
+                                { days: '30', label: '30 Gün', price: '850₺' },
+                                { days: '90', label: '90 Gün', price: '1800₺' },
+                                { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
+                            ],
+                            status: 'active',
+                            setupSteps: [
+                                {
+                                    title: 'Orijinal ML İndirin',
+                                    description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
+                                    actionType: 'playstore'
+                                },
+                                {
+                                    title: 'Sertifikaları Kapatın',
+                                    description: 'Bypass korumasının çalışabilmesi için sertifikaları kapatın. Aşağıdaki butona tıklayarak video rehberi izleyin.',
+                                    actionType: 'modal',
+                                    modalId: 'imguiModal'
+                                },
+                                {
+                                    title: 'IMGUI APK İndirin',
+                                    description: 'TheBestML IMGUI APK dosyasını indirin ve kurun.',
+                                    actionType: 'download',
+                                    downloadUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html'
+                                },
+                                {
+                                    title: 'Spa Dosyasını Çalıştırın',
+                                    description: 'İndirdiğiniz TheBestML Spa dosyasını çalıştırın ve karşınıza çıkan ekrandan izinleri verin.',
+                                    actionType: 'none'
+                                },
+                                {
+                                    title: 'ML Klonlayın',
+                                    description: 'Listeden Mobile Legends\'ı seçin ve "Klon" yazısına tıklayın.',
+                                    actionType: 'none'
+                                },
+                                {
+                                    title: 'Klonlanan ML\'yi Başlatın',
+                                    description: 'Klonladığınız ML sürümünü başlatın ve hesabım kısmındaki KEY\'iniz ile giriş yapın.',
+                                    actionType: 'none'
+                                }
+                            ]
+                        },
+                        'thebestml_pro': {
+                            name: 'TheBestML Pro',
+                            image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
+                            version: 'YENİ',
+                            desc: 'Full Map • Auto Combo • Auto Aim • Rootlu/Rootsuz',
+                            apkUrl: '',
+                            videoUrl: '',
+                            features: [
+                                '🗺️ Full Map',
+                                '🐾 Oto Pençe',
+                                '⚔️ Ling Oto Combo',
+                                '🌟 Julian Oto Combo',
+                                '🗡️ Arlott Oto Combo',
+                                '💀 Gusion Oto Combo',
+                                '🔫 Granger Oto Ulti',
+                                '🧲 Franco Mıknatıs Hook',
+                                '🎯 Xavier Oto Ulti',
+                                '🚀 Tigreal Oto Işınlanma + Ulti',
+                                '👊 Chou Oto Combo',
+                                '🪓 Balmond Oto Ulti',
+                                '⚡ Martis Oto Ulti',
+                                '🎯 Full Auto Aim'
+                            ],
+                            prices: [
+                                { days: '1', label: '1 Gün', price: '220₺' },
+                                { days: '30', label: '30 Gün', price: '850₺' },
+                                { days: '90', label: '90 Gün', price: '1800₺' },
+                                { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
+                            ],
+                            status: 'active',
+                            setupSteps: [
+                                {
+                                    title: 'Orijinal ML İndirin',
+                                    description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
+                                    actionType: 'playstore'
+                                },
+                                {
+                                    title: 'TheBestML Pro APK İndirin',
+                                    description: 'TheBestML Pro APK dosyasını indirin ve kurun.',
+                                    actionType: 'download',
+                                    downloadUrl: ''
+                                },
+                                {
+                                    title: 'Oyuna Giriş Yapın',
+                                    description: 'Oyuna giriş yapın, key giriş ekranına geldiğinizde hesabım kısmındaki KEY\'inizi kopyalayıp yapıştırın.',
+                                    actionType: 'none'
+                                }
+                            ]
                         }
                     }
                 };
+                
                 try {
-                    await db.collection('settings').doc('gamesData').set({ games: gamesData });
+                    // Her oyunu ayrı dokümanda tut
+                    await db.collection('games').doc('mobile_legends').set(defaultGame);
+                    gamesData['mobile_legends'] = defaultGame;
                     console.log('Varsayılan oyun verisi kaydedildi');
                 } catch(saveErr) {
                     console.error('Varsayılan veri kaydetme hatası:', saveErr);
@@ -9314,11 +9231,30 @@
         }
     }
     
-    // Veritabanına kaydet
+    // Veritabanına kaydet - Belirli bir oyunu kaydet
+    async function saveGameData(gameId) {
+        try {
+            if (!gamesData[gameId]) {
+                throw new Error('Oyun bulunamadı: ' + gameId);
+            }
+            await db.collection('games').doc(gameId).set(gamesData[gameId]);
+            updateCheatStatusBadges();
+            return true;
+        } catch(e) {
+            console.error('Kaydetme hatası:', e);
+            showToast('❌ Kaydetme hatası: ' + e.message);
+            return false;
+        }
+    }
+    
+    // Tüm oyunları kaydet (eski uyumluluk için)
     async function saveGamesData() {
         try {
-            await db.collection('settings').doc('gamesData').set({ games: gamesData });
-            updateCheatStatusBadges(); // Kayıt sonrası badge'leri güncelle
+            const promises = Object.keys(gamesData).map(gameId => 
+                db.collection('games').doc(gameId).set(gamesData[gameId])
+            );
+            await Promise.all(promises);
+            updateCheatStatusBadges();
             return true;
         } catch(e) {
             console.error('Kaydetme hatası:', e);
@@ -9478,7 +9414,8 @@
             cheats: gamesData[newGameId]?.cheats || {}
         };
         
-        if (await saveGamesData()) {
+        // Sadece değiştirilen oyunu kaydet
+        if (await saveGameData(newGameId)) {
             showToast('✅ Oyun kaydedildi!');
             closeModal('gameModal');
             updateGameSelects();
@@ -9711,7 +9648,13 @@
             setupSteps: gamesData[gameId].cheats[newCheatId]?.setupSteps || []
         };
         
-        if (await saveGamesData()) {
+        // Hile değiştiyse eski oyundan sil
+        if (cheatId && originalGameId && originalGameId !== gameId) {
+            await saveGameData(originalGameId); // Eski oyunu kaydet
+        }
+        
+        // Sadece değiştirilen oyunu kaydet
+        if (await saveGameData(gameId)) {
             showToast('✅ Hile kaydedildi!');
             closeModal('cheatModal');
             updateGameSelects();
@@ -9944,7 +9887,8 @@
         
         gamesData[gameId].cheats[cheatId].setupSteps = currentSetupSteps;
         
-        if (await saveGamesData()) {
+        // Sadece değiştirilen oyunu kaydet
+        if (await saveGameData(gameId)) {
             showToast('✅ Kurulum adımları kaydedildi!');
             closeModal('setupModal');
             loadGameCheatList();
@@ -10017,7 +9961,9 @@
         
         delete gamesData[gameId];
         
-        if (await saveGamesData()) {
+        try {
+            // Firestore'dan dokümani sil
+            await db.collection('games').doc(gameId).delete();
             showToast('✅ Oyun silindi!');
             updateGameSelects();
             loadGameCheatList();
@@ -10030,6 +9976,10 @@
                 showPage('home');
                 currentDynamicGame = null;
             }
+        } catch(e) {
+            console.error('Silme hatası:', e);
+            showToast('❌ Silme hatası: ' + e.message);
+            return false;
         }
     }
     
@@ -10043,7 +9993,8 @@
         
         delete gamesData[gameId].cheats[cheatId];
         
-        if (await saveGamesData()) {
+        // Sadece değiştirilen oyunu kaydet
+        if (await saveGameData(gameId)) {
             showToast('✅ Hile silindi!');
             updateGameSelects();
             loadGameCheatList();
