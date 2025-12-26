@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.7';
+    const APP_VERSION = '4.0.8';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10340,19 +10340,19 @@
             const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
             
             html += `
-                <div class="sort-game-card" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; transition: all 0.2s;">
+                <div class="sort-game-card" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; cursor: move; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <span draggable="true" style="color: #9C27B0; font-size: 18px; cursor: grab; user-select: none; padding: 5px;">☰</span>
-                        <div onclick="event.stopPropagation(); toggleSortGameCheats('${gameId}')" style="display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;">
-                            ${game.image ? `<img src="${game.image}" style="width: 45px; height: 45px; border-radius: 10px; object-fit: cover; pointer-events: none;" onerror="this.style.display='none'">` : ''}
-                            <div style="flex: 1; pointer-events: none;">
+                        <span class="drag-handle" style="color: #9C27B0; font-size: 18px; cursor: grab; user-select: none; padding: 5px;">☰</span>
+                        <div class="game-info-area" onclick="toggleSortGameCheats('${gameId}')" style="display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;">
+                            ${game.image ? `<img src="${game.image}" style="width: 45px; height: 45px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
+                            <div style="flex: 1;">
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span style="color: #fff; font-weight: bold; font-size: 14px;">${statusBadge} ${game.name}</span>
                                     <span style="background: #2196F3; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${cheatCount} hile</span>
                                 </div>
                                 <div style="font-size: 12px; color: #888; margin-top: 2px;">${game.desc || 'Açıklama yok'}</div>
                             </div>
-                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s; pointer-events: none;">▼</span>
+                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">▼</span>
                         </div>
                     </div>
                     
@@ -10429,9 +10429,22 @@
     // Drag and Drop sistemi (Sıralama modal)
     let sortDraggedElement = null;
     let sortDraggedOverElement = null;
+    let isDraggingSort = false;
     
     function initSortDragAndDrop() {
         document.querySelectorAll('.sort-game-card').forEach(item => {
+            // Drag handle'dan sürüklerken onclick'i engelle
+            const gameInfoArea = item.querySelector('.game-info-area');
+            if (gameInfoArea) {
+                gameInfoArea.addEventListener('click', function(e) {
+                    if (isDraggingSort) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
+                }, true);
+            }
+            
             // Desktop
             item.addEventListener('dragstart', handleSortGameDragStart);
             item.addEventListener('dragover', handleSortGameDragOver);
@@ -10463,6 +10476,7 @@
     // === OYUN DRAG & DROP (Sort Modal) ===
     function handleSortGameDragStart(e) {
         sortDraggedElement = this;
+        isDraggingSort = true;
         this.style.opacity = '0.5';
         e.dataTransfer.effectAllowed = 'move';
     }
@@ -10483,6 +10497,7 @@
         if (sortDraggedElement !== this && this.classList.contains('sort-game-card')) {
             const draggedId = sortDraggedElement.dataset.gameId;
             const targetId = this.dataset.gameId;
+            console.log('🔄 Oyun swap:', draggedId, '↔️', targetId);
             swapGames(draggedId, targetId);
         }
         
@@ -10495,6 +10510,11 @@
         document.querySelectorAll('.sort-game-card').forEach(item => {
             item.style.borderTop = '';
         });
+        
+        // Drag bitti, click tekrar aktif olabilir
+        setTimeout(() => {
+            isDraggingSort = false;
+        }, 100);
     }
     
     // === OYUN TOUCH (Sort Modal) ===
