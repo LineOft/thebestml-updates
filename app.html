@@ -8480,26 +8480,43 @@
     
     // Firestore'dan oyun/hile verilerini yükle (her oyun ayrı dökümanda)
     async function loadGamesAndCheats() {
+        const debugDiv = document.getElementById('homeGamesGrid');
+        
+        function showDebug(msg, isError = false) {
+            if (debugDiv) {
+                const color = isError ? '#f44336' : '#4CAF50';
+                debugDiv.innerHTML += `<div style="background: ${color}22; border-left: 3px solid ${color}; padding: 10px; margin: 5px; font-size: 12px; color: ${color}; border-radius: 5px;">${msg}</div>`;
+            }
+            console.log(msg);
+        }
+        
         try {
+            showDebug('🔄 Başlangıç: Oyunlar yükleniyor...');
+            
             // Önce yeni yapıyı dene: games/{gameId} koleksiyonu
+            showDebug('📡 games koleksiyonu kontrol ediliyor...');
             const gamesSnapshot = await db.collection('games').get();
             gamesData = {};
+            
+            showDebug(`📊 Koleksiyon sonucu: ${gamesSnapshot.size} doküman bulundu`);
             
             if (!gamesSnapshot.empty) {
                 // Yeni yapıda veri var
                 gamesSnapshot.forEach(doc => {
                     gamesData[doc.id] = doc.data();
                 });
-                console.log('✅ Oyunlar yüklendi (yeni yapı):', Object.keys(gamesData));
+                showDebug(`✅ Oyunlar yüklendi (yeni yapı): ${Object.keys(gamesData).join(', ')}`);
             } else {
                 // Yeni yapıda veri yok, eski yapıyı dene: settings/gamesData
-                console.log('⚠️ Yeni yapıda veri yok, eski yapıdan yükleniyor...');
+                showDebug('⚠️ Yeni yapıda veri yok, eski yapı kontrol ediliyor...');
                 const oldDoc = await db.collection('settings').doc('gamesData').get();
                 
-                if (oldDoc.exists && oldDoc.data().games) {
+                showDebug(`🔍 Eski doküman var mı: ${oldDoc.exists}`);
+                
+                if (oldDoc.exists && oldDoc.data() && oldDoc.data().games) {
                     // Eski yapıdan veri bulduk, otomatik migration yap
                     const oldGamesData = oldDoc.data().games;
-                    console.log('📦 Eski yapıda veri bulundu, migration başlıyor...');
+                    showDebug(`📦 Eski yapıda ${Object.keys(oldGamesData).length} oyun bulundu, migration başlıyor...`);
                     
                     // Her oyunu yeni yapıya aktar
                     const migrationPromises = [];
@@ -8512,14 +8529,14 @@
                     
                     // Tüm oyunları kaydet
                     await Promise.all(migrationPromises);
-                    console.log('✅ Migration tamamlandı! Oyunlar:', Object.keys(gamesData));
+                    showDebug(`✅ Migration tamamlandı! Oyunlar: ${Object.keys(gamesData).join(', ')}`);
                     
                     // Eski veriyi yedek olarak sakla
                     await db.collection('settings').doc('gamesData_BACKUP').set(oldDoc.data());
-                    console.log('💾 Eski veri yedeklendi: settings/gamesData_BACKUP');
+                    showDebug('💾 Eski veri yedeklendi');
                 } else {
                     // Hiç veri yok, varsayılan oluştur
-                    console.log('📝 Hiç veri yok, varsayılan oluşturuluyor...');
+                    showDebug('📝 Hiç veri yok, varsayılan oluşturuluyor...');
                     
                     // Varsayılan oyun verisi
                     const defaultGame = {
@@ -8632,22 +8649,28 @@
                 };
                 
                     try {
+                        showDebug('💾 Varsayılan oyun kaydediliyor...');
                         // Her oyunu ayrı dokümanda tut
                         await db.collection('games').doc('mobile_legends').set(defaultGame);
                         gamesData['mobile_legends'] = defaultGame;
-                        console.log('✅ Varsayılan oyun verisi kaydedildi');
+                        showDebug('✅ Varsayılan oyun verisi kaydedildi');
                     } catch(saveErr) {
-                        console.error('❌ Varsayılan veri kaydetme hatası:', saveErr);
+                        showDebug('❌ Varsayılan veri kaydetme hatası: ' + saveErr.message, true);
                     }
                 }
             }
+            
+            showDebug(`🎮 Toplam ${Object.keys(gamesData).length} oyun yüklendi`);
+            showDebug('🔄 Sayfa render ediliyor...');
             
             renderHomeGames(); // Ana sayfadaki oyunları render et
             updateGameSelects();
             loadGameCheatList();
             updateCheatStatusBadges(); // Durum badge'lerini güncelle
+            
+            showDebug('✅ YÜKLENDİ! Sayfa hazır.');
         } catch(e) {
-            console.error('❌ Oyun/Hile yükleme hatası:', e);
+            showDebug('❌ HATA: ' + e.message + ' | ' + e.stack, true);
             // Hata durumunda bile bir şey göster
             const grid = document.getElementById('homeGamesGrid');
             if (grid) {
@@ -8655,7 +8678,7 @@
                     <div style="text-align: center; padding: 30px; color: #f44336;">
                         <div style="font-size: 50px; margin-bottom: 15px;">⚠️</div>
                         <div style="font-size: 16px; margin-bottom: 10px;">Oyunlar yüklenemedi</div>
-                        <div style="font-size: 13px; color: #666;">${e.message}</div>
+                        <div style="font-size: 11px; color: #666; margin: 10px; padding: 10px; background: #222; border-radius: 5px; text-align: left; overflow: auto;">${e.message}<br><br>${e.stack || ''}</div>
                         <button onclick="loadGamesAndCheats()" style="margin-top: 15px; background: #4CAF50; border: none; color: #fff; padding: 10px 20px; border-radius: 8px; cursor: pointer;">🔄 Tekrar Dene</button>
                     </div>
                 `;
