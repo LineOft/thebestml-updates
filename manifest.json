@@ -1,12 +1,12 @@
 {
-    "version": "4.0.6",
-    "buildNumber": 236,
+    "version": "4.0.7",
+    "buildNumber": 237,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-26",
     "changelog": [
-        "🐛 Sıralama modal'ında drag-drop sorunu düzeltildi",
-        "☰ Drag handle artık bağımsız çalışıyor",
-        "🎯 Oyunları sürükleyerek sıralayabilirsiniz",
+        "✅ Drag-drop sistemi tamamen düzeltildi",
+        "☰ Sürükleme şimdi doğru çalışıyor",
+        "🎯 Oyunları kolayca sıralayabilirsiniz",
         "⬍ Ayrı Sıralama Ekranı eklendi",
         "👋 Sıralama butonuyla özel modal açılır",
         "🎮 Oyun kartına tıklayarak hilelerini sırala",
