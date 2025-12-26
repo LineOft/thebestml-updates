@@ -1,9 +1,11 @@
 {
-    "version": "4.0.1",
-    "buildNumber": 231,
+    "version": "4.0.2",
+    "buildNumber": 232,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-26",
     "changelog": [
+        "🎨 UI iyileştirmeleri (debug temizliği, açılır-kapanır özellikler)",
+        "🔄 Yükleme mesajı güncellendi",
         "🔥 KRİTİK: Firestore 1MB limit hatası düzeltildi",
         "🗄️ Veri yapısı yeniden tasarlandı (her oyun ayrı doküman)",
         "🔄 Otomatik migration sistemi eklendi",
