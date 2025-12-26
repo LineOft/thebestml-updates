@@ -2794,7 +2794,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.2';
+    const APP_VERSION = '4.0.3';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8780,7 +8780,12 @@
         
         try {
             let html = '';
-            const gameIds = Object.keys(gamesData || {});
+            // Oyunları sortOrder'a göre sırala
+            const gameIds = Object.keys(gamesData || {}).sort((a, b) => {
+                const orderA = gamesData[a].sortOrder ?? 999;
+                const orderB = gamesData[b].sortOrder ?? 999;
+                return orderA - orderB;
+            });
             let activeGames = 0;
             
             console.log('Render edilecek oyun sayısı:', gameIds.length);
@@ -8852,12 +8857,19 @@
         document.getElementById('dynamicGameTitle').textContent = game.name;
         document.getElementById('dynamicGameDesc').textContent = game.desc || 'Oyun hileleri';
         
-        // Hileleri listele
+        // Hileleri listele (sortOrder'a göre sıralı)
         const cheatsGrid = document.getElementById('dynamicCheatsGrid');
         const cheats = game.cheats || {};
         let cheatsHtml = '';
         
-        Object.keys(cheats).forEach(cheatId => {
+        // Hileleri sırala
+        const cheatIds = Object.keys(cheats).sort((a, b) => {
+            const orderA = cheats[a].sortOrder ?? 999;
+            const orderB = cheats[b].sortOrder ?? 999;
+            return orderA - orderB;
+        });
+        
+        cheatIds.forEach(cheatId => {
             const cheat = cheats[cheatId];
             if (cheat.status === 'inactive' && !currentUser) return; // Giriş yapmamışsa pasif hileleri gösterme
             
@@ -10180,7 +10192,12 @@
             return;
         }
         
-        const gameIds = Object.keys(gamesData);
+        // Oyunları sortOrder'a göre sırala
+        const gameIds = Object.keys(gamesData).sort((a, b) => {
+            const orderA = gamesData[a].sortOrder ?? 999;
+            const orderB = gamesData[b].sortOrder ?? 999;
+            return orderA - orderB;
+        });
         
         if (gameIds.length === 0) {
             container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Henüz oyun eklenmemiş</div>';
@@ -10189,7 +10206,7 @@
         
         let html = '';
         
-        gameIds.forEach(gameId => {
+        gameIds.forEach((gameId, index) => {
             const game = gamesData[gameId];
             const cheats = game.cheats || {};
             const cheatCount = Object.keys(cheats).length;
@@ -10207,6 +10224,8 @@
                             <div style="font-size: 11px; color: #888;">${game.desc || 'Açıklama yok'}</div>
                         </div>
                         <div style="display: flex; gap: 4px;">
+                            ${index > 0 ? `<button onclick="moveGame('${gameId}', 'up')" style="background: #9C27B0; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;" title="Yukarı">⬆️</button>` : ''}
+                            ${index < gameIds.length - 1 ? `<button onclick="moveGame('${gameId}', 'down')" style="background: #9C27B0; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;" title="Aşağı">⬇️</button>` : ''}
                             <button onclick="openGameModal('${gameId}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">✏️</button>
                             <button onclick="deleteGame('${gameId}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">🗑️</button>
                         </div>
@@ -10216,7 +10235,14 @@
                     <div style="padding-left: 10px; border-left: 2px solid rgba(255,255,255,0.1);">
             `;
             
-            Object.keys(cheats).forEach(cheatId => {
+            // Hileleri sortOrder'a göre sırala
+            const cheatIds = Object.keys(cheats).sort((a, b) => {
+                const orderA = cheats[a].sortOrder ?? 999;
+                const orderB = cheats[b].sortOrder ?? 999;
+                return orderA - orderB;
+            });
+            
+            cheatIds.forEach((cheatId, cheatIndex) => {
                 const cheat = cheats[cheatId];
                 const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
                 const hasSetup = (cheat.setupSteps || []).length > 0;
@@ -10236,6 +10262,8 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 3px;">
+                            ${cheatIndex > 0 ? `<button onclick="moveCheat('${gameId}', '${cheatId}', 'up')" style="background: #9C27B0; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Yukarı">⬆️</button>` : ''}
+                            ${cheatIndex < cheatIds.length - 1 ? `<button onclick="moveCheat('${gameId}', '${cheatId}', 'down')" style="background: #9C27B0; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Aşağı">⬇️</button>` : ''}
                             <button onclick="openSetupModal('${gameId}', '${cheatId}')" style="background: #FF9800; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Kurulum Adımları">📋</button>
                             <button onclick="openCheatModal('${gameId}', '${cheatId}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Düzenle">✏️</button>
                             <button onclick="deleteCheat('${gameId}', '${cheatId}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Sil">🗑️</button>
@@ -10256,6 +10284,87 @@
         });
         
         container.innerHTML = html;
+    }
+    
+    // Oyun sırasını değiştir
+    async function moveGame(gameId, direction) {
+        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        
+        try {
+            // Mevcut sıralamayı al
+            const gameIds = Object.keys(gamesData).sort((a, b) => {
+                const orderA = gamesData[a].sortOrder ?? 999;
+                const orderB = gamesData[b].sortOrder ?? 999;
+                return orderA - orderB;
+            });
+            
+            const currentIndex = gameIds.indexOf(gameId);
+            if (currentIndex === -1) return;
+            
+            const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+            if (targetIndex < 0 || targetIndex >= gameIds.length) return;
+            
+            // İki oyunun yerini değiştir
+            const targetGameId = gameIds[targetIndex];
+            
+            const tempOrder = gamesData[gameId].sortOrder ?? currentIndex;
+            gamesData[gameId].sortOrder = gamesData[targetGameId].sortOrder ?? targetIndex;
+            gamesData[targetGameId].sortOrder = tempOrder;
+            
+            // Firestore'a kaydet
+            await Promise.all([
+                db.collection('games').doc(gameId).update({ sortOrder: gamesData[gameId].sortOrder }),
+                db.collection('games').doc(targetGameId).update({ sortOrder: gamesData[targetGameId].sortOrder })
+            ]);
+            
+            showToast('✅ Sıralama güncellendi');
+            loadGameCheatList();
+            renderHomeGames();
+        } catch(e) {
+            console.error('Sıralama hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // Hile sırasını değiştir
+    async function moveCheat(gameId, cheatId, direction) {
+        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        
+        try {
+            const cheats = gamesData[gameId].cheats || {};
+            
+            // Mevcut sıralamayı al
+            const cheatIds = Object.keys(cheats).sort((a, b) => {
+                const orderA = cheats[a].sortOrder ?? 999;
+                const orderB = cheats[b].sortOrder ?? 999;
+                return orderA - orderB;
+            });
+            
+            const currentIndex = cheatIds.indexOf(cheatId);
+            if (currentIndex === -1) return;
+            
+            const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+            if (targetIndex < 0 || targetIndex >= cheatIds.length) return;
+            
+            // İki hilenin yerini değiştir
+            const targetCheatId = cheatIds[targetIndex];
+            
+            const tempOrder = cheats[cheatId].sortOrder ?? currentIndex;
+            cheats[cheatId].sortOrder = cheats[targetCheatId].sortOrder ?? targetIndex;
+            cheats[targetCheatId].sortOrder = tempOrder;
+            
+            // Firestore'a kaydet
+            await db.collection('games').doc(gameId).update({
+                [`cheats.${cheatId}.sortOrder`]: cheats[cheatId].sortOrder,
+                [`cheats.${targetCheatId}.sortOrder`]: cheats[targetCheatId].sortOrder
+            });
+            
+            showToast('✅ Hile sıralaması güncellendi');
+            loadGameCheatList();
+        } catch(e) {
+            console.error('Hile sıralama hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
     }
     
     // Eski fonksiyonları kaldır - uyumluluk için boş bırak
