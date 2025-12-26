@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.1';
+    const APP_VERSION = '4.2.2';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3783,32 +3783,47 @@
                     return;
                 }
                 
+                console.log('🔔 FCM Push Notifications başlatılıyor...');
+                
                 // İzin iste
                 const permResult = await PushNotifications.requestPermissions();
+                console.log('🔔 İzin durumu:', permResult.receive);
+                
                 if (permResult.receive !== 'granted') {
                     console.log('Push notification izni reddedildi');
+                    showToast('⚠️ Bildirim izni verilmedi! Sipariş bildirimleri alamazsınız.');
                     return;
                 }
                 
                 // Kaydol
                 await PushNotifications.register();
+                console.log('🔔 FCM kayıt isteği gönderildi');
                 
                 // Token alındığında
                 PushNotifications.addListener('registration', async (token) => {
-                    console.log('FCM Token:', token.value);
+                    console.log('🔔 ========== FCM TOKEN ALINDI ==========');
+                    console.log('🔔 Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
                     fcmToken = token.value;
                     
                     // Token'ı Firestore'a kaydet
                     if (currentUser && fcmToken) {
                         try {
+                            console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
                             await db.collection('users').doc(currentUser.uid).update({
                                 fcmToken: fcmToken,
-                                fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                fcmPlatform: 'android',
+                                fcmLastUpdate: new Date().toISOString()
                             });
-                            console.log('FCM token Firestore\'a kaydedildi');
+                            console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
+                            // Bildirim ayarları açık olduğunu göster
+                            showToast('✅ Bildirimler aktif! Sipariş onaylandığında bildirim alacaksınız.');
                         } catch(e) {
-                            console.log('FCM token kaydetme hatası:', e);
+                            console.error('🔔 ❌ FCM token kaydetme hatası:', e);
+                            showToast('⚠️ Bildirim kaydı başarısız: ' + e.message);
                         }
+                    } else {
+                        console.log('🔔 ⚠️ currentUser veya fcmToken yok:', { hasUser: !!currentUser, hasToken: !!fcmToken });
                     }
                 });
                 
