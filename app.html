@@ -8800,13 +8800,11 @@
             
             const imgSrc = cheat.image && cheat.image.startsWith('data:') 
                 ? cheat.image 
-                : (cheat.image || '');
-            
-            const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%234CAF50%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>🗡</text></svg>`;
+                : (cheat.image || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%234CAF50%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>🗡</text></svg>');
             
             cheatsHtml += `
                 <div class="game-card" onclick="openCheatDetail('${gameId}', '${cheatId}')">
-                    <img src="${imgSrc}" alt="${cheat.name}" class="game-icon" onerror="this.src='${fallbackSvg}'">
+                    <img src="${imgSrc}" alt="${cheat.name}" class="game-icon">
                     <div class="game-info">
                         <div class="game-name">${cheat.name}</div>
                         <div class="game-desc">${cheat.desc || 'Hile açıklaması'}</div>
@@ -9070,6 +9068,17 @@
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
         const match = url.match(regExp);
         return (match && match[2].length === 11) ? match[2] : null;
+    }
+    
+    // YouTube video açma
+    function openYouTubeVideo(videoId) {
+        if (videoId) {
+            // YouTube uygulaması veya tarayıcıda aç
+            const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            window.open(youtubeUrl, '_blank');
+        } else {
+            showToast('⚠️ Video açılamadı!');
+        }
     }
     
     // Dinamik APK indirme
