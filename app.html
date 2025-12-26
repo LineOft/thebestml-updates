@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.9';
+    const APP_VERSION = '4.1.0';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10686,23 +10686,21 @@
             const order1 = gamesData[gameId1].sortOrder ?? 999;
             const order2 = gamesData[gameId2].sortOrder ?? 999;
             
+            // Önce lokal veriyi güncelle
             gamesData[gameId1].sortOrder = order2;
             gamesData[gameId2].sortOrder = order1;
             
+            // HEMEN UI'ı güncelle (Firestore'u bekleme)
+            renderSortModal();
+            loadGameCheatList();
+            renderHomeGames();
+            
+            // Sonra arka planda Firestore'a kaydet
             await Promise.all([
                 db.collection('games').doc(gameId1).update({ sortOrder: order2 }),
                 db.collection('games').doc(gameId2).update({ sortOrder: order1 })
             ]);
             
-            // Listeleri güncelle
-            loadGameCheatList();
-            renderHomeGames();
-            
-            // Sıralama modal açıksa güncelle
-            const sortModal = document.getElementById('sortModal');
-            if (sortModal && sortModal.classList.contains('active')) {
-                renderSortModal();
-            }
         } catch(e) {
             console.error('Oyun sıralama hatası:', e);
             showToast('❌ Sıralama güncellenemedi');
