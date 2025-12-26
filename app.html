@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.4';
+    const APP_VERSION = '4.2.5';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3307,11 +3307,13 @@
                 if (data.bankInfo) paymentSettings.bankInfo = data.bankInfo;
                 if (data.methods) paymentSettings.methods = data.methods;
                 if (data.shopier) paymentSettings.shopier = { ...paymentSettings.shopier, ...data.shopier };
-                // Push server ayarlarını yükle
-                if (data.pushServer) {
-                    PUSH_SERVER.url = data.pushServer.url || '';
-                    PUSH_SERVER.apiKey = data.pushServer.apiKey || '';
-                    console.log('📱 Push server ayarları yüklendi');
+                // Push server ayarlarını yükle - SADECE geçerli URL varsa
+                if (data.pushServer && data.pushServer.url && data.pushServer.url.includes('push-server-psi')) {
+                    PUSH_SERVER.url = data.pushServer.url;
+                    PUSH_SERVER.apiKey = data.pushServer.apiKey || PUSH_SERVER.apiKey;
+                    console.log('📱 Push server ayarları Firestore\'dan yüklendi');
+                } else {
+                    console.log('📱 Push server varsayılan ayarlar kullanılıyor:', PUSH_SERVER.url);
                 }
             }
         } catch(e) {
@@ -6302,11 +6304,13 @@
                     document.getElementById('paymentShopierUrl').value = data.shopier.storeUrl || '';
                 }
                 if (data.pushServer) {
-                    document.getElementById('pushServerUrl').value = data.pushServer.url || '';
-                    document.getElementById('pushServerApiKey').value = data.pushServer.apiKey || '';
-                    // Global değişkenleri güncelle
-                    PUSH_SERVER.url = data.pushServer.url || '';
-                    PUSH_SERVER.apiKey = data.pushServer.apiKey || '';
+                    document.getElementById('pushServerUrl').value = data.pushServer.url || 'https://push-server-psi.vercel.app';
+                    document.getElementById('pushServerApiKey').value = data.pushServer.apiKey || 'thebestml_push_secret_2024';
+                    // Global değişkenleri güncelle - SADECE geçerli URL varsa
+                    if (data.pushServer.url && data.pushServer.url.includes('push-server-psi')) {
+                        PUSH_SERVER.url = data.pushServer.url;
+                        PUSH_SERVER.apiKey = data.pushServer.apiKey || PUSH_SERVER.apiKey;
+                    }
                 }
             } else {
                 // Varsayılan değerlerle doldur
