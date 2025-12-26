@@ -1,14 +1,15 @@
 {
-    "version": "4.1.9",
-    "buildNumber": 249,
+    "version": "4.2.0",
+    "buildNumber": 250,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-27",
     "changelog": [
-        "🔔 Push server URL düzeltildi",
-        "📤 Sipariş onay bildirimleri artık doğru çalışıyor",
-        "📱 Arka plan bildirimleri tam çalışır durumda"
+        "🔔 Bildirim sistemi tamamen yenilendi",
+        "📱 Uygulama açıkken de telefon bildirimi görünür",
+        "🔧 FCM data-only mesaj desteği iyileştirildi",
+        "✅ Arka plan bildirimleri düzeltildi"
     ],
     "required": false,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.9/GameStore_v4.1.9_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.0/GameStore_v4.2.0_debug.apk",
     "fileSize": 6.06
 }

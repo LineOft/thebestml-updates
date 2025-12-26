@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.1.9';
+    const APP_VERSION = '4.2.0';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3818,14 +3818,26 @@
                 });
                 
                 // Bildirim alındığında (uygulama açıkken)
+                // DATA-ONLY mesajlarda title/body data içinde gelir
                 PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                    console.log('Push bildirim alındı:', notification);
+                    console.log('Push bildirim alındı (raw):', JSON.stringify(notification));
+                    
+                    // Data-only mesajda title/body data içinde olabilir
+                    const title = notification.title || notification.data?.title || 'Bildirim';
+                    const body = notification.body || notification.data?.body || '';
+                    const type = notification.data?.type || 'info';
+                    
+                    console.log('İşlenmiş bildirim:', { title, body, type });
+                    
                     // Uygulama içi popup göster
                     showNotificationPopup({
-                        title: notification.title,
-                        message: notification.body,
-                        type: notification.data?.type || 'info'
+                        title: title,
+                        message: body,
+                        type: type
                     });
+                    
+                    // AYRICA native bildirim de göster (telefon bildirimi)
+                    sendNativeNotification(title, body, { type: type });
                 });
                 
                 // Bildirime tıklandığında
