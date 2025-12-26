@@ -2347,6 +2347,21 @@
     </div>
 </div>
 
+<!-- YOUTUBE VIDEO MODAL -->
+<div class="modal-overlay" id="youtubeVideoModal" onclick="closeModal('youtubeVideoModal')">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 800px; width: 95%; background: #000;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #E040FB, #BA68C8);">
+            <div class="modal-title">🎬 Tanıtım Videosu</div>
+            <button class="modal-close" onclick="closeModal('youtubeVideoModal')">✕</button>
+        </div>
+        <div class="modal-body" style="padding: 0; background: #000;">
+            <div id="youtubeVideoContainer" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+                <!-- YouTube iframe buraya yerleştirilecek -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- AKTİF ÜYELİKLER MODAL -->
 <div class="modal-overlay" id="keyDetailModal" onclick="closeModalOutside(event, 'keyDetailModal')">
     <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px; max-height: 80vh; overflow-y: auto;">
@@ -9073,9 +9088,18 @@
     // YouTube video açma
     function openYouTubeVideo(videoId) {
         if (videoId) {
-            // YouTube uygulaması veya tarayıcıda aç
-            const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-            window.open(youtubeUrl, '_blank');
+            // Modal içinde YouTube iframe göster
+            const container = document.getElementById('youtubeVideoContainer');
+            container.innerHTML = `
+                <iframe 
+                    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" 
+                    src="https://www.youtube.com/embed/${videoId}?autoplay=1" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
+                </iframe>
+            `;
+            openModal('youtubeVideoModal');
         } else {
             showToast('⚠️ Video açılamadı!');
         }
@@ -12110,6 +12134,11 @@
         document.body.style.overflow = 'auto';
         const video = document.getElementById('certVideo');
         if (video) video.pause();
+        
+        // YouTube video modal kapatılıyorsa iframe'i temizle
+        if (modalId === 'youtubeVideoModal') {
+            document.getElementById('youtubeVideoContainer').innerHTML = '';
+        }
         
         // Chat modal kapatılıyorsa interval'ı durdur
         if (modalId === 'userChatModal') {
