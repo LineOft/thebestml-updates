@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.1.1';
+    const APP_VERSION = '4.1.2';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10756,13 +10756,8 @@
             cheats[cheatId1].sortOrder = order2;
             cheats[cheatId2].sortOrder = order1;
             
-            // HEMEN UI'ı güncelle - hile listesini yeniden render et
-            const cheatsDiv = document.getElementById(`sortCheats${gameId}`);
-            if (cheatsDiv && cheatsDiv.style.maxHeight !== '0px') {
-                // Hile listesini kapat ve tekrar aç (yeniden render için)
-                toggleSortGameCheats(gameId);
-                setTimeout(() => toggleSortGameCheats(gameId), 50);
-            }
+            // HEMEN UI'ı güncelle - hile listesini doğrudan render et
+            renderSortCheatList(gameId);
             
             loadGameCheatList();
             
@@ -10776,6 +10771,46 @@
             console.error('Hile sıralama hatası:', e);
             showToast('❌ Sıralama güncellenemedi');
         }
+    }
+    
+    // Hile listesini anlık render et
+    function renderSortCheatList(gameId) {
+        const cheatListDiv = document.getElementById(`sortCheatList${gameId}`);
+        if (!cheatListDiv) return;
+        
+        const cheats = gamesData[gameId].cheats || {};
+        const cheatIds = Object.keys(cheats).sort((a, b) => {
+            const orderA = cheats[a].sortOrder ?? 999;
+            const orderB = cheats[b].sortOrder ?? 999;
+            return orderA - orderB;
+        });
+        
+        if (cheatIds.length === 0) {
+            cheatListDiv.innerHTML = '<div style="padding: 10px; color: #666; font-size: 12px; text-align: center;">Bu oyunda hile yok</div>';
+            return;
+        }
+        
+        let cheatHtml = '';
+        cheatIds.forEach(cheatId => {
+            const cheat = cheats[cheatId];
+            const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
+            
+            cheatHtml += `
+                <div class="sort-cheat-card" data-game-id="${gameId}" data-cheat-id="${cheatId}" style="display: flex; align-items: center; gap: 8px; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <button onclick="moveCheatUp('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▲</button>
+                        <button onclick="moveCheatDown('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▼</button>
+                    </div>
+                    ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">🛡️</span>'}
+                    <div style="flex: 1;">
+                        <div style="color: #2196F3; font-size: 13px; font-weight: 500;">${cheatStatus} ${cheat.name}</div>
+                        <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiş'}</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        cheatListDiv.innerHTML = cheatHtml;
     }
     
     // Oyun yerlerini değiştir (Sıralama modal'dan)
