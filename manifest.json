@@ -1,14 +1,14 @@
 {
-    "version": "4.2.2",
-    "buildNumber": 252,
+    "version": "4.2.3",
+    "buildNumber": 253,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-27",
     "changelog": [
-        "🔔 Arka plan bildirimleri güçlendirildi",
-        "📱 FCM servis optimizasyonu",
-        "✅ Uygulama kapalıyken bildirim desteği iyileştirildi"
+        "🔔 FCM topic subscription eklendi",
+        "📱 all_users ve all topic'lerine otomatik abone olma",
+        "✅ Bildirimler artık tüm kullanıcılara gönderilecek"
     ],
     "required": false,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.2/GameStore_v4.2.2_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.3/GameStore_v4.2.3_debug.apk",
     "fileSize": 6.06
 }

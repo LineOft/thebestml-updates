@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.2';
+    const APP_VERSION = '4.2.3';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3798,6 +3798,18 @@
                 // Kaydol
                 await PushNotifications.register();
                 console.log('🔔 FCM kayıt isteği gönderildi');
+                
+                // ALL_USERS topic'ine abone ol (Firebase topic mesajları için)
+                try {
+                    if (typeof FirebaseMessaging !== 'undefined') {
+                        await FirebaseMessaging.subscribeToTopic({ topic: 'all_users' });
+                        console.log('🔔 ✅ all_users topic\'ine abone olundu!');
+                    } else {
+                        console.log('🔔 FirebaseMessaging plugin yok, topic subscription atlanıyor');
+                    }
+                } catch(topicErr) {
+                    console.log('🔔 Topic subscription hatası (görmezden gelinebilir):', topicErr.message);
+                }
                 
                 // Token alındığında
                 PushNotifications.addListener('registration', async (token) => {
