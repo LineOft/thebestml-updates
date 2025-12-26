@@ -1,14 +1,14 @@
 ﻿{
-    "fileSize":  6.07,
-    "buildNumber":  255,
-    "minBuildNumber":  150,
-    "required":  true,
-    "releaseDate":  "2025-12-27",
-    "version":  "4.2.5",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.5/GameStore_v4.2.5_debug.apk",
-    "changelog":  [
-                      " Push server URL sorunu düzeltildi",
-                      " Firestore ayarları doğrulaması eklendi",
-                      " Varsayılan push server her zaman kullanılacak"
-                  ]
+    "version": "4.2.6",
+    "buildNumber": 256,
+    "minBuildNumber": 150,
+    "releaseDate": "2025-12-27",
+    "changelog": [
+        " FCM topic subscription düzgün derlendi",
+        " Uygulama açıldığında all_users topic'ine abone olur",
+        " Artık topic bildirimleri alınacak"
+    ],
+    "required": true,
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.6/GameStore_v4.2.6_debug.apk",
+    "fileSize": 6.07
 }
