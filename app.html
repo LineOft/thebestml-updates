@@ -2723,8 +2723,8 @@
             <!-- Tanıtım Videosu -->
             <div style="background: rgba(156,39,176,0.1); border: 1px solid rgba(156,39,176,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
                 <div style="font-size: 13px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">🎬 Tanıtım Videosu (Opsiyonel)</div>
-                <input type="text" id="setupModalIntroVideo" class="auth-input" placeholder="Video URL (örn: https://...mp4)" style="margin-bottom: 8px;">
-                <div style="font-size: 10px; color: #888;">💡 GitHub raw URL veya herhangi bir video linki</div>
+                <input type="text" id="setupModalIntroVideo" class="auth-input" placeholder="YouTube veya MP4 URL (örn: https://youtube.com/watch?v=...)" style="margin-bottom: 8px;">
+                <div style="font-size: 10px; color: #888;">💡 YouTube linki veya MP4 video linki desteklenir</div>
             </div>
             
             <!-- APK İndirme -->
@@ -2744,7 +2744,7 @@
             <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
                 <div style="font-size: 13px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🔐 Rehber Videosu (Opsiyonel)</div>
                 <input type="text" id="setupModalGuideTitle" class="auth-input" placeholder="Rehber başlığı (örn: Sertifika Kapatma)" style="margin-bottom: 8px;">
-                <input type="text" id="setupModalGuideVideo" class="auth-input" placeholder="Video URL'si" style="margin-bottom: 8px;">
+                <input type="text" id="setupModalGuideVideo" class="auth-input" placeholder="YouTube veya MP4 URL" style="margin-bottom: 8px;">
                 <textarea id="setupModalGuideDesc" class="auth-input" placeholder="Açıklama metni" style="height: 60px; resize: none;"></textarea>
             </div>
             
@@ -6087,15 +6087,34 @@
             `;
         }
         
-        // Rehber video bölümü
+        // Rehber video bölümü (YouTube URL desteği eklenmiştir)
         if (modalData.guideSection?.title && modalData.guideSection?.video) {
+            const guideVideoUrl = modalData.guideSection.video;
+            const guideYtId = typeof extractYouTubeId === 'function' ? extractYouTubeId(guideVideoUrl) : null;
+            
+            let guideVideoHtml = '';
+            if (guideYtId) {
+                // YouTube video
+                guideVideoHtml = `
+                    <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px;">
+                        <iframe src="https://www.youtube.com/embed/${guideYtId}?rel=0&autoplay=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position: absolute; top:0; left:0; width:100%; height:100%;"></iframe>
+                    </div>
+                `;
+            } else {
+                // Normal video dosyası (mp4 vb.)
+                guideVideoHtml = `
+                    <video controls style="width: 100%; border-radius: 12px; max-height: 200px;">
+                        <source src="${guideVideoUrl}" type="video/mp4">
+                        Tarayıcınız video oynatmayı desteklemiyor.
+                    </video>
+                `;
+            }
+            
             html += `
                 <div style="background: linear-gradient(135deg, rgba(255,152,0,0.2), rgba(244,67,54,0.2)); border: 1px solid rgba(255,152,0,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
                     <div style="font-size: 16px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🔐 ${modalData.guideSection.title}</div>
                     ${modalData.guideSection.description ? `<div style="font-size: 12px; color: #ffcc80; margin-bottom: 10px;">${modalData.guideSection.description}</div>` : ''}
-                    <video controls style="width: 100%; border-radius: 12px; max-height: 200px;">
-                        <source src="${modalData.guideSection.video}" type="video/mp4">
-                    </video>
+                    ${guideVideoHtml}
                 </div>
             `;
         }
