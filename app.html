@@ -2794,7 +2794,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.3';
+    const APP_VERSION = '4.0.4';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10213,8 +10213,9 @@
             const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
             
             html += `
-                <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
+                <div class="draggable-game" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: move; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <span style="color: #666; font-size: 16px; cursor: grab; user-select: none;">☰</span>
                         ${game.image ? `<img src="${game.image}" style="width: 40px; height: 40px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                         <div style="flex: 1;">
                             <div style="display: flex; align-items: center; gap: 6px;">
@@ -10224,10 +10225,8 @@
                             <div style="font-size: 11px; color: #888;">${game.desc || 'Açıklama yok'}</div>
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            ${index > 0 ? `<button onclick="moveGame('${gameId}', 'up')" style="background: #9C27B0; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;" title="Yukarı">⬆️</button>` : ''}
-                            ${index < gameIds.length - 1 ? `<button onclick="moveGame('${gameId}', 'down')" style="background: #9C27B0; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;" title="Aşağı">⬇️</button>` : ''}
-                            <button onclick="openGameModal('${gameId}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">✏️</button>
-                            <button onclick="deleteGame('${gameId}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">🗑️</button>
+                            <button onclick="event.stopPropagation(); openGameModal('${gameId}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">✏️</button>
+                            <button onclick="event.stopPropagation(); deleteGame('${gameId}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">🗑️</button>
                         </div>
                     </div>
                     
@@ -10251,7 +10250,8 @@
                 const priceCount = cheat.prices?.length || 0;
                 
                 html += `
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <div class="draggable-cheat" data-game-id="${gameId}" data-cheat-id="${cheatId}" draggable="true" style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: move;">
+                        <span style="color: #666; font-size: 12px; cursor: grab; user-select: none;">☰</span>
                         ${cheat.image ? `<img src="${cheat.image}" style="width: 30px; height: 30px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 20px;">🛡️</span>'}
                         <div style="flex: 1;">
                             <div style="color: #2196F3; font-size: 12px;">${cheatStatus} ${cheat.name} <span style="color: #888;">${cheat.version || ''}</span></div>
@@ -10262,11 +10262,9 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 3px;">
-                            ${cheatIndex > 0 ? `<button onclick="moveCheat('${gameId}', '${cheatId}', 'up')" style="background: #9C27B0; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Yukarı">⬆️</button>` : ''}
-                            ${cheatIndex < cheatIds.length - 1 ? `<button onclick="moveCheat('${gameId}', '${cheatId}', 'down')" style="background: #9C27B0; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Aşağı">⬇️</button>` : ''}
-                            <button onclick="openSetupModal('${gameId}', '${cheatId}')" style="background: #FF9800; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Kurulum Adımları">📋</button>
-                            <button onclick="openCheatModal('${gameId}', '${cheatId}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Düzenle">✏️</button>
-                            <button onclick="deleteCheat('${gameId}', '${cheatId}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Sil">🗑️</button>
+                            <button onclick="event.stopPropagation(); openSetupModal('${gameId}', '${cheatId}')" style="background: #FF9800; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Kurulum Adımları">📋</button>
+                            <button onclick="event.stopPropagation(); openCheatModal('${gameId}', '${cheatId}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Düzenle">✏️</button>
+                            <button onclick="event.stopPropagation(); deleteCheat('${gameId}', '${cheatId}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Sil">🗑️</button>
                         </div>
                     </div>
                 `;
@@ -10284,9 +10282,259 @@
         });
         
         container.innerHTML = html;
+        
+        // Drag and drop event listeners ekle
+        initDragAndDrop();
     }
     
-    // Oyun sırasını değiştir
+    // Drag and Drop sistemi
+    let draggedGameElement = null;
+    let draggedCheatElement = null;
+    let draggedOverElement = null;
+    
+    function initDragAndDrop() {
+        // Oyun sürükle-bırak
+        document.querySelectorAll('.draggable-game').forEach(item => {
+            // Desktop - Drag events
+            item.addEventListener('dragstart', handleGameDragStart);
+            item.addEventListener('dragover', handleGameDragOver);
+            item.addEventListener('drop', handleGameDrop);
+            item.addEventListener('dragend', handleGameDragEnd);
+            
+            // Mobile - Touch events
+            item.addEventListener('touchstart', handleGameTouchStart, { passive: false });
+            item.addEventListener('touchmove', handleGameTouchMove, { passive: false });
+            item.addEventListener('touchend', handleGameTouchEnd);
+        });
+        
+        // Hile sürükle-bırak
+        document.querySelectorAll('.draggable-cheat').forEach(item => {
+            // Desktop - Drag events
+            item.addEventListener('dragstart', handleCheatDragStart);
+            item.addEventListener('dragover', handleCheatDragOver);
+            item.addEventListener('drop', handleCheatDrop);
+            item.addEventListener('dragend', handleCheatDragEnd);
+            
+            // Mobile - Touch events
+            item.addEventListener('touchstart', handleCheatTouchStart, { passive: false });
+            item.addEventListener('touchmove', handleCheatTouchMove, { passive: false });
+            item.addEventListener('touchend', handleCheatTouchEnd);
+        });
+    }
+    
+    // === OYUN DRAG & DROP ===
+    function handleGameDragStart(e) {
+        draggedGameElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function handleGameDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (this !== draggedGameElement && this.classList.contains('draggable-game')) {
+            this.style.borderTop = '2px solid #2196F3';
+        }
+        return false;
+    }
+    
+    function handleGameDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+        
+        if (draggedGameElement !== this && this.classList.contains('draggable-game')) {
+            const draggedId = draggedGameElement.dataset.gameId;
+            const targetId = this.dataset.gameId;
+            swapGames(draggedId, targetId);
+        }
+        
+        this.style.borderTop = '';
+        return false;
+    }
+    
+    function handleGameDragEnd(e) {
+        this.style.opacity = '';
+        document.querySelectorAll('.draggable-game').forEach(item => {
+            item.style.borderTop = '';
+        });
+    }
+    
+    // === OYUN TOUCH EVENTS (Mobile) ===
+    let touchStartY = 0;
+    let touchElement = null;
+    
+    function handleGameTouchStart(e) {
+        touchElement = this;
+        touchStartY = e.touches[0].clientY;
+        this.style.opacity = '0.7';
+        this.style.transform = 'scale(1.05)';
+    }
+    
+    function handleGameTouchMove(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+        const target = elements.find(el => el.classList && el.classList.contains('draggable-game') && el !== touchElement);
+        
+        if (draggedOverElement && draggedOverElement !== target) {
+            draggedOverElement.style.borderTop = '';
+        }
+        
+        if (target) {
+            target.style.borderTop = '2px solid #2196F3';
+            draggedOverElement = target;
+        }
+    }
+    
+    function handleGameTouchEnd(e) {
+        this.style.opacity = '';
+        this.style.transform = '';
+        
+        if (draggedOverElement) {
+            const draggedId = this.dataset.gameId;
+            const targetId = draggedOverElement.dataset.gameId;
+            swapGames(draggedId, targetId);
+            draggedOverElement.style.borderTop = '';
+            draggedOverElement = null;
+        }
+        
+        touchElement = null;
+    }
+    
+    // === HİLE DRAG & DROP ===
+    function handleCheatDragStart(e) {
+        draggedCheatElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function handleCheatDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        const draggedGameId = draggedCheatElement?.dataset.gameId;
+        const thisGameId = this.dataset.gameId;
+        
+        if (this !== draggedCheatElement && this.classList.contains('draggable-cheat') && draggedGameId === thisGameId) {
+            this.style.borderTop = '2px solid #2196F3';
+        }
+        return false;
+    }
+    
+    function handleCheatDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+        
+        const draggedGameId = draggedCheatElement?.dataset.gameId;
+        const thisGameId = this.dataset.gameId;
+        
+        if (draggedCheatElement !== this && this.classList.contains('draggable-cheat') && draggedGameId === thisGameId) {
+            const gameId = draggedGameId;
+            const draggedCheatId = draggedCheatElement.dataset.cheatId;
+            const targetCheatId = this.dataset.cheatId;
+            swapCheats(gameId, draggedCheatId, targetCheatId);
+        }
+        
+        this.style.borderTop = '';
+        return false;
+    }
+    
+    function handleCheatDragEnd(e) {
+        this.style.opacity = '';
+        document.querySelectorAll('.draggable-cheat').forEach(item => {
+            item.style.borderTop = '';
+        });
+    }
+    
+    // === HİLE TOUCH EVENTS (Mobile) ===
+    function handleCheatTouchStart(e) {
+        touchElement = this;
+        touchStartY = e.touches[0].clientY;
+        this.style.opacity = '0.7';
+        this.style.transform = 'scale(1.05)';
+    }
+    
+    function handleCheatTouchMove(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+        const draggedGameId = touchElement?.dataset.gameId;
+        const target = elements.find(el => el.classList && el.classList.contains('draggable-cheat') && el !== touchElement && el.dataset.gameId === draggedGameId);
+        
+        if (draggedOverElement && draggedOverElement !== target) {
+            draggedOverElement.style.borderTop = '';
+        }
+        
+        if (target) {
+            target.style.borderTop = '2px solid #2196F3';
+            draggedOverElement = target;
+        }
+    }
+    
+    function handleCheatTouchEnd(e) {
+        this.style.opacity = '';
+        this.style.transform = '';
+        
+        if (draggedOverElement) {
+            const gameId = this.dataset.gameId;
+            const draggedCheatId = this.dataset.cheatId;
+            const targetCheatId = draggedOverElement.dataset.cheatId;
+            swapCheats(gameId, draggedCheatId, targetCheatId);
+            draggedOverElement.style.borderTop = '';
+            draggedOverElement = null;
+        }
+        
+        touchElement = null;
+    }
+    
+    // Oyun yerlerini değiştir
+    async function swapGames(gameId1, gameId2) {
+        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        
+        try {
+            const order1 = gamesData[gameId1].sortOrder ?? 999;
+            const order2 = gamesData[gameId2].sortOrder ?? 999;
+            
+            gamesData[gameId1].sortOrder = order2;
+            gamesData[gameId2].sortOrder = order1;
+            
+            await Promise.all([
+                db.collection('games').doc(gameId1).update({ sortOrder: order2 }),
+                db.collection('games').doc(gameId2).update({ sortOrder: order1 })
+            ]);
+            
+            loadGameCheatList();
+            renderHomeGames();
+        } catch(e) {
+            console.error('Oyun swap hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // Hile yerlerini değiştir
+    async function swapCheats(gameId, cheatId1, cheatId2) {
+        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        
+        try {
+            const cheats = gamesData[gameId].cheats;
+            const order1 = cheats[cheatId1].sortOrder ?? 999;
+            const order2 = cheats[cheatId2].sortOrder ?? 999;
+            
+            cheats[cheatId1].sortOrder = order2;
+            cheats[cheatId2].sortOrder = order1;
+            
+            await db.collection('games').doc(gameId).update({
+                [`cheats.${cheatId1}.sortOrder`]: order2,
+                [`cheats.${cheatId2}.sortOrder`]: order1
+            });
+            
+            loadGameCheatList();
+        } catch(e) {
+            console.error('Hile swap hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // Oyun sırasını değiştir (eski buton sistemi - artık kullanılmıyor ama uyumluluk için kalsın)
     async function moveGame(gameId, direction) {
         if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
         
