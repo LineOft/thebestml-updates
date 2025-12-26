@@ -1,12 +1,12 @@
 {
-    "version": "4.1.2",
-    "buildNumber": 242,
+    "version": "4.1.3",
+    "buildNumber": 243,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-26",
     "changelog": [
-        "⚡ Hile sıralama anlık güncelleniyor",
-        "⬆️⬇️ Oyun ve hile sıralama butonları",
-        "🎮 Kolay sıralama sistemi",
+        "🔧 Sıralama sistemi tamamen düzeltildi",
+        "✅ Tıkanma sorunu çözüldü",
+        "⚡ Tüm liste yeniden numaralanıyor",
         "⬍ Ayrı Sıralama Ekranı eklendi",
         "👋 Sıralama butonuyla özel modal açılır",
         "🎮 Oyun kartına tıklayarak hilelerini sırala",

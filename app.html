@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.1.2';
+    const APP_VERSION = '4.1.3';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10648,14 +10648,20 @@
     async function moveGameUp(gameId) {
         if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
         
+        // Mevcut sıralamayı al
         const sortedGames = Object.entries(gamesData)
             .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
         
         const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
         
         if (currentIndex > 0) {
-            const prevGameId = sortedGames[currentIndex - 1][0];
-            await swapGameOrders(gameId, prevGameId);
+            // Listedeki pozisyonları değiştir
+            const temp = sortedGames[currentIndex];
+            sortedGames[currentIndex] = sortedGames[currentIndex - 1];
+            sortedGames[currentIndex - 1] = temp;
+            
+            // Tüm listeyi yeniden numarala ve kaydet
+            await reorderAllGames(sortedGames);
             showToast('✅ Oyun yukarı taşındı');
         } else {
             showToast('⚠️ Bu oyun zaten en üstte');
@@ -10666,21 +10672,54 @@
     async function moveGameDown(gameId) {
         if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
         
+        // Mevcut sıralamayı al
         const sortedGames = Object.entries(gamesData)
             .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
         
         const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
         
         if (currentIndex < sortedGames.length - 1) {
-            const nextGameId = sortedGames[currentIndex + 1][0];
-            await swapGameOrders(gameId, nextGameId);
+            // Listedeki pozisyonları değiştir
+            const temp = sortedGames[currentIndex];
+            sortedGames[currentIndex] = sortedGames[currentIndex + 1];
+            sortedGames[currentIndex + 1] = temp;
+            
+            // Tüm listeyi yeniden numarala ve kaydet
+            await reorderAllGames(sortedGames);
             showToast('✅ Oyun aşağı taşındı');
         } else {
             showToast('⚠️ Bu oyun zaten en altta');
         }
     }
     
-    // İki oyunun sırasını değiştir
+    // Tüm oyunları yeniden sırala (0, 1, 2, 3...)
+    async function reorderAllGames(sortedGames) {
+        try {
+            const updates = [];
+            
+            // Önce lokal veriyi güncelle ve Firestore güncellemelerini hazırla
+            sortedGames.forEach(([gameId, game], index) => {
+                gamesData[gameId].sortOrder = index;
+                updates.push(
+                    db.collection('games').doc(gameId).update({ sortOrder: index })
+                );
+            });
+            
+            // HEMEN UI'ı güncelle
+            renderSortModal();
+            loadGameCheatList();
+            renderHomeGames();
+            
+            // Sonra arka planda Firestore'a kaydet
+            await Promise.all(updates);
+            
+        } catch(e) {
+            console.error('Oyun sıralama hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // İki oyunun sırasını değiştir (eski fonksiyon - drag-drop için)
     async function swapGameOrders(gameId1, gameId2) {
         try {
             const order1 = gamesData[gameId1].sortOrder ?? 999;
@@ -10718,8 +10757,13 @@
         const currentIndex = sortedCheats.findIndex(([id]) => id === cheatId);
         
         if (currentIndex > 0) {
-            const prevCheatId = sortedCheats[currentIndex - 1][0];
-            await swapCheatOrders(gameId, cheatId, prevCheatId);
+            // Listedeki pozisyonları değiştir
+            const temp = sortedCheats[currentIndex];
+            sortedCheats[currentIndex] = sortedCheats[currentIndex - 1];
+            sortedCheats[currentIndex - 1] = temp;
+            
+            // Tüm hileleri yeniden numarala ve kaydet
+            await reorderAllCheats(gameId, sortedCheats);
             showToast('✅ Hile yukarı taşındı');
         } else {
             showToast('⚠️ Bu hile zaten en üstte');
@@ -10737,15 +10781,44 @@
         const currentIndex = sortedCheats.findIndex(([id]) => id === cheatId);
         
         if (currentIndex < sortedCheats.length - 1) {
-            const nextCheatId = sortedCheats[currentIndex + 1][0];
-            await swapCheatOrders(gameId, cheatId, nextCheatId);
+            // Listedeki pozisyonları değiştir
+            const temp = sortedCheats[currentIndex];
+            sortedCheats[currentIndex] = sortedCheats[currentIndex + 1];
+            sortedCheats[currentIndex + 1] = temp;
+            
+            // Tüm hileleri yeniden numarala ve kaydet
+            await reorderAllCheats(gameId, sortedCheats);
             showToast('✅ Hile aşağı taşındı');
         } else {
             showToast('⚠️ Bu hile zaten en altta');
         }
     }
     
-    // İki hilenin sırasını değiştir
+    // Tüm hileleri yeniden sırala (0, 1, 2, 3...)
+    async function reorderAllCheats(gameId, sortedCheats) {
+        try {
+            const updateData = {};
+            
+            // Önce lokal veriyi güncelle ve Firestore update objesini hazırla
+            sortedCheats.forEach(([cheatId, cheat], index) => {
+                gamesData[gameId].cheats[cheatId].sortOrder = index;
+                updateData[`cheats.${cheatId}.sortOrder`] = index;
+            });
+            
+            // HEMEN UI'ı güncelle
+            renderSortCheatList(gameId);
+            loadGameCheatList();
+            
+            // Sonra arka planda Firestore'a kaydet (tek bir update ile)
+            await db.collection('games').doc(gameId).update(updateData);
+            
+        } catch(e) {
+            console.error('Hile sıralama hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // İki hilenin sırasını değiştir (eski fonksiyon - drag-drop için)
     async function swapCheatOrders(gameId, cheatId1, cheatId2) {
         try {
             const cheats = gamesData[gameId].cheats;
