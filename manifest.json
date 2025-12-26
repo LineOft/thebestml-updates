@@ -1,11 +1,17 @@
 {
-    "version": "3.13.8",
-    "buildNumber": 171,
+    "version": "4.0.0",
+    "buildNumber": 230,
     "minBuildNumber": 150,
-    "releaseDate": "2025-12-23",
+    "releaseDate": "2025-12-26",
     "changelog": [
-        "🔧 Stabilite düzeltmeleri",
-        "✅ Oyun yükleme sorunu çözüldü"
+        "🎉 Büyük güncelleme - Versiyon 4.0",
+        "🚀 VS Code entegrasyonu ile tam otomatik derleme",
+        "⚡ Performans iyileştirmeleri",
+        "🔧 Gradle 8.7 ve Node.js 24 desteği",
+        "📦 Yeni APK derleme sistemi",
+        "🌐 Gelişmiş güncelleme yönetimi"
     ],
-    "required": true
+    "required": false,
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.0.0/GameStore_v4.0.0.apk",
+    "fileSize": 12.5
 }
