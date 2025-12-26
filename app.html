@@ -2818,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.0';
+    const APP_VERSION = '4.2.1';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -6365,7 +6365,10 @@
     // Sipariş onaylandığında otomatik bildirim gönder (MERKEZİ SİSTEM KULLANIR)
     async function sendOrderApprovalNotification(userEmail, keyCode, packageName) {
         try {
-            console.log('📩 Sipariş onay bildirimi gönderiliyor:', userEmail, packageName);
+            console.log('📩 ========== SİPARİŞ ONAY BİLDİRİMİ ==========');
+            console.log('📩 Hedef email:', userEmail);
+            console.log('📩 Paket:', packageName);
+            console.log('📩 Key:', keyCode);
             
             // Email'i küçük harfe çevir (eşleşme sorunu önleme)
             const normalizedEmail = userEmail.toLowerCase().trim();
@@ -6389,21 +6392,34 @@
             
             // GERÇEK PUSH NOTIFICATION GÖNDER (Vercel sunucu üzerinden)
             try {
+                console.log('🔍 Kullanıcı FCM token aranıyor:', normalizedEmail);
                 const userDocs = await db.collection('users').where('email', '==', normalizedEmail).get();
+                console.log('🔍 Bulunan kullanıcı sayısı:', userDocs.size);
+                
                 if (!userDocs.empty) {
                     const userData = userDocs.docs[0].data();
+                    console.log('🔍 Kullanıcı FCM token:', userData.fcmToken ? 'VAR' : 'YOK');
+                    
                     if (userData.fcmToken) {
-                        await sendPushNotification(
+                        console.log('📤 Push server\'a istek gönderiliyor...');
+                        console.log('📤 URL:', PUSH_SERVER.url);
+                        
+                        const pushResult = await sendPushNotification(
                             userData.fcmToken,
                             '🎉 Siparişiniz Onaylandı!',
                             `${packageName} paketiniz aktif edildi. Key: ${keyCode}`,
                             { type: 'order_approved', keyCode: keyCode }
                         );
-                        console.log('📱 Push notification gönderildi!');
+                        console.log('📱 Push notification sonucu:', pushResult);
+                    } else {
+                        console.log('⚠️ Kullanıcının FCM token\'ı yok!');
+                        showToast('⚠️ Kullanıcının bildirim token\'ı yok, uygulama içi bildirim gönderildi');
                     }
+                } else {
+                    console.log('⚠️ Kullanıcı Firestore\'da bulunamadı:', normalizedEmail);
                 }
             } catch(pushErr) {
-                console.log('Push bildirim gönderilemedi:', pushErr);
+                console.error('❌ Push bildirim hatası:', pushErr);
             }
             
             // Bu kullanıcı şu an online mı kontrol et - Online ise MERKEZİ BİLDİRİM gönder

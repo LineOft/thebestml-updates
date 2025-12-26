@@ -1,10 +1,10 @@
 {
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.0/GameStore_v4.2.0_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.1/GameStore_v4.2.1_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🔔 v4.2.0 — Bildirim sistemi tamamen yenilendi!",
+    "announcement": "🔔 v4.2.1 — Push bildirimler çalışıyor!",
     "maintenanceMode": false,
-    "currentVersion": "4.2.0",
+    "currentVersion": "4.2.1",
     "forceUpdate": false,
-    "updateMessage": "Artık uygulama açık veya kapalı her durumda bildirim alabilirsiniz!"
+    "updateMessage": "Sipariş bildirimleri artık her durumda çalışıyor!"
 }
