@@ -8520,14 +8520,15 @@
                 } else {
                     // Hiç veri yok, varsayılan oluştur
                     console.log('📝 Hiç veri yok, varsayılan oluşturuluyor...');
-                // Varsayılan oyun verisi
-                const defaultGame = {
-                    name: 'Mobile Legends',
-                    image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/mobile-legends-icon.jpg', 
-                    desc: 'Mobil MOBA oyunu',
-                    playStore: 'https://play.google.com/store/apps/details?id=com.mobile.legends',
-                    status: 'active',
-                    cheats: {
+                    
+                    // Varsayılan oyun verisi
+                    const defaultGame = {
+                        name: 'Mobile Legends',
+                        image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/mobile-legends-icon.jpg', 
+                        desc: 'Mobil MOBA oyunu',
+                        playStore: 'https://play.google.com/store/apps/details?id=com.mobile.legends',
+                        status: 'active',
+                        cheats: {
                         'thebestml': {
                             name: 'TheBestML IMGUI',
                             image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
@@ -8630,14 +8631,14 @@
                     }
                 };
                 
-                try {
-                    // Her oyunu ayrı dokümanda tut
-                    await db.collection('games').doc('mobile_legends').set(defaultGame);
-                    gamesData['mobile_legends'] = defaultGame;
-                    console.log('✅ Varsayılan oyun verisi kaydedildi');
-                } catch(saveErr) {
-                    console.error('❌ Varsayılan veri kaydetme hatası:', saveErr);
-                }
+                    try {
+                        // Her oyunu ayrı dokümanda tut
+                        await db.collection('games').doc('mobile_legends').set(defaultGame);
+                        gamesData['mobile_legends'] = defaultGame;
+                        console.log('✅ Varsayılan oyun verisi kaydedildi');
+                    } catch(saveErr) {
+                        console.error('❌ Varsayılan veri kaydetme hatası:', saveErr);
+                    }
                 }
             }
             
