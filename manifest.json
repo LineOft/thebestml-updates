@@ -1,15 +1,15 @@
 {
-    "version": "4.1.7",
-    "buildNumber": 247,
+    "version": "4.1.8",
+    "buildNumber": 248,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-27",
     "changelog": [
-        "🔔 Arka planda push bildirim desteği eklendi",
-        "📱 Uygulama kapalıyken bile bildirim alabilirsiniz",
-        "🛒 Yeni sipariş geldiğinde admin'lere bildirim",
-        "✅ Sipariş onay/red bildirimleri iyileştirildi"
+        "🔔 Arka plan bildirimleri düzeltildi - artık uygulama kapalıyken de çalışır",
+        "📱 Data-only push notification ile %100 arka plan desteği",
+        "🔧 Sürüm gösterimi düzeltildi",
+        "✅ Push server optimizasyonu"
     ],
     "required": false,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.7/GameStore_v4.1.7_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.8/GameStore_v4.1.8_debug.apk",
     "fileSize": 6.06
 }

@@ -1,10 +1,10 @@
 {
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.7/GameStore_v4.1.7_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.8/GameStore_v4.1.8_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🔔 v4.1.7 — Arka planda bildirim desteği eklendi!",
+    "announcement": "🔔 v4.1.8 — Arka plan bildirimleri düzeltildi!",
     "maintenanceMode": false,
-    "currentVersion": "4.1.7",
+    "currentVersion": "4.1.8",
     "forceUpdate": false,
-    "updateMessage": "Yeni: Uygulama kapalıyken bile sipariş bildirimleri alabilirsiniz!"
+    "updateMessage": "Önemli: Arka plan bildirimleri artık %100 çalışıyor!"
 }
