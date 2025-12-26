@@ -1,10 +1,10 @@
 {
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v1.0.0/GameStore_v1.0.0.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.5/GameStore_v4.0.0_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🎉 Yeni sürüm 1.0.0 yayınlandı! Hemen güncelleyin.",
+    "announcement": "🔔 v4.1.5 yayınlandı — performans iyileştirmeleri ve hata düzeltmeleri.",
     "maintenanceMode": false,
-    "currentVersion": "1.0.0",
+    "currentVersion": "4.1.5",
     "forceUpdate": false,
-    "updateMessage": "Yeni özellikler ve iyileştirmeler mevcut!"
+    "updateMessage": "Güncelleme: performans iyileştirmeleri ve hata düzeltmeleri."
 }

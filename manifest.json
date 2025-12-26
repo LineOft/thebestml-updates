@@ -1,25 +1,15 @@
 {
-    "version": "4.1.3",
-    "buildNumber": 243,
+    "version": "4.1.5",
+    "buildNumber": 245,
     "minBuildNumber": 150,
-    "releaseDate": "2025-12-26",
+    "releaseDate": "2025-12-27",
     "changelog": [
-        "🔧 Sıralama sistemi tamamen düzeltildi",
-        "✅ Tıkanma sorunu çözüldü",
-        "⚡ Tüm liste yeniden numaralanıyor",
-        "⬍ Ayrı Sıralama Ekranı eklendi",
-        "👋 Sıralama butonuyla özel modal açılır",
-        "🎮 Oyun kartına tıklayarak hilelerini sırala",
-        "📱 Sayfa kaydırma sorunu çözüldü",
-        "☰ Mobil ve desktop uyumlu drag&drop",
-        "🎯 Tüm sıralama işlemleri tek ekrandan",
-        "🗄️ Veri yapısı yeniden tasarlandı (her oyun ayrı doküman)",
-        "🔄 Otomatik migration sistemi eklendi",
-        "⚡ Performans iyileştirmesi (sadece değişen oyun kaydediliyor)",
-        "🔍 Mobil debug modu eklendi",
-        "✅ Uygulama donma sorunu çözüldü"
+        "🚀 Uygulama güncellemesi yayınlandı",
+        "🔧 Performans iyileştirmeleri",
+        "✅ Hata düzeltmeleri",
+        "⚡ Stabilite artırıldı"
     ],
-    "required": true,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.0.0/GameStore_v4.0.0.apk",
-    "fileSize": 12.5
+    "required": false,
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.5/GameStore_v4.0.0_debug.apk",
+    "fileSize": 6.18
 }
