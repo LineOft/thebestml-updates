@@ -2394,9 +2394,19 @@
                 <!-- YouTube iframe buraya yerleştirilecek -->
             </div>
             
-            <!-- Özellikler Bölümü -->
-            <div id="videoModalFeatures" style="padding: 20px; background: rgba(0,0,0,0.2);">
-                <!-- Özellikler buraya yerleştirilecek -->
+            <!-- Özellikler Bölümü (Açılır-Kapanır) -->
+            <div style="padding: 15px; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.1);">
+                <div onclick="toggleVideoFeatures()" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px; background: rgba(138,43,226,0.2); border-radius: 8px; transition: all 0.3s;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 20px;">✨</span>
+                        <span style="font-weight: 600; font-size: 15px;">Hile Özellikleri</span>
+                    </div>
+                    <span id="videoFeaturesToggleIcon" style="font-size: 20px; transition: transform 0.3s;">▼</span>
+                </div>
+                
+                <div id="videoModalFeatures" style="max-height: 0; overflow: hidden; transition: max-height 0.4s ease; margin-top: 0;">
+                    <!-- Özellikler buraya yerleştirilecek -->
+                </div>
             </div>
         </div>
     </div>
@@ -8514,14 +8524,13 @@
     
     // Firestore'dan oyun/hile verilerini yükle (her oyun ayrı dökümanda)
     async function loadGamesAndCheats() {
-        const debugDiv = document.getElementById('homeGamesGrid');
-        
+        // Debug sadece console'da (ekranda görünmez)
         function showDebug(msg, isError = false) {
-            if (debugDiv) {
-                const color = isError ? '#f44336' : '#4CAF50';
-                debugDiv.innerHTML += `<div style="background: ${color}22; border-left: 3px solid ${color}; padding: 10px; margin: 5px; font-size: 12px; color: ${color}; border-radius: 5px;">${msg}</div>`;
+            if (isError) {
+                console.error(msg);
+            } else {
+                console.log(msg);
             }
-            console.log(msg);
         }
         
         // BAŞLATMA KONTROLLERI
@@ -9156,10 +9165,7 @@
             const features = currentDynamicCheat?.features || [];
             
             if (features.length > 0) {
-                let featuresHtml = `
-                    <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 15px;">🗡️ Özellikler</div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
-                `;
+                let featuresHtml = `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">`;
                 
                 features.forEach(feature => {
                     featuresHtml += `
@@ -9180,14 +9186,29 @@
                 
                 featuresHtml += '</div>';
                 featuresContainer.innerHTML = featuresHtml;
-                featuresContainer.style.display = 'block';
             } else {
-                featuresContainer.style.display = 'none';
+                featuresContainer.innerHTML = '<p style="text-align: center; color: #888; padding: 15px;">Özellik bilgisi yok</p>';
             }
             
             openModal('youtubeVideoModal');
         } else {
             showToast('⚠️ Video açılamadı!');
+        }
+    }
+    
+    // Video modal'daki özellikleri aç/kapa
+    function toggleVideoFeatures() {
+        const container = document.getElementById('videoModalFeatures');
+        const icon = document.getElementById('videoFeaturesToggleIcon');
+        
+        if (container.style.maxHeight === '0px' || container.style.maxHeight === '') {
+            // Aç
+            container.style.maxHeight = container.scrollHeight + 'px';
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            // Kapat
+            container.style.maxHeight = '0px';
+            icon.style.transform = 'rotate(0deg)';
         }
     }
     
