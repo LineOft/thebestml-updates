@@ -2,9 +2,9 @@
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.5/GameStore_v4.0.0_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🎬 v4.1.6 yayınlandı — YouTube video desteği eklendi!",
+    "announcement": "🔔 v4.1.7 — Arka planda bildirim desteği eklendi!",
     "maintenanceMode": false,
-    "currentVersion": "4.1.6",
+    "currentVersion": "4.1.7",
     "forceUpdate": false,
-    "updateMessage": "Yeni özellik: Kurulum modallarında artık YouTube videoları destekleniyor!"
+    "updateMessage": "Yeni: Uygulama kapalıyken bile sipariş bildirimleri alabilirsiniz!"
 }

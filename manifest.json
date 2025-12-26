@@ -1,12 +1,13 @@
 {
-    "version": "4.1.6",
-    "buildNumber": 246,
+    "version": "4.1.7",
+    "buildNumber": 247,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-27",
     "changelog": [
-        "🎬 Kurulum modallarına YouTube video desteği eklendi",
-        "🔗 Tanıtım ve rehber videoları artık YouTube linki destekliyor",
-        "🔧 Performans iyileştirmeleri"
+        "🔔 Arka planda push bildirim desteği eklendi",
+        "📱 Uygulama kapalıyken bile bildirim alabilirsiniz",
+        "🛒 Yeni sipariş geldiğinde admin'lere bildirim",
+        "✅ Sipariş onay/red bildirimleri iyileştirildi"
     ],
     "required": false,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.1.5/GameStore_v4.0.0_debug.apk",

@@ -12261,17 +12261,126 @@
         if (!confirm('Bu siparişi reddetmek istediğinize emin misiniz?')) return;
         
         try {
+            // Sipariş bilgilerini al
+            const orderDoc = await db.collection('orders').doc(currentOrderId).get();
+            const orderData = orderDoc.data();
+            
             await db.collection('orders').doc(currentOrderId).update({
                 status: 'rejected',
                 rejectedAt: new Date(),
                 rejectedBy: currentUser.email
             });
             
+            // Kullanıcıya red bildirimi gönder
+            if (orderData && orderData.email) {
+                await sendOrderRejectionNotification(
+                    orderData.email, 
+                    orderData.packageName || orderData.cheat || 'Paket'
+                );
+            }
+            
             showToast('❌ Sipariş reddedildi');
             closeModal('orderDetailModal');
             loadPendingOrders();
         } catch(e) {
             showToast('❌ Hata: ' + e.message);
+        }
+    }
+    
+    // Sipariş reddedildiğinde bildirim gönder
+    async function sendOrderRejectionNotification(userEmail, packageName) {
+        try {
+            console.log('📩 Sipariş red bildirimi gönderiliyor:', userEmail);
+            
+            const normalizedEmail = userEmail.toLowerCase().trim();
+            
+            // Firestore bildirimi kaydet
+            await db.collection('notifications').add({
+                targetType: normalizedEmail,
+                targetEmail: normalizedEmail,
+                title: '❌ Siparişiniz Reddedildi',
+                message: `${packageName} paketi siparişiniz reddedildi. Detaylar için iletişime geçin.`,
+                type: 'order_rejected',
+                packageName: packageName,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: currentUser?.email || 'system',
+                read: false
+            });
+            
+            // Push notification gönder
+            try {
+                const userDocs = await db.collection('users').where('email', '==', normalizedEmail).get();
+                if (!userDocs.empty) {
+                    const userData = userDocs.docs[0].data();
+                    if (userData.fcmToken) {
+                        await sendPushNotification(
+                            userData.fcmToken,
+                            '❌ Siparişiniz Reddedildi',
+                            `${packageName} paketi siparişiniz reddedildi.`,
+                            { type: 'order_rejected' }
+                        );
+                        console.log('📱 Red bildirimi gönderildi!');
+                    }
+                }
+            } catch(pushErr) {
+                console.log('Push bildirim gönderilemedi:', pushErr);
+            }
+            
+        } catch(e) {
+            console.error('Red bildirimi hatası:', e);
+        }
+    }
+    
+    // Yeni sipariş olduğunda tüm admin'lere bildirim gönder
+    async function sendNewOrderNotificationToAdmins(userEmail, packageName, price) {
+        try {
+            console.log('📩 Admin\'lere yeni sipariş bildirimi gönderiliyor...');
+            
+            // Admin kullanıcıları bul (role === 'admin')
+            const adminDocs = await db.collection('users').where('role', '==', 'admin').get();
+            
+            if (adminDocs.empty) {
+                console.log('Admin bulunamadı');
+                return;
+            }
+            
+            const fcmTokens = [];
+            
+            adminDocs.forEach(doc => {
+                const adminData = doc.data();
+                if (adminData.fcmToken) {
+                    fcmTokens.push(adminData.fcmToken);
+                }
+            });
+            
+            console.log(`${fcmTokens.length} admin'e bildirim gönderilecek`);
+            
+            // Tüm admin'lere push notification gönder
+            if (fcmTokens.length > 0) {
+                await sendPushToMultiple(
+                    fcmTokens,
+                    '🛒 Yeni Sipariş!',
+                    `${userEmail} - ${packageName} (${price}₺)`,
+                    { type: 'order_new', page: 'admin' }
+                );
+                console.log('📱 Admin bildirimler gönderildi!');
+            }
+            
+            // Firestore'a da admin bildirimi kaydet
+            await db.collection('notifications').add({
+                targetType: 'admin',
+                title: '🛒 Yeni Sipariş Geldi!',
+                message: `${userEmail} kullanıcısı ${packageName} paketi sipariş etti. Fiyat: ${price}₺`,
+                type: 'order_new',
+                userEmail: userEmail,
+                packageName: packageName,
+                price: price,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                read: false
+            });
+            
+        } catch(e) {
+            console.error('Admin bildirim hatası:', e);
         }
     }
     
@@ -13804,6 +13913,10 @@
             
             // Sipariş badge'ini güncelle
             updateOrderBadge();
+            
+            // Admin'lere yeni sipariş bildirimi gönder
+            const packageName = isDynamic ? orderData.cheat : orderData.label;
+            await sendNewOrderNotificationToAdmins(currentUser.email, packageName, orderData.price);
             
             // Başarı modalını göster
             showOrderSuccessModal();
