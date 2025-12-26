@@ -17,9 +17,33 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script>
+        // Global error handler - TÜM hataları yakala
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            const errorDiv = document.getElementById('homeGamesGrid');
+            if (errorDiv) {
+                errorDiv.innerHTML = `
+                    <div style="background: #f44336; color: white; padding: 15px; margin: 10px; border-radius: 8px; text-align: left; font-size: 11px;">
+                        <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">❌ JavaScript Hatası</div>
+                        <div><strong>Mesaj:</strong> ${msg}</div>
+                        <div><strong>Satır:</strong> ${lineNo}:${columnNo}</div>
+                        <div style="margin-top: 10px; background: #222; padding: 8px; border-radius: 4px; overflow: auto;">${error ? error.stack : 'Stack yok'}</div>
+                    </div>
+                `;
+            }
+            return false;
+        };
+        
         var firebaseReady = false;
         var auth = null;
         var db = null;
+        
+        // Başlatma logu
+        document.addEventListener('DOMContentLoaded', function() {
+            const grid = document.getElementById('homeGamesGrid');
+            if (grid) {
+                grid.innerHTML = '<div style="padding: 20px; color: #4CAF50;">⏳ Firebase başlatılıyor...</div>';
+            }
+        });
         
         try {
             const firebaseConfig = {
@@ -37,11 +61,21 @@
                 db = firebase.firestore();
                 firebaseReady = true;
                 console.log('✅ Firebase başlatıldı');
+                console.log('✅ db:', db ? 'OK' : 'NULL');
+                console.log('✅ auth:', auth ? 'OK' : 'NULL');
             } else {
                 console.error('❌ Firebase SDK yüklenemedi');
+                const grid = document.getElementById('homeGamesGrid');
+                if (grid) {
+                    grid.innerHTML = '<div style="padding: 20px; color: #f44336;">❌ Firebase SDK yüklenemedi!</div>';
+                }
             }
         } catch(e) {
             console.error('❌ Firebase başlatma hatası:', e);
+            const grid = document.getElementById('homeGamesGrid');
+            if (grid) {
+                grid.innerHTML = `<div style="padding: 20px; color: #f44336;">❌ Firebase başlatma hatası: ${e.message}</div>`;
+            }
         }
     </script>
 </head>
@@ -8490,6 +8524,18 @@
             console.log(msg);
         }
         
+        // BAŞLATMA KONTROLLERI
+        showDebug('🔄 loadGamesAndCheats başlatıldı');
+        
+        if (!db) {
+            showDebug('❌ HATA: db nesnesi null! Firebase başlatılamadı.', true);
+            showDebug(`firebaseReady: ${firebaseReady}`, true);
+            showDebug(`typeof firebase: ${typeof firebase}`, true);
+            return;
+        }
+        
+        showDebug('✅ db nesnesi hazır');
+        
         try {
             showDebug('🔄 Başlangıç: Oyunlar yükleniyor...');
             
@@ -8661,16 +8707,45 @@
             }
             
             showDebug(`🎮 Toplam ${Object.keys(gamesData).length} oyun yüklendi`);
+            
+            if (Object.keys(gamesData).length === 0) {
+                showDebug('⚠️ UYARI: Hiç oyun yüklenmedi!', true);
+            }
+            
             showDebug('🔄 Sayfa render ediliyor...');
             
-            renderHomeGames(); // Ana sayfadaki oyunları render et
-            updateGameSelects();
-            loadGameCheatList();
-            updateCheatStatusBadges(); // Durum badge'lerini güncelle
+            try {
+                renderHomeGames(); // Ana sayfadaki oyunları render et
+                showDebug('✅ renderHomeGames tamamlandı');
+            } catch(renderErr) {
+                showDebug('❌ renderHomeGames hatası: ' + renderErr.message, true);
+            }
             
-            showDebug('✅ YÜKLENDİ! Sayfa hazır.');
+            try {
+                updateGameSelects();
+                showDebug('✅ updateGameSelects tamamlandı');
+            } catch(selectErr) {
+                showDebug('❌ updateGameSelects hatası: ' + selectErr.message, true);
+            }
+            
+            try {
+                loadGameCheatList();
+                showDebug('✅ loadGameCheatList tamamlandı');
+            } catch(listErr) {
+                showDebug('❌ loadGameCheatList hatası: ' + listErr.message, true);
+            }
+            
+            try {
+                updateCheatStatusBadges(); // Durum badge'lerini güncelle
+                showDebug('✅ updateCheatStatusBadges tamamlandı');
+            } catch(badgeErr) {
+                showDebug('❌ updateCheatStatusBadges hatası: ' + badgeErr.message, true);
+            }
+            
+            showDebug('🎉 YÜKLENDİ! Sayfa hazır.');
         } catch(e) {
-            showDebug('❌ HATA: ' + e.message + ' | ' + e.stack, true);
+            showDebug('❌ KRİTİK HATA: ' + e.message, true);
+            showDebug('Stack: ' + (e.stack || 'Stack bilgisi yok'), true);
             // Hata durumunda bile bir şey göster
             const grid = document.getElementById('homeGamesGrid');
             if (grid) {
