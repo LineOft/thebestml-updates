@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.6';
+    const APP_VERSION = '4.2.7';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3146,12 +3146,27 @@
         
         const debugInfo = [];
         debugInfo.push('=== FCM DEBUG ===');
-        debugInfo.push('FCM Token: ' + (fcmToken ? fcmToken.substring(0, 30) + '...' : 'YOK'));
         debugInfo.push('Push Server: ' + PUSH_SERVER.url);
         debugInfo.push('API Key: ' + (PUSH_SERVER.apiKey ? 'VAR' : 'YOK'));
         
-        // Önce kendi token'ımıza gönder
+        // Token'ı göster ve kopyala seçeneği sun
         if (fcmToken) {
+            debugInfo.push('');
+            debugInfo.push('FCM TOKEN (tam):');
+            debugInfo.push(fcmToken);
+            debugInfo.push('');
+            
+            // Token'ı panoya kopyala
+            try {
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(fcmToken);
+                    debugInfo.push('📋 Token panoya kopyalandı!');
+                }
+            } catch(e) {
+                debugInfo.push('(Kopyalama başarısız)');
+            }
+            
+            // Doğrudan token'a bildirim gönder
             try {
                 const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
                     method: 'POST',
@@ -3162,16 +3177,17 @@
                     body: JSON.stringify({ 
                         token: fcmToken, 
                         title: '🧪 FCM Token Test', 
-                        body: 'Bu bildirim doğrudan token\'ınıza gönderildi - ' + new Date().toLocaleTimeString(),
+                        body: 'Doğrudan token\'a gönderildi - ' + new Date().toLocaleTimeString(),
                         data: { type: 'test' }
                     })
                 });
                 const result = await response.json();
-                debugInfo.push('Token Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + result.error));
+                debugInfo.push('Token Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + (result.error || result.details)));
             } catch(e) {
                 debugInfo.push('Token Test: ❌ HATA: ' + e.message);
             }
         } else {
+            debugInfo.push('FCM Token: YOK');
             debugInfo.push('Token Test: ⚠️ Token yok, atlandı');
         }
         
@@ -3191,7 +3207,7 @@
                 })
             });
             const result = await response.json();
-            debugInfo.push('Topic Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + result.error));
+            debugInfo.push('Topic Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + (result.error || result.details)));
         } catch(e) {
             debugInfo.push('Topic Test: ❌ HATA: ' + e.message);
         }
