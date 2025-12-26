@@ -2349,14 +2349,20 @@
 
 <!-- YOUTUBE VIDEO MODAL -->
 <div class="modal-overlay" id="youtubeVideoModal" onclick="closeModal('youtubeVideoModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 800px; width: 95%; background: #000;">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
         <div class="modal-header" style="background: linear-gradient(135deg, #E040FB, #BA68C8);">
             <div class="modal-title">🎬 Tanıtım Videosu</div>
             <button class="modal-close" onclick="closeModal('youtubeVideoModal')">✕</button>
         </div>
-        <div class="modal-body" style="padding: 0; background: #000;">
-            <div id="youtubeVideoContainer" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden;">
+        <div class="modal-body" style="padding: 0;">
+            <!-- Video Container -->
+            <div id="youtubeVideoContainer" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background: #000;">
                 <!-- YouTube iframe buraya yerleştirilecek -->
+            </div>
+            
+            <!-- Özellikler Bölümü -->
+            <div id="videoModalFeatures" style="padding: 20px; background: rgba(0,0,0,0.2);">
+                <!-- Özellikler buraya yerleştirilecek -->
             </div>
         </div>
     </div>
@@ -9099,6 +9105,41 @@
                     allowfullscreen>
                 </iframe>
             `;
+            
+            // Özellikleri ekle
+            const featuresContainer = document.getElementById('videoModalFeatures');
+            const features = currentDynamicCheat?.features || [];
+            
+            if (features.length > 0) {
+                let featuresHtml = `
+                    <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 15px;">🗡️ Özellikler</div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                `;
+                
+                features.forEach(feature => {
+                    featuresHtml += `
+                        <div style="background: linear-gradient(135deg, rgba(156,39,176,0.2), rgba(103,58,183,0.2)); 
+                                    border: 1px solid rgba(156,39,176,0.3); 
+                                    border-radius: 12px; 
+                                    padding: 12px; 
+                                    font-size: 13px; 
+                                    color: #ddd; 
+                                    display: flex; 
+                                    align-items: center; 
+                                    gap: 8px;">
+                            <span style="color: #4CAF50; font-size: 16px;">✓</span>
+                            ${feature}
+                        </div>
+                    `;
+                });
+                
+                featuresHtml += '</div>';
+                featuresContainer.innerHTML = featuresHtml;
+                featuresContainer.style.display = 'block';
+            } else {
+                featuresContainer.style.display = 'none';
+            }
+            
             openModal('youtubeVideoModal');
         } else {
             showToast('⚠️ Video açılamadı!');
