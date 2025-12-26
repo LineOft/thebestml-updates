@@ -474,6 +474,7 @@
     .btn-secondary { background: linear-gradient(135deg, #2196F3, #1976D2); color: #fff; }
     .btn-warning { background: linear-gradient(135deg, #FF9800, #F57C00); color: #fff; }
     .btn-purple { background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; }
+    .btn-purple { background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; }
     .btn-subtext { display: block; font-size: 11px; font-weight: normal; opacity: 0.8; margin-top: 4px; }
     .btn-small { padding: 12px 20px; font-size: 14px; }
     
@@ -1133,6 +1134,7 @@
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button class="btn btn-primary btn-small" onclick="openGameModal()" style="flex: 1;">➕ Yeni Oyun</button>
                 <button class="btn btn-secondary btn-small" onclick="openCheatModal()" style="flex: 1;">➕ Yeni Hile</button>
+                <button class="btn btn-purple btn-small" onclick="openSortModal()" style="flex: 1;">⬍ Sıralama</button>
                 <button class="btn btn-warning btn-small" onclick="loadGameCheatList()" style="flex: 1;">🔄 Yenile</button>
             </div>
         </div>
@@ -2412,6 +2414,28 @@
     </div>
 </div>
 
+<!-- SIRALAMA MODAL -->
+<div class="modal-overlay" id="sortModal" onclick="closeModalOutside(event, 'sortModal')">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #9C27B0, #7B1FA2);">
+            <div class="modal-title">⬍ Oyun ve Hile Sıralaması</div>
+            <button class="modal-close" onclick="closeModal('sortModal')">✕</button>
+        </div>
+        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px;">
+            <div style="margin-bottom: 15px; padding: 10px; background: rgba(156, 39, 176, 0.1); border-radius: 8px; font-size: 13px; color: #aaa;">
+                💡 <strong>Nasıl Kullanılır:</strong><br>
+                • ☰ ikonunu tutup sürükleyerek oyunları sıralayın<br>
+                • Oyun kartına tıklayarak hilelerini açın ve sıralayın<br>
+                • Değişiklikler otomatik kaydedilir
+            </div>
+            
+            <div id="sortGameList" style="min-height: 200px;">
+                <!-- Oyun listesi buraya gelecek -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- AKTİF ÜYELİKLER MODAL -->
 <div class="modal-overlay" id="keyDetailModal" onclick="closeModalOutside(event, 'keyDetailModal')">
     <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px; max-height: 80vh; overflow-y: auto;">
@@ -2794,7 +2818,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.0.4';
+    const APP_VERSION = '4.0.5';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10213,9 +10237,8 @@
             const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
             
             html += `
-                <div class="draggable-game" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: move; transition: all 0.2s;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <span style="color: #666; font-size: 16px; cursor: grab; user-select: none;">☰</span>
                         ${game.image ? `<img src="${game.image}" style="width: 40px; height: 40px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                         <div style="flex: 1;">
                             <div style="display: flex; align-items: center; gap: 6px;">
@@ -10250,8 +10273,7 @@
                 const priceCount = cheat.prices?.length || 0;
                 
                 html += `
-                    <div class="draggable-cheat" data-game-id="${gameId}" data-cheat-id="${cheatId}" draggable="true" style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: move;">
-                        <span style="color: #666; font-size: 12px; cursor: grab; user-select: none;">☰</span>
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
                         ${cheat.image ? `<img src="${cheat.image}" style="width: 30px; height: 30px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 20px;">🛡️</span>'}
                         <div style="flex: 1;">
                             <div style="color: #2196F3; font-size: 12px;">${cheatStatus} ${cheat.name} <span style="color: #888;">${cheat.version || ''}</span></div>
@@ -10282,13 +10304,389 @@
         });
         
         container.innerHTML = html;
-        
-        // Drag and drop event listeners ekle
-        initDragAndDrop();
     }
     
-    // Drag and Drop sistemi
-    let draggedGameElement = null;
+    // Sıralama modalını aç
+    function openSortModal() {
+        if (!requirePermission('games_edit', 'sıralama yapmak')) return;
+        
+        renderSortModal();
+        openModal('sortModal');
+    }
+    
+    // Sıralama modal'ını render et
+    function renderSortModal() {
+        const container = document.getElementById('sortGameList');
+        if (!container) return;
+        
+        // Oyunları sortOrder'a göre sırala
+        const gameIds = Object.keys(gamesData).sort((a, b) => {
+            const orderA = gamesData[a].sortOrder ?? 999;
+            const orderB = gamesData[b].sortOrder ?? 999;
+            return orderA - orderB;
+        });
+        
+        if (gameIds.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Henüz oyun eklenmemiş</div>';
+            return;
+        }
+        
+        let html = '';
+        
+        gameIds.forEach(gameId => {
+            const game = gamesData[gameId];
+            const cheats = game.cheats || {};
+            const cheatCount = Object.keys(cheats).length;
+            const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
+            
+            html += `
+                <div class="sort-game-card" data-game-id="${gameId}" draggable="true" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; cursor: move; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 10px;" onclick="toggleSortGameCheats('${gameId}')">
+                        <span style="color: #9C27B0; font-size: 18px; cursor: grab; user-select: none;">☰</span>
+                        ${game.image ? `<img src="${game.image}" style="width: 45px; height: 45px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
+                        <div style="flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="color: #fff; font-weight: bold; font-size: 14px;">${statusBadge} ${game.name}</span>
+                                <span style="background: #2196F3; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${cheatCount} hile</span>
+                            </div>
+                            <div style="font-size: 12px; color: #888; margin-top: 2px;">${game.desc || 'Açıklama yok'}</div>
+                        </div>
+                        <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">▼</span>
+                    </div>
+                    
+                    <!-- Hileler (başlangıçta gizli) -->
+                    <div id="sortCheats${gameId}" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;">
+                        <div style="padding-left: 30px; margin-top: 10px; border-left: 2px solid rgba(156, 39, 176, 0.3);">
+                            <div id="sortCheatList${gameId}">
+                                <!-- Hileler buraya gelecek -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+        
+        // Drag and drop event listeners ekle
+        initSortDragAndDrop();
+    }
+    
+    // Oyun kartının hilelerini aç/kapat
+    function toggleSortGameCheats(gameId) {
+        const cheatsDiv = document.getElementById(`sortCheats${gameId}`);
+        const chevron = document.getElementById(`sortChevron${gameId}`);
+        const cheatListDiv = document.getElementById(`sortCheatList${gameId}`);
+        
+        if (cheatsDiv.style.maxHeight === '0px' || cheatsDiv.style.maxHeight === '') {
+            // Aç
+            const game = gamesData[gameId];
+            const cheats = game.cheats || {};
+            
+            // Hileleri sortOrder'a göre sırala
+            const cheatIds = Object.keys(cheats).sort((a, b) => {
+                const orderA = cheats[a].sortOrder ?? 999;
+                const orderB = cheats[b].sortOrder ?? 999;
+                return orderA - orderB;
+            });
+            
+            if (cheatIds.length === 0) {
+                cheatListDiv.innerHTML = '<div style="padding: 10px; color: #666; font-size: 12px; text-align: center;">Bu oyunda hile yok</div>';
+            } else {
+                let cheatHtml = '';
+                cheatIds.forEach(cheatId => {
+                    const cheat = cheats[cheatId];
+                    const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
+                    
+                    cheatHtml += `
+                        <div class="sort-cheat-card" data-game-id="${gameId}" data-cheat-id="${cheatId}" draggable="true" style="display: flex; align-items: center; gap: 8px; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px; cursor: move;">
+                            <span style="color: #9C27B0; font-size: 14px; cursor: grab; user-select: none;">☰</span>
+                            ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">🛡️</span>'}
+                            <div style="flex: 1;">
+                                <div style="color: #2196F3; font-size: 13px; font-weight: 500;">${cheatStatus} ${cheat.name}</div>
+                                <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiş'}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                cheatListDiv.innerHTML = cheatHtml;
+                
+                // Hile drag-drop event listeners ekle
+                initSortCheatDragAndDrop(gameId);
+            }
+            
+            cheatsDiv.style.maxHeight = cheatsDiv.scrollHeight + 'px';
+            chevron.style.transform = 'rotate(180deg)';
+        } else {
+            // Kapat
+            cheatsDiv.style.maxHeight = '0px';
+            chevron.style.transform = 'rotate(0deg)';
+        }
+    }
+    
+    // Drag and Drop sistemi (Sıralama modal)
+    let sortDraggedElement = null;
+    let sortDraggedOverElement = null;
+    
+    function initSortDragAndDrop() {
+        document.querySelectorAll('.sort-game-card').forEach(item => {
+            // Desktop
+            item.addEventListener('dragstart', handleSortGameDragStart);
+            item.addEventListener('dragover', handleSortGameDragOver);
+            item.addEventListener('drop', handleSortGameDrop);
+            item.addEventListener('dragend', handleSortGameDragEnd);
+            
+            // Mobile
+            item.addEventListener('touchstart', handleSortGameTouchStart, { passive: false });
+            item.addEventListener('touchmove', handleSortGameTouchMove, { passive: false });
+            item.addEventListener('touchend', handleSortGameTouchEnd);
+        });
+    }
+    
+    function initSortCheatDragAndDrop(gameId) {
+        document.querySelectorAll(`.sort-cheat-card[data-game-id="${gameId}"]`).forEach(item => {
+            // Desktop
+            item.addEventListener('dragstart', handleSortCheatDragStart);
+            item.addEventListener('dragover', handleSortCheatDragOver);
+            item.addEventListener('drop', handleSortCheatDrop);
+            item.addEventListener('dragend', handleSortCheatDragEnd);
+            
+            // Mobile
+            item.addEventListener('touchstart', handleSortCheatTouchStart, { passive: false });
+            item.addEventListener('touchmove', handleSortCheatTouchMove, { passive: false });
+            item.addEventListener('touchend', handleSortCheatTouchEnd);
+        });
+    }
+    
+    // === OYUN DRAG & DROP (Sort Modal) ===
+    function handleSortGameDragStart(e) {
+        sortDraggedElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+    }
+    
+    function handleSortGameDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        if (this !== sortDraggedElement && this.classList.contains('sort-game-card')) {
+            this.style.borderTop = '3px solid #9C27B0';
+        }
+        return false;
+    }
+    
+    function handleSortGameDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+        
+        if (sortDraggedElement !== this && this.classList.contains('sort-game-card')) {
+            const draggedId = sortDraggedElement.dataset.gameId;
+            const targetId = this.dataset.gameId;
+            swapGames(draggedId, targetId);
+        }
+        
+        this.style.borderTop = '';
+        return false;
+    }
+    
+    function handleSortGameDragEnd(e) {
+        this.style.opacity = '';
+        document.querySelectorAll('.sort-game-card').forEach(item => {
+            item.style.borderTop = '';
+        });
+    }
+    
+    // === OYUN TOUCH (Sort Modal) ===
+    function handleSortGameTouchStart(e) {
+        sortDraggedElement = this;
+        this.style.opacity = '0.7';
+        this.style.transform = 'scale(1.03)';
+    }
+    
+    function handleSortGameTouchMove(e) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+        const target = elements.find(el => el.classList && el.classList.contains('sort-game-card') && el !== sortDraggedElement);
+        
+        if (sortDraggedOverElement && sortDraggedOverElement !== target) {
+            sortDraggedOverElement.style.borderTop = '';
+        }
+        
+        if (target) {
+            target.style.borderTop = '3px solid #9C27B0';
+            sortDraggedOverElement = target;
+        }
+    }
+    
+    function handleSortGameTouchEnd(e) {
+        this.style.opacity = '';
+        this.style.transform = '';
+        
+        if (sortDraggedOverElement) {
+            const draggedId = this.dataset.gameId;
+            const targetId = sortDraggedOverElement.dataset.gameId;
+            swapGames(draggedId, targetId);
+            sortDraggedOverElement.style.borderTop = '';
+            sortDraggedOverElement = null;
+        }
+        
+        sortDraggedElement = null;
+    }
+    
+    // === HİLE DRAG & DROP (Sort Modal) ===
+    function handleSortCheatDragStart(e) {
+        sortDraggedElement = this;
+        this.style.opacity = '0.5';
+        e.dataTransfer.effectAllowed = 'move';
+        e.stopPropagation();
+    }
+    
+    function handleSortCheatDragOver(e) {
+        if (e.preventDefault) e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        
+        const draggedGameId = sortDraggedElement?.dataset.gameId;
+        const thisGameId = this.dataset.gameId;
+        
+        if (this !== sortDraggedElement && this.classList.contains('sort-cheat-card') && draggedGameId === thisGameId) {
+            this.style.borderTop = '3px solid #9C27B0';
+        }
+        return false;
+    }
+    
+    function handleSortCheatDrop(e) {
+        if (e.stopPropagation) e.stopPropagation();
+        
+        const draggedGameId = sortDraggedElement?.dataset.gameId;
+        const thisGameId = this.dataset.gameId;
+        
+        if (sortDraggedElement !== this && this.classList.contains('sort-cheat-card') && draggedGameId === thisGameId) {
+            const gameId = draggedGameId;
+            const draggedCheatId = sortDraggedElement.dataset.cheatId;
+            const targetCheatId = this.dataset.cheatId;
+            swapCheats(gameId, draggedCheatId, targetCheatId);
+        }
+        
+        this.style.borderTop = '';
+        return false;
+    }
+    
+    function handleSortCheatDragEnd(e) {
+        this.style.opacity = '';
+        const gameId = this.dataset.gameId;
+        document.querySelectorAll(`.sort-cheat-card[data-game-id="${gameId}"]`).forEach(item => {
+            item.style.borderTop = '';
+        });
+    }
+    
+    // === HİLE TOUCH (Sort Modal) ===
+    function handleSortCheatTouchStart(e) {
+        e.stopPropagation();
+        sortDraggedElement = this;
+        this.style.opacity = '0.7';
+        this.style.transform = 'scale(1.03)';
+    }
+    
+    function handleSortCheatTouchMove(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const touch = e.touches[0];
+        const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+        const draggedGameId = sortDraggedElement?.dataset.gameId;
+        const target = elements.find(el => el.classList && el.classList.contains('sort-cheat-card') && el !== sortDraggedElement && el.dataset.gameId === draggedGameId);
+        
+        if (sortDraggedOverElement && sortDraggedOverElement !== target) {
+            sortDraggedOverElement.style.borderTop = '';
+        }
+        
+        if (target) {
+            target.style.borderTop = '3px solid #9C27B0';
+            sortDraggedOverElement = target;
+        }
+    }
+    
+    function handleSortCheatTouchEnd(e) {
+        e.stopPropagation();
+        this.style.opacity = '';
+        this.style.transform = '';
+        
+        if (sortDraggedOverElement) {
+            const gameId = this.dataset.gameId;
+            const draggedCheatId = this.dataset.cheatId;
+            const targetCheatId = sortDraggedOverElement.dataset.cheatId;
+            swapCheats(gameId, draggedCheatId, targetCheatId);
+            sortDraggedOverElement.style.borderTop = '';
+            sortDraggedOverElement = null;
+        }
+        
+        sortDraggedElement = null;
+    }
+    
+    // Oyun yerlerini değiştir (Sıralama modal'dan)
+    async function swapGames(gameId1, gameId2) {
+        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        
+        try {
+            const order1 = gamesData[gameId1].sortOrder ?? 999;
+            const order2 = gamesData[gameId2].sortOrder ?? 999;
+            
+            gamesData[gameId1].sortOrder = order2;
+            gamesData[gameId2].sortOrder = order1;
+            
+            await Promise.all([
+                db.collection('games').doc(gameId1).update({ sortOrder: order2 }),
+                db.collection('games').doc(gameId2).update({ sortOrder: order1 })
+            ]);
+            
+            // Her iki listeyide güncelle
+            loadGameCheatList();
+            renderHomeGames();
+            
+            // Eğer sıralama modal açıksa onu da güncelle
+            const sortModal = document.getElementById('sortModal');
+            if (sortModal && sortModal.classList.contains('active')) {
+                renderSortModal();
+            }
+        } catch(e) {
+            console.error('Oyun swap hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
+    
+    // Hile yerlerini değiştir (Sıralama modal'dan)
+    async function swapCheats(gameId, cheatId1, cheatId2) {
+        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        
+        try {
+            const cheats = gamesData[gameId].cheats;
+            const order1 = cheats[cheatId1].sortOrder ?? 999;
+            const order2 = cheats[cheatId2].sortOrder ?? 999;
+            
+            cheats[cheatId1].sortOrder = order2;
+            cheats[cheatId2].sortOrder = order1;
+            
+            await db.collection('games').doc(gameId).update({
+                [`cheats.${cheatId1}.sortOrder`]: order2,
+                [`cheats.${cheatId2}.sortOrder`]: order1
+            });
+            
+            loadGameCheatList();
+            
+            // Eğer sıralama modal açıksa o oyunun hilelerini güncelle
+            const sortModal = document.getElementById('sortModal');
+            if (sortModal && sortModal.classList.contains('active')) {
+                // Oyun kartını açık tut ve sadece hile listesini güncelle
+                const cheatsDiv = document.getElementById(`sortCheats${gameId}`);
+                if (cheatsDiv && cheatsDiv.style.maxHeight !== '0px') {
+                    toggleSortGameCheats(gameId); // Kapat
+                    setTimeout(() => toggleSortGameCheats(gameId), 100); // Tekrar aç
+                }
+            }
+        } catch(e) {
+            console.error('Hile swap hatası:', e);
+            showToast('❌ Sıralama güncellenemedi');
+        }
+    }
     let draggedCheatElement = null;
     let draggedOverElement = null;
     
