@@ -922,6 +922,16 @@
                 <span class="menu-arrow">›</span>
             </div>
             
+            <!-- FCM Test Butonu -->
+            <div class="profile-menu-item" onclick="testFcmNotification(); toggleProfilePanel();">
+                <span class="menu-icon">🔔</span>
+                <div class="menu-text">
+                    <div class="menu-title">Bildirim Test</div>
+                    <div class="menu-subtitle">Push bildirim durumunu test et</div>
+                </div>
+                <span class="menu-arrow">›</span>
+            </div>
+            
             <!-- Çıkış Butonu -->
             <button class="profile-logout-btn" onclick="logout(); toggleProfilePanel();">🚪 Çıkış Yap</button>
         </div>
@@ -2818,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.3';
+    const APP_VERSION = '4.2.4';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3129,6 +3139,66 @@
         url: 'https://push-server-psi.vercel.app', // Vercel deploy URL
         apiKey: 'thebestml_push_secret_2024' // Güvenlik anahtarı
     };
+    
+    // FCM Debug - Bildirim durumunu test et
+    async function testFcmNotification() {
+        showToast('🔔 FCM test başlatılıyor...');
+        
+        const debugInfo = [];
+        debugInfo.push('=== FCM DEBUG ===');
+        debugInfo.push('FCM Token: ' + (fcmToken ? fcmToken.substring(0, 30) + '...' : 'YOK'));
+        debugInfo.push('Push Server: ' + PUSH_SERVER.url);
+        debugInfo.push('API Key: ' + (PUSH_SERVER.apiKey ? 'VAR' : 'YOK'));
+        
+        // Önce kendi token'ımıza gönder
+        if (fcmToken) {
+            try {
+                const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': PUSH_SERVER.apiKey
+                    },
+                    body: JSON.stringify({ 
+                        token: fcmToken, 
+                        title: '🧪 FCM Token Test', 
+                        body: 'Bu bildirim doğrudan token\'ınıza gönderildi - ' + new Date().toLocaleTimeString(),
+                        data: { type: 'test' }
+                    })
+                });
+                const result = await response.json();
+                debugInfo.push('Token Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + result.error));
+            } catch(e) {
+                debugInfo.push('Token Test: ❌ HATA: ' + e.message);
+            }
+        } else {
+            debugInfo.push('Token Test: ⚠️ Token yok, atlandı');
+        }
+        
+        // Topic'e de gönder
+        try {
+            const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': PUSH_SERVER.apiKey
+                },
+                body: JSON.stringify({ 
+                    topic: 'all_users', 
+                    title: '🧪 FCM Topic Test', 
+                    body: 'Bu bildirim all_users topic\'ine gönderildi - ' + new Date().toLocaleTimeString(),
+                    data: { type: 'test' }
+                })
+            });
+            const result = await response.json();
+            debugInfo.push('Topic Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + result.error));
+        } catch(e) {
+            debugInfo.push('Topic Test: ❌ HATA: ' + e.message);
+        }
+        
+        // Sonuçları göster
+        alert(debugInfo.join('\n'));
+    }
     
     // Push notification gönder (sunucu üzerinden)
     async function sendPushNotification(token, title, body, data = {}) {

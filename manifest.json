@@ -1,14 +1,14 @@
 {
-    "version": "4.2.3",
-    "buildNumber": 253,
+    "version": "4.2.4",
+    "buildNumber": 254,
     "minBuildNumber": 150,
     "releaseDate": "2025-12-27",
     "changelog": [
-        "🔔 FCM topic subscription eklendi",
-        "📱 all_users ve all topic'lerine otomatik abone olma",
-        "✅ Bildirimler artık tüm kullanıcılara gönderilecek"
+        "🔔 Bildirim Test butonu eklendi",
+        "🧪 FCM debug modu eklendi",
+        "✅ Push bildirim durumunu test edebilirsiniz"
     ],
     "required": false,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.3/GameStore_v4.2.3_debug.apk",
-    "fileSize": 6.06
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.4/GameStore_v4.2.4_debug.apk",
+    "fileSize": 6.07
 }
