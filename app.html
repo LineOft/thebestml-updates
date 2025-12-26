@@ -8481,17 +8481,45 @@
     // Firestore'dan oyun/hile verilerini yükle (her oyun ayrı dökümanda)
     async function loadGamesAndCheats() {
         try {
-            // Her oyunu games/{gameId} koleksiyonundan yükle
+            // Önce yeni yapıyı dene: games/{gameId} koleksiyonu
             const gamesSnapshot = await db.collection('games').get();
             gamesData = {};
             
-            gamesSnapshot.forEach(doc => {
-                gamesData[doc.id] = doc.data();
-            });
-            
-            console.log('Oyunlar yüklendi:', Object.keys(gamesData));
+            if (!gamesSnapshot.empty) {
+                // Yeni yapıda veri var
+                gamesSnapshot.forEach(doc => {
+                    gamesData[doc.id] = doc.data();
+                });
+                console.log('✅ Oyunlar yüklendi (yeni yapı):', Object.keys(gamesData));
             } else {
-                console.log('Firestore\'da oyun verisi yok, varsayılan oluşturuluyor...');
+                // Yeni yapıda veri yok, eski yapıyı dene: settings/gamesData
+                console.log('⚠️ Yeni yapıda veri yok, eski yapıdan yükleniyor...');
+                const oldDoc = await db.collection('settings').doc('gamesData').get();
+                
+                if (oldDoc.exists && oldDoc.data().games) {
+                    // Eski yapıdan veri bulduk, otomatik migration yap
+                    const oldGamesData = oldDoc.data().games;
+                    console.log('📦 Eski yapıda veri bulundu, migration başlıyor...');
+                    
+                    // Her oyunu yeni yapıya aktar
+                    const migrationPromises = [];
+                    for (const gameId in oldGamesData) {
+                        gamesData[gameId] = oldGamesData[gameId];
+                        migrationPromises.push(
+                            db.collection('games').doc(gameId).set(oldGamesData[gameId])
+                        );
+                    }
+                    
+                    // Tüm oyunları kaydet
+                    await Promise.all(migrationPromises);
+                    console.log('✅ Migration tamamlandı! Oyunlar:', Object.keys(gamesData));
+                    
+                    // Eski veriyi yedek olarak sakla
+                    await db.collection('settings').doc('gamesData_BACKUP').set(oldDoc.data());
+                    console.log('💾 Eski veri yedeklendi: settings/gamesData_BACKUP');
+                } else {
+                    // Hiç veri yok, varsayılan oluştur
+                    console.log('📝 Hiç veri yok, varsayılan oluşturuluyor...');
                 // Varsayılan oyun verisi
                 const defaultGame = {
                     name: 'Mobile Legends',
@@ -8606,9 +8634,10 @@
                     // Her oyunu ayrı dokümanda tut
                     await db.collection('games').doc('mobile_legends').set(defaultGame);
                     gamesData['mobile_legends'] = defaultGame;
-                    console.log('Varsayılan oyun verisi kaydedildi');
+                    console.log('✅ Varsayılan oyun verisi kaydedildi');
                 } catch(saveErr) {
-                    console.error('Varsayılan veri kaydetme hatası:', saveErr);
+                    console.error('❌ Varsayılan veri kaydetme hatası:', saveErr);
+                }
                 }
             }
             
@@ -8617,7 +8646,7 @@
             loadGameCheatList();
             updateCheatStatusBadges(); // Durum badge'lerini güncelle
         } catch(e) {
-            console.error('Oyun/Hile yükleme hatası:', e);
+            console.error('❌ Oyun/Hile yükleme hatası:', e);
             // Hata durumunda bile bir şey göster
             const grid = document.getElementById('homeGamesGrid');
             if (grid) {
