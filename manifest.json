@@ -1,12 +1,13 @@
 {
-    "version": "4.2.72",
-    "buildNumber": 322,
+    "version": "4.2.73",
+    "buildNumber": 323,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Düzeltme: Bildirimleri temizle sonrası 9+ rozetinin takılı kalması düzeltildi",
         "Güvenlik (Admin): Aylık özet sipariş silme yetkisi sadece OWNER",
         "Geliştirme (Admin): Onaylanan siparişler arşivlenir; silinse bile aylık özetlerde görünür",
         "Yeni (Admin): Aylık onaylanan sipariş detayında onaylayan admin bilgisi",

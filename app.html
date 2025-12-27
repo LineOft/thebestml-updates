@@ -2930,7 +2930,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.72';
+    const APP_VERSION = '4.2.73';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -5324,12 +5324,15 @@
         if (!badge) return;
         
         const readNotifs = JSON.parse(localStorage.getItem('readNotifications') || '[]');
-        const unreadCount = userNotifications.filter(n => !readNotifs.includes(n.id)).length;
+        const unreadCount = userNotifications
+            .filter(n => isNotificationVisibleByCutoff(n))
+            .filter(n => !readNotifs.includes(n.id)).length;
         
         if (unreadCount > 0) {
             badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
             badge.style.display = 'inline';
         } else {
+            badge.textContent = '0';
             badge.style.display = 'none';
         }
         
@@ -5343,14 +5346,36 @@
         if (!badge) return;
         
         const readNotifs = JSON.parse(localStorage.getItem('readNotifications') || '[]');
-        const unreadCount = userNotifications.filter(n => !readNotifs.includes(n.id)).length;
+        const unreadCount = userNotifications
+            .filter(n => isNotificationVisibleByCutoff(n))
+            .filter(n => !readNotifs.includes(n.id)).length;
         
         if (unreadCount > 0) {
             badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
             badge.style.display = 'flex';
         } else {
+            badge.textContent = '0';
             badge.style.display = 'none';
         }
+    }
+
+    function getNotificationDateMaybe(notif) {
+        try {
+            if (!notif) return null;
+            if (notif.createdAt && notif.createdAt.toDate) return notif.createdAt.toDate();
+            if (notif.notifiedAt) {
+                const d = new Date(notif.notifiedAt);
+                return isNaN(d.getTime()) ? null : d;
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function isNotificationVisibleByCutoff(notif) {
+        if (!notificationCutoffDate) return true;
+        const d = getNotificationDateMaybe(notif);
+        if (!d) return false; // tarihi olmayanlar: eski kabul et
+        return d >= notificationCutoffDate;
     }
     
     // Bildirim sesi çal
@@ -5652,6 +5677,9 @@
             const now = new Date();
             notificationCutoffDate = now;
 
+            // Hafızadaki bildirimleri de temizle (aksi halde badge eski listeden 9+ gösterebilir)
+            userNotifications = [];
+
             if (currentUser?.uid) {
                 try {
                     localStorage.setItem('notifClearedAt_' + currentUser.uid, now.toISOString());
@@ -5662,6 +5690,13 @@
                 localStorage.setItem('clearedNotifications', '[]');
                 localStorage.setItem('readNotifications', '[]');
                 localStorage.setItem('notifiedNotifications', '[]');
+            } catch (e) {}
+
+            // Badge'leri anında sıfırla
+            try {
+                updateNotificationBadge();
+                updateProfileNotifBadge();
+                if (typeof updateSidebarBadges === 'function') updateSidebarBadges();
             } catch (e) {}
 
             if (db && currentUser?.uid) {

@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.72",
+    "currentVersion": "4.2.73",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.72 – Owner silme yetkisi",
+    "announcement": "📢 v4.2.73 – Bildirim rozeti düzeltme",
     "maintenanceMode": false,
-    "updateMessage": "Güncelleme: Aylık özet detayındaki sipariş silme yetkisi sadece OWNER olacak şekilde kısıtlandı. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Düzeltme: Profil > Bildirimler ekranında 'Tüm Bildirimleri Temizle' sonrası 9+ rozetinin takılı kalması düzeltildi. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
