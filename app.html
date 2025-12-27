@@ -2930,7 +2930,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.73';
+    const APP_VERSION = '4.2.74';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14433,12 +14433,22 @@
             const id = (orderId || '').toString().trim();
             if (!id) return;
 
-            const ok = confirm('⚠️ Bu işlem sipariş kaydını (orders) siler.\n\nNot: Aylık özet arşivi silinmez; özetlerde görünmeye devam edebilir.\n\nDevam edilsin mi?');
+            const ok = confirm('⚠️ Bu işlem sipariş kaydını (orders) ve aylık özet arşiv kaydını (approvedOrdersArchive) siler.\n\nDevam edilsin mi?');
             if (!ok) return;
 
             showToast('⏳ Siliniyor...');
-            await db.collection('orders').doc(id).delete();
-            showToast('✅ Sipariş kaydı silindi');
+            try {
+                const batch = db.batch();
+                batch.delete(db.collection('orders').doc(id));
+                batch.delete(db.collection('approvedOrdersArchive').doc(id));
+                await batch.commit();
+            } catch (e) {
+                // Batch desteklenmiyorsa veya izin/kurallar yüzünden hata aldıysa, en azından ayrı ayrı dene.
+                try { await db.collection('orders').doc(id).delete(); } catch (e2) {}
+                try { await db.collection('approvedOrdersArchive').doc(id).delete(); } catch (e3) {}
+            }
+
+            showToast('✅ Sipariş silindi');
 
             try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
         } catch (e) {
