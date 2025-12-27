@@ -1485,6 +1485,7 @@
                 <div id="supportAgentInfo" style="font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 2px; display: none;"></div>
             </div>
             <div style="display: flex; gap: 8px; align-items: center;">
+                <button onclick="openSupportFaqModal()" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Sık Sorulan Sorular">❓</button>
                 <button onclick="clearUserChat()" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Sohbeti Temizle">🗑️</button>
                 <button class="modal-close" onclick="closeModal('userChatModal')">✕</button>
             </div>
@@ -1507,9 +1508,26 @@
             <div style="display: flex; gap: 8px;">
                 <input type="file" id="userChatFile" accept="image/*" style="display: none;" onchange="previewUserFile(this)">
                 <button onclick="document.getElementById('userChatFile').click()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Dosya Ekle">📎</button>
+                <button onclick="insertSupportAutoInfo()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Otomatik Bilgi">ℹ️</button>
                 <input type="text" id="userChatInput" class="auth-input" placeholder="Mesajınızı yazın..." style="flex: 1; margin: 0;" onkeypress="if(event.key==='Enter')sendUserMessage()">
                 <button onclick="sendUserMessage()" style="background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold;">📤</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- DESTEK FAQ (S.S.S) MODAL -->
+<div class="modal-overlay" id="supportFaqModal" onclick="closeModalOutside(event, 'supportFaqModal')">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #00BCD4, #0097A7);">
+            <div class="modal-title">❓ Sık Sorulan Sorular</div>
+            <button class="modal-close" onclick="closeModal('supportFaqModal')">✕</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; padding: 15px; background: #1a1a2e;">
+            <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
+                Burada en sık gelen soruların kısa cevaplarını bulabilirsiniz.
+            </div>
+            <div id="supportFaqList"></div>
         </div>
     </div>
 </div>
@@ -8008,6 +8026,193 @@
                 stopChatRefreshInterval();
             }
         }, 3000);
+    }
+
+    // Destek FAQ (S.S.S)
+    const SUPPORT_FAQ_ITEMS = [
+        {
+            q: 'Key kodu nasıl girilir?',
+            a: 'Profil menüsünden “Key Kodu Gir” alanına girin ve size verilen key kodunu yazıp onaylayın. Key aktif olunca “Key Durumu” kartında görünür.'
+        },
+        {
+            q: 'Siparişim ne zaman onaylanır?',
+            a: 'Siparişler “Siparişlerim” ekranında bekleyen/onaylanan olarak görünür. Ödeme kontrolü sonrası onaylanır; yoğunluk durumuna göre süre değişebilir.'
+        },
+        {
+            q: 'Bildirim gelmiyor, ne yapmalıyım?',
+            a: 'Telefonunuzda uygulama bildirim izninin açık olduğundan emin olun. Bazı cihazlarda pil tasarrufu/arka plan kısıtlamaları bildirimleri engelleyebilir.'
+        },
+        {
+            q: 'Kurulum rehberlerini nereden bulurum?',
+            a: 'Oyun/hile detay sayfasında “Kurulum Rehberi” bölümünden ilgili rehberi açabilirsiniz.'
+        },
+        {
+            q: 'Destek ekibine hızlı bilgi nasıl gönderebilirim?',
+            a: 'Bir sonraki adımda “Otomatik Bilgi” butonu ekleyip cihaz/sürüm/key durumunu tek tıkla mesaj olarak hazırlayacağız.'
+        },
+        {
+            q: 'Ban riski nedir?',
+            a: 'Uygulama içinde gösterilen “Ban Riski Bilgilendirme” metnini okuyup onayladıktan sonra satın alma/destek işlemlerine devam edebilirsiniz.'
+        }
+    ];
+
+    function renderSupportFaq() {
+        const el = document.getElementById('supportFaqList');
+        if (!el) return;
+
+        const items = Array.isArray(SUPPORT_FAQ_ITEMS) ? SUPPORT_FAQ_ITEMS : [];
+        if (!items.length) {
+            el.innerHTML = '<div style="color:#aaa; font-size:13px;">Henüz FAQ eklenmedi.</div>';
+            return;
+        }
+
+        el.innerHTML = items.map((item) => {
+            const q = escapeHtml((item?.q || '').toString());
+            const a = escapeHtml((item?.a || '').toString()).replace(/\n/g, '<br>');
+            return `
+                <details style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
+                    <summary style="cursor: pointer; color: #fff; font-weight: bold; font-size: 14px;">${q}</summary>
+                    <div style="margin-top: 10px; color: rgba(255,255,255,0.85); font-size: 13px; line-height: 1.55;">${a}</div>
+                </details>
+            `;
+        }).join('');
+    }
+
+    function openSupportFaqModal() {
+        try {
+            renderSupportFaq();
+            openModal('supportFaqModal');
+        } catch (e) {
+            console.log('FAQ modal açma hatası:', e?.message || e);
+        }
+    }
+
+    // Destek: Otomatik Bilgi (teşhis metni)
+    async function buildSupportAutoInfoText() {
+        const lines = [];
+        const now = new Date();
+
+        lines.push('📌 Otomatik Bilgi');
+        lines.push('Tarih: ' + now.toLocaleString());
+        try {
+            lines.push('Sürüm: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
+        } catch (e) {
+            lines.push('Sürüm: unknown');
+        }
+
+        // Kullanıcı
+        try {
+            if (currentUser) {
+                lines.push('UID: ' + (currentUser.uid || '-'));
+                lines.push('Email: ' + (currentUser.email || '-'));
+            } else {
+                lines.push('UID: -');
+                lines.push('Email: -');
+            }
+        } catch (e) {
+            lines.push('UID: -');
+            lines.push('Email: -');
+        }
+
+        // Platform / cihaz
+        try {
+            let platform = 'web';
+            if (typeof Capacitor !== 'undefined' && Capacitor.getPlatform) {
+                platform = Capacitor.getPlatform();
+            }
+            lines.push('Platform: ' + platform);
+        } catch (e) {}
+
+        try {
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+                const devicePlugin = Capacitor?.Plugins?.Device;
+                if (devicePlugin?.getInfo) {
+                    const info = await devicePlugin.getInfo();
+                    if (info) {
+                        if (info.model) lines.push('Cihaz: ' + info.model);
+                        if (info.operatingSystem || info.osVersion) {
+                            const os = (info.operatingSystem || 'os') + (info.osVersion ? (' ' + info.osVersion) : '');
+                            lines.push('OS: ' + os);
+                        }
+                        if (info.platform) lines.push('Device Platform: ' + info.platform);
+                    }
+                }
+            } else {
+                lines.push('UA: ' + (navigator.userAgent || '-'));
+            }
+        } catch (e) {
+            // sessiz
+        }
+
+        // Sayfa
+        try {
+            const activePage = document.querySelector('.page.active');
+            if (activePage && activePage.id) {
+                lines.push('Ekran: ' + activePage.id);
+            }
+        } catch (e) {}
+
+        // FCM token (tam yazma: sadece prefix/uzunluk)
+        try {
+            const t = (typeof fcmToken !== 'undefined' && fcmToken) ? String(fcmToken) : '';
+            if (t) {
+                lines.push('FCM: var (len=' + t.length + ', prefix=' + t.substring(0, 12) + '...)');
+            } else {
+                lines.push('FCM: yok');
+            }
+        } catch (e) {
+            lines.push('FCM: -');
+        }
+
+        // Key durumu (Firestore üzerinden kısa özet)
+        try {
+            if (db && currentUser && currentUser.uid) {
+                const doc = await db.collection('users').doc(currentUser.uid).get();
+                if (doc.exists) {
+                    const data = doc.data() || {};
+                    const keys = Array.isArray(data.keys) ? data.keys : [];
+                    const nowDt = new Date();
+                    const active = keys
+                        .map((k) => {
+                            const exp = toDate(k?.expiresAt);
+                            return { code: k?.code || '', expiresAt: exp };
+                        })
+                        .filter((k) => k.expiresAt && k.expiresAt > nowDt);
+                    lines.push('Key: toplam=' + keys.length + ', aktif=' + active.length);
+                    if (active.length) {
+                        const nearest = active
+                            .slice()
+                            .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime())[0];
+                        lines.push('Key Bitiş: ' + nearest.expiresAt.toLocaleString());
+                    }
+                } else {
+                    lines.push('Key: kullanıcı dokümanı yok');
+                }
+            }
+        } catch (e) {
+            // sessiz
+        }
+
+        lines.push('---');
+        lines.push('Sorun:');
+        lines.push('- (kısaca yazınız)');
+
+        return lines.join('\n');
+    }
+
+    async function insertSupportAutoInfo() {
+        try {
+            const input = document.getElementById('userChatInput');
+            if (!input) return;
+            const infoText = await buildSupportAutoInfoText();
+
+            const current = (input.value || '').trim();
+            input.value = current ? (input.value + '\n\n' + infoText) : infoText;
+            input.focus();
+        } catch (e) {
+            showToast('❌ Otomatik bilgi alınamadı');
+            console.log('insertSupportAutoInfo hatası:', e?.message || e);
+        }
     }
     
     // Chat mesajlarını yenile

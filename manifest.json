@@ -1,6 +1,6 @@
 {
-    "version": "4.2.62",
-    "buildNumber": 312,
+    "version": "4.2.63",
+    "buildNumber": 313,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -13,6 +13,8 @@
         "Destek: Admin yanıtlarında kullanıcıya uygulama içi + FCM bildirim (tek sefer, çift bildirim engelli)",
         "Destek: Kullanıcı destek ekranı açık görünse bile FCM push engellenmez (sadece uygulama içi bildirim atlanır)",
         "Destek: Görüldü (read receipt) eklendi",
+        "Yeni: Destek SSS (FAQ) eklendi (sohbet başlığındaki ❓)",
+        "Yeni: Destek Otomatik Bilgi eklendi (mesaj alanındaki ℹ️ ile teşhis metni ekleme)",
         "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
         "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
         "Yeni: Sadakat puanı eklendi (profilde puan görüntüleme, onaylanan siparişlerden puan kazanma)",
