@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.63",
+    "currentVersion": "4.2.64",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.63 – Destek SSS + Otomatik Bilgi",
+    "announcement": "📢 v4.2.64 – Destek Otomatik Bilgi iyileştirme",
     "maintenanceMode": false,
-    "updateMessage": "Yeni: Destek sohbetinde SSS (FAQ) eklendi (başlıktaki ❓). Yeni: Otomatik Bilgi eklendi (ℹ️ ile teşhis metnini mesaj alanına ekler). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Güncelleme: FAQ içindeki “hızlı bilgi” maddesi ℹ️ Otomatik Bilgi ile güncellendi. Güncelleme: Otomatik Bilgi metnine email/telefon bilgisi eklendi ve ℹ️ butonu daha belirgin yapıldı. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

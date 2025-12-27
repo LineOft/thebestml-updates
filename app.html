@@ -1508,7 +1508,7 @@
             <div style="display: flex; gap: 8px;">
                 <input type="file" id="userChatFile" accept="image/*" style="display: none;" onchange="previewUserFile(this)">
                 <button onclick="document.getElementById('userChatFile').click()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Dosya Ekle">📎</button>
-                <button onclick="insertSupportAutoInfo()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Otomatik Bilgi">ℹ️</button>
+                <button onclick="insertSupportAutoInfo()" style="background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px 14px; border-radius: 10px; cursor: pointer; font-weight: bold;" title="Otomatik Bilgi">ℹ️</button>
                 <input type="text" id="userChatInput" class="auth-input" placeholder="Mesajınızı yazın..." style="flex: 1; margin: 0;" onkeypress="if(event.key==='Enter')sendUserMessage()">
                 <button onclick="sendUserMessage()" style="background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold;">📤</button>
             </div>
@@ -8048,7 +8048,7 @@
         },
         {
             q: 'Destek ekibine hızlı bilgi nasıl gönderebilirim?',
-            a: 'Bir sonraki adımda “Otomatik Bilgi” butonu ekleyip cihaz/sürüm/key durumunu tek tıkla mesaj olarak hazırlayacağız.'
+            a: 'Destek mesaj alanındaki “ℹ️ Otomatik Bilgi” butonuna basın. Cihaz/sürüm/key ve hesap bilgileri otomatik olarak mesaj alanına eklenir; ardından mesajı gönderin.'
         },
         {
             q: 'Ban riski nedir?',
@@ -8105,13 +8105,16 @@
             if (currentUser) {
                 lines.push('UID: ' + (currentUser.uid || '-'));
                 lines.push('Email: ' + (currentUser.email || '-'));
+                lines.push('Telefon: ' + (currentUser.phoneNumber || '-'));
             } else {
                 lines.push('UID: -');
                 lines.push('Email: -');
+                lines.push('Telefon: -');
             }
         } catch (e) {
             lines.push('UID: -');
             lines.push('Email: -');
+            lines.push('Telefon: -');
         }
 
         // Platform / cihaz
@@ -8170,6 +8173,13 @@
                 const doc = await db.collection('users').doc(currentUser.uid).get();
                 if (doc.exists) {
                     const data = doc.data() || {};
+
+                    // Profilde telefon tutuluyorsa ekle
+                    const phoneFromProfile = data.phone || data.phoneNumber || data.telefon || data.tel || data.gsm || data.mobile || data.mobilePhone;
+                    if (phoneFromProfile) {
+                        lines.push('Telefon (profil): ' + phoneFromProfile);
+                    }
+
                     const keys = Array.isArray(data.keys) ? data.keys : [];
                     const nowDt = new Date();
                     const active = keys
