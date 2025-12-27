@@ -1304,6 +1304,14 @@
         <div class="admin-section-content">
             <div id="pendingOrders" style="font-size: 13px; color: #aaa;">Yükleniyor...</div>
             <button onclick="loadPendingOrders()" style="background: #FF5722; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Yenile</button>
+
+            <div style="height: 1px; background: rgba(255,255,255,0.08); margin: 15px 0;"></div>
+
+            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                <span>📊 Aylık Onaylanan Siparişler</span>
+            </div>
+            <div id="monthlyApprovedOrdersSummary" style="font-size: 13px; color: #aaa;">Yükleniyor...</div>
+            <button onclick="loadMonthlyApprovedOrdersSummary()" style="background: rgba(76,175,80,0.25); border: 1px solid rgba(76,175,80,0.5); color: #4CAF50; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Aylık Özeti Yenile</button>
         </div>
     </div>
     
@@ -2922,7 +2930,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.67';
+    const APP_VERSION = '4.2.68';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14073,6 +14081,8 @@
         // Sipariş yetkisi yoksa erken dön
         if (!hasPermission('orders')) {
             document.getElementById('pendingOrders').innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
+            const monthlyEl = document.getElementById('monthlyApprovedOrdersSummary');
+            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
             return;
         }
         
@@ -14084,6 +14094,8 @@
             
             if (orders.empty) {
                 container.innerHTML = '<div style="text-align: center; padding: 20px;">✅ Bekleyen sipariş yok</div>';
+                // Aylık özet yine de yüklensin
+                try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
                 return;
             }
             
@@ -14121,8 +14133,171 @@
                 </div>`;
             });
             container.innerHTML = html;
+
+            // Bekleyenler yüklendikten sonra aylık özet
+            try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
         } catch(e) {
             container.innerHTML = 'Hata: ' + e.message;
+            const monthlyEl = document.getElementById('monthlyApprovedOrdersSummary');
+            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Aylık özet yüklenemedi</div>';
+        }
+    }
+
+    function getTurkishMonthNameUpper(monthIndex0) {
+        const names = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+        return names[monthIndex0] || '';
+    }
+
+    function safeToDateMaybe(value) {
+        try {
+            if (typeof toDate === 'function') return toDate(value);
+        } catch (e) {}
+        try {
+            if (!value) return null;
+            if (value instanceof Date) return value;
+            if (value.toDate && typeof value.toDate === 'function') return value.toDate();
+            const t = new Date(value);
+            if (isNaN(t.getTime())) return null;
+            return t;
+        } catch (e) {}
+        return null;
+    }
+
+    function formatTryAmountTL(amount) {
+        const n = Number(amount);
+        if (!Number.isFinite(n) || n <= 0) return '0₺';
+        return Math.floor(n) + '₺';
+    }
+
+    function computeOrderApprovedAmount(order) {
+        const payable = Number(order && order.payableAmount);
+        if (Number.isFinite(payable) && payable >= 0) return Math.floor(payable);
+
+        const base = Number(order && order.baseAmount);
+        if (Number.isFinite(base) && base > 0) {
+            // baseAmount varsa ama payable yoksa, gene de price'a öncelik verelim
+        }
+
+        try {
+            if (typeof parsePriceToAmount === 'function') {
+                return parsePriceToAmount(order && order.price);
+            }
+        } catch (e) {}
+
+        const digits = String(order && order.price || '').replace(/[^0-9]/g, '');
+        const n = Number(digits);
+        return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    }
+
+    async function loadMonthlyApprovedOrdersSummary() {
+        if (!isAdmin()) return;
+
+        const container = document.getElementById('monthlyApprovedOrdersSummary');
+        if (!container) return;
+
+        if (!hasPermission('orders')) {
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
+            return;
+        }
+
+        container.innerHTML = '<div style="text-align: center; padding: 15px; color: #aaa;">⏳ Yükleniyor...</div>';
+
+        try {
+            const snap = await db.collection('orders').where('status', '==', 'approved').get();
+
+            if (!snap || snap.empty) {
+                container.innerHTML = '<div style="text-align: center; padding: 15px;">✅ Onaylanmış sipariş yok</div>';
+                return;
+            }
+
+            const items = [];
+            snap.forEach((doc) => {
+                items.push({ id: doc.id, ...(doc.data() || {}) });
+            });
+
+            // Sıralama: approvedAt desc, yoksa createdAt desc
+            items.sort((a, b) => {
+                const ad = safeToDateMaybe(a.approvedAt) || safeToDateMaybe(a.createdAt) || new Date(0);
+                const bd = safeToDateMaybe(b.approvedAt) || safeToDateMaybe(b.createdAt) || new Date(0);
+                return bd.getTime() - ad.getTime();
+            });
+
+            const groups = {}; // key: YYYY-MM
+            items.forEach((o) => {
+                const d = safeToDateMaybe(o.approvedAt) || safeToDateMaybe(o.createdAt) || new Date(0);
+                const y = d.getFullYear();
+                const m1 = d.getMonth() + 1;
+                const key = y + '-' + String(m1).padStart(2, '0');
+                const label = m1 + '.' + y + ' ' + getTurkishMonthNameUpper(m1 - 1);
+                if (!groups[key]) {
+                    groups[key] = {
+                        key,
+                        label,
+                        year: y,
+                        month: m1,
+                        count: 0,
+                        totalAmount: 0,
+                        orders: []
+                    };
+                }
+                const amount = computeOrderApprovedAmount(o);
+                groups[key].count += 1;
+                groups[key].totalAmount += amount;
+                groups[key].orders.push({ ...o, __approvedDate: d, __amount: amount });
+            });
+
+            const sortedKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+            let html = '';
+            sortedKeys.forEach((k) => {
+                const g = groups[k];
+                const totalLabel = formatTryAmountTL(g.totalAmount);
+
+                html += `
+                    <details style="background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
+                        <summary style="cursor: pointer; color: #fff; font-weight: bold; font-size: 14px; display:flex; align-items:center; justify-content: space-between; gap: 10px;">
+                            <span>${g.label}</span>
+                            <span style="font-size: 12px; color: #4CAF50;">✅ ${g.count} onay • 💰 ${totalLabel}</span>
+                        </summary>
+                        <div style="margin-top: 10px;">
+                            <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">Detaylar:</div>
+                            ${g.orders.map((o) => {
+                                const email = (o.email || o.userEmail || 'Bilinmiyor').toString();
+                                const pkg = (o.packageName || o.label || o.package || o.cheat || 'Paket').toString();
+                                const dt = o.__approvedDate ? o.__approvedDate.toLocaleString('tr-TR') : '-';
+                                const amount = formatTryAmountTL(o.__amount);
+                                const payable = Number(o.payableAmount);
+                                const payableLabel = Number.isFinite(payable) ? (' • Ödenecek: ' + Math.floor(payable) + '₺') : '';
+                                const keyCode = (o.keyCode || '').toString();
+                                const keyLine = keyCode ? `<div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">🔑 Key: <span style="font-family: monospace;">${escapeHtml(keyCode)}</span></div>` : '';
+
+                                return `
+                                    <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px; margin-bottom: 8px;">
+                                        <div style="display:flex; justify-content: space-between; gap: 10px; align-items: flex-start;">
+                                            <div style="flex: 1;">
+                                                <div style="font-weight: 700; color: #fff; font-size: 13px;">${escapeHtml(email)}</div>
+                                                <div style="font-size: 12px; color: #ddd; margin-top: 4px;">📦 ${escapeHtml(pkg)}</div>
+                                                <div style="font-size: 11px; color: #888; margin-top: 4px;">📅 ${dt}</div>
+                                                ${keyLine}
+                                            </div>
+                                            <div style="text-align:right; min-width: 110px;">
+                                                <div style="font-weight: 800; color: #4CAF50;">${amount}</div>
+                                                <div style="font-size: 10px; color: #888; margin-top: 2px;">ID: ${escapeHtml(o.id || '')}</div>
+                                                ${payableLabel ? `<div style="font-size: 10px; color: #aaa; margin-top: 2px;">${escapeHtml(payableLabel)}</div>` : ''}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </details>
+                `;
+            });
+
+            container.innerHTML = html;
+        } catch (e) {
+            console.error('Aylık onaylı sipariş özeti hatası:', e);
+            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #f44336;">❌ Hata: ' + (e?.message || e) + '</div>';
         }
     }
     
