@@ -1,14 +1,14 @@
 {
-    "version": "4.2.31",
-    "buildNumber": 281,
+    "version": "4.2.32",
+    "buildNumber": 282,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.31/GameStore_v4.2.31_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.32/GameStore_v4.2.32_debug.apk",
     "changelog": [
-        "Token-based FCM bildirimleri aktif",
-        "Admin panelden toplu bildirim",
-        "Stabilite iyilestirmeleri"
+        "Toplu bildirim server-side token listesi (all:true)",
+        "Firestore permission'a takılmadan toplu gönderim",
+        "CORS: X-API-Key header düzeltildi"
     ]
 }

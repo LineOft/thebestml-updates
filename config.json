@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.31",
+    "currentVersion": "4.2.32",
     "forceUpdate": false,
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.31/GameStore_v4.2.31_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.32/GameStore_v4.2.32_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": " v4.2.31  Token-based bildirim sistemi!",
+    "announcement": "📢 v4.2.32 – Toplu bildirim düzeltildi!",
     "maintenanceMode": false,
-    "updateMessage": "FCM token bildirimleri calisiyor."
+    "updateMessage": "Admin toplu bildirim: server-side token listesi (all:true)."
 }
