@@ -2837,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.50';
+    const APP_VERSION = '4.2.51';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -7504,11 +7504,67 @@
     }
 
     function getSupportUserAvatarHtml(size = 28) {
-        const fontSize = Math.max(10, Math.round(size * 0.45));
         const radius = Math.max(8, Math.round(size / 3));
+        const photoUrl = arguments.length > 1 ? (arguments[1] || '') : '';
+        if (photoUrl) {
+            return `
+                <img src="${photoUrl}" alt="Profil" style="width:${size}px; height:${size}px; border-radius:${radius}px; object-fit: cover; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); flex-shrink: 0;" />
+            `;
+        }
+        const fontSize = Math.max(10, Math.round(size * 0.45));
         return `
             <div style="width:${size}px; height:${size}px; border-radius:${radius}px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; font-weight: 700; color:#fff; font-size:${fontSize}px; flex-shrink: 0;">👤</div>
         `;
+    }
+
+    // Destek sohbeti: kullanıcı profil fotoğrafını (varsa) al
+    function getCurrentUserSupportAvatarUrl() {
+        const img = document.getElementById('toggleBtnAvatar') || document.getElementById('profileAvatarImg');
+        if (!img) return '';
+        if (img.style && img.style.display === 'none') return '';
+        const src = img.getAttribute('src') || img.src || '';
+        return (src && src !== 'null' && src !== 'undefined') ? src : '';
+    }
+
+    // Admin tarafı: açık olan sohbet kullanıcısının profil fotoğrafını cache'le
+    let supportProfilePhotoCache = {};
+    let supportProfilePhotoLoading = {};
+    let currentAdminChatUserId = '';
+    let currentAdminChatUserPhoto = '';
+    let lastAdminChatMessages = [];
+
+    function ensureAdminChatUserProfilePhotoLoaded() {
+        const uid = currentAdminChatUserId;
+        if (!uid || !db) return;
+
+        if (Object.prototype.hasOwnProperty.call(supportProfilePhotoCache, uid)) {
+            currentAdminChatUserPhoto = supportProfilePhotoCache[uid] || '';
+            return;
+        }
+        if (supportProfilePhotoLoading[uid]) return;
+
+        supportProfilePhotoLoading[uid] = true;
+        db.collection('users').doc(uid).get()
+            .then((doc) => {
+                const photo = (doc && doc.exists && doc.data && doc.data().profilePhoto) ? doc.data().profilePhoto : '';
+                supportProfilePhotoCache[uid] = photo || '';
+                currentAdminChatUserPhoto = supportProfilePhotoCache[uid] || '';
+                if (Array.isArray(lastAdminChatMessages) && lastAdminChatMessages.length > 0) {
+                    renderAdminChatMessages(lastAdminChatMessages);
+                }
+            })
+            .catch(() => {
+                supportProfilePhotoCache[uid] = '';
+                currentAdminChatUserPhoto = '';
+            })
+            .finally(() => {
+                supportProfilePhotoLoading[uid] = false;
+            });
+    }
+
+    function getAdminChatUserSupportAvatarUrl() {
+        ensureAdminChatUserProfilePhotoLoaded();
+        return currentAdminChatUserPhoto || '';
     }
     
     // Kullanıcı: Mesajları render et
@@ -7558,6 +7614,7 @@
             agentInfo.style.display = 'none';
         }
         
+        const currentUserPhoto = getCurrentUserSupportAvatarUrl();
         let html = '';
         userChatMessages.forEach(msg => {
             const isUser = msg.sender === 'user';
@@ -7579,7 +7636,7 @@
             };
             const roleIcon = roleIcons[role] || '👑';
 
-            const avatarHtml = isUser ? getSupportUserAvatarHtml(28) : getSupportAppLogoAvatarHtml(28);
+            const avatarHtml = isUser ? getSupportUserAvatarHtml(28, currentUserPhoto) : getSupportAppLogoAvatarHtml(28);
             const bubbleStyle = isUser
                 ? 'background: linear-gradient(135deg, #00BCD4, #0097A7);'
                 : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);';
@@ -7838,6 +7895,8 @@
         if (!hasPermission('support')) return;
         
         currentAdminChatId = chatId;
+        currentAdminChatUserId = chatId;
+        currentAdminChatUserPhoto = '';
         
         try {
             const chatDoc = await db.collection('chats').doc(chatId).get();
@@ -7905,6 +7964,9 @@
     // Admin: Mesajları render et
     function renderAdminChatMessages(messages) {
         const container = document.getElementById('adminChatMessages');
+
+        lastAdminChatMessages = Array.isArray(messages) ? messages : [];
+        ensureAdminChatUserProfilePhotoLoaded();
         
         if (messages.length === 0) {
             container.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Henüz mesaj yok</div>';
@@ -7932,7 +7994,7 @@
             };
             const roleIcon = roleIcons[role] || '👑';
 
-            const avatarHtml = isAdmin ? getSupportAppLogoAvatarHtml(28) : getSupportUserAvatarHtml(28);
+            const avatarHtml = isAdmin ? getSupportAppLogoAvatarHtml(28) : getSupportUserAvatarHtml(28, getAdminChatUserSupportAvatarUrl());
             const bubbleStyle = isAdmin
                 ? 'background: linear-gradient(135deg, #673AB7, #512DA8);'
                 : 'background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);';
