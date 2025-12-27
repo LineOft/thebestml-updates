@@ -8,6 +8,7 @@
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
         "Admin panel: Oyun/Hile Yönetimi sayfasına 'Hile Güncelleme' bölümü eklendi (sürüm / apkUrl)",
-        "Bildirimler: hile güncellemesi sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gönderilir"
+        "Bildirimler: hile güncellemesi sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gönderilir",
+        "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

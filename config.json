@@ -6,5 +6,5 @@
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
     "announcement": "📢 v4.2.42 – Admin hile güncelleme + bildirim!",
     "maintenanceMode": false,
-    "updateMessage": "Admin panel: Oyun/Hile Yönetimi > Hile Güncelleme bölümü eklendi. Güncelleme sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gider."
+    "updateMessage": "Admin panel: Oyun/Hile Yönetimi > Hile Güncelleme bölümü eklendi. Güncelleme sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gider. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
