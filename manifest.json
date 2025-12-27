@@ -1,6 +1,6 @@
 {
-    "version": "4.2.61",
-    "buildNumber": 311,
+    "version": "4.2.62",
+    "buildNumber": 312,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -11,7 +11,7 @@
         "Destek: Admin mesajlarında animasyonlu uygulama logosu (avatar) gösterilir",
         "Destek: Kullanıcı mesajlarında profil fotoğrafı avatar olarak gösterilir",
         "Destek: Admin yanıtlarında kullanıcıya uygulama içi + FCM bildirim (tek sefer, çift bildirim engelli)",
-        "Destek: Kullanıcı destek ekranındayken admin yanıt bildirimi gönderilmez",
+        "Destek: Kullanıcı destek ekranı açık görünse bile FCM push engellenmez (sadece uygulama içi bildirim atlanır)",
         "Destek: Görüldü (read receipt) eklendi",
         "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
         "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
@@ -21,6 +21,7 @@
         "Yeni (Admin): Sadakat puanı kazanım ayarı (oran veya sipariş başına sabit puan)",
         "Düzeltme: Admin destek yanıtlarında kullanıcıya FCM push (email eksik olsa da)",
         "Düzeltme: FCM token kaydı daha güvenli (users dokümanı yoksa oluşturur)",
+        "Debug: Destek yanıt push logları eklendi (chats/{uid}/pushLogs)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.61",
+    "currentVersion": "4.2.62",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.61 – FCM token düzeltmesi",
+    "announcement": "📢 v4.2.62 – Destek yanıtı FCM düzeltmesi",
     "maintenanceMode": false,
-    "updateMessage": "Düzeltme: Admin/Owner destek yanıtlarında kullanıcıya FCM push bildirim gönderimi iyileştirildi. Ayrıca FCM token kaydı artık users dokümanı yoksa da oluşturularak kaydedilir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Düzeltme: Admin/Owner destek yanıtlarında kullanıcı destek ekranı açık görünse bile FCM push engellenmez (yalnızca uygulama içi bildirim atlanır). Ayrıca destek yanıtı push denemeleri için debug log eklendi (chats/{uid}/pushLogs). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

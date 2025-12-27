@@ -2904,7 +2904,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.61';
+    const APP_VERSION = '4.2.62';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3392,13 +3392,21 @@
         alert(debugInfo.join('\n'));
     }
     
-    // Push notification gönder (sunucu üzerinden)
-    async function sendPushNotification(token, title, body, data = {}) {
+    // Push notification gönder (sunucu üzerinden) - detaylı sonuç döndürür
+    async function sendPushNotificationWithResult(token, title, body, data = {}) {
+        const out = {
+            success: false,
+            httpStatus: 0,
+            result: null,
+            error: null
+        };
+
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
+            out.error = 'push_server_not_configured';
             console.log('Push server yapılandırılmamış');
-            return false;
+            return out;
         }
-        
+
         try {
             const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
                 method: 'POST',
@@ -3408,14 +3416,28 @@
                 },
                 body: JSON.stringify({ token, title, body, data })
             });
-            
-            const result = await response.json();
-            console.log('Push bildirim gönderildi:', result);
-            return result.success;
+
+            out.httpStatus = response.status;
+            const raw = await response.text();
+            try {
+                out.result = raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                out.result = { raw };
+            }
+            out.success = !!(out.result && out.result.success);
+            console.log('Push bildirim gönderildi:', out.result);
+            return out;
         } catch (e) {
+            out.error = e?.message || String(e);
             console.error('Push bildirim hatası:', e);
-            return false;
+            return out;
         }
+    }
+
+    // Push notification gönder (sunucu üzerinden)
+    async function sendPushNotification(token, title, body, data = {}) {
+        const res = await sendPushNotificationWithResult(token, title, body, data);
+        return !!res.success;
     }
     
     // Birden fazla kullanıcıya push bildirim gönder
@@ -14467,6 +14489,8 @@
         try {
             let normalizedEmail = (userEmail || '').toLowerCase().trim();
             let token = '';
+            let skipInAppNotification = false;
+            let supportOpenHint = false;
 
             // Önce userId (chatId = uid) üzerinden kullanıcı kaydını çöz
             try {
@@ -14492,8 +14516,10 @@
                         const isOpen = !!cd.userSupportOpen;
                         const lastActiveMs = getFirestoreTimeMs(cd.userSupportLastActiveAt || cd.userSupportOpenAt);
                         if (isOpen && lastActiveMs > 0 && (Date.now() - lastActiveMs) < 45000) {
-                            console.log('🔕 Kullanıcı destek ekranında: bildirim atlandı');
-                            return;
+                            // Not: Bu alan bazen "takılı" kalabiliyor; FCM'i tamamen engellemiyoruz.
+                            console.log('🔕 Kullanıcı destek ekranında görünüyor: uygulama içi bildirim atlanacak, FCM devam edecek');
+                            skipInAppNotification = true;
+                            supportOpenHint = true;
                         }
                     }
                 }
@@ -14508,7 +14534,7 @@
 
             // 1) Uygulama içi + native local bildirim zinciri (client listener tetikler)
             try {
-                if (normalizedEmail) {
+                if (!skipInAppNotification && normalizedEmail) {
                     await db.collection('notifications').add({
                         targetType: normalizedEmail,
                         targetEmail: normalizedEmail,
@@ -14542,15 +14568,41 @@
                 } catch (e) {}
             }
 
+            let pushAttempt = null;
             if (token && token.length > 20) {
                 try {
-                    await sendPushNotification(token, title, message, {
+                    pushAttempt = await sendPushNotificationWithResult(token, title, message, {
                         type: 'support_reply',
                         page: 'support',
                         chatId: userId || ''
                     });
-                } catch (e) {}
+                } catch (e) {
+                    pushAttempt = { success: false, error: e?.message || String(e) };
+                }
+            } else {
+                pushAttempt = { success: false, error: 'missing_or_short_token', tokenLength: (token || '').length };
             }
+
+            // Debug log (best-effort): chat push denemesini kayıt altına al
+            try {
+                if (userId && db) {
+                    const tokenPrefix = token ? token.substring(0, 12) : '';
+                    await db.collection('chats').doc(userId).collection('pushLogs').add({
+                        kind: 'support_reply',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        targetUserId: userId,
+                        targetEmail: normalizedEmail || null,
+                        tokenPrefix: tokenPrefix || null,
+                        tokenLength: token ? token.length : 0,
+                        supportOpenHint: !!supportOpenHint,
+                        pushServerUrl: PUSH_SERVER?.url || null,
+                        pushHttpStatus: pushAttempt?.httpStatus || null,
+                        pushSuccess: !!pushAttempt?.success,
+                        pushError: pushAttempt?.error || null,
+                        pushResult: pushAttempt?.result || null
+                    });
+                }
+            } catch (e) {}
         } catch (e) {
             console.error('Kullanıcı destek yanıt bildirimi hatası:', e);
         }
