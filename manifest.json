@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  266,
+    "buildNumber":  267,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.16",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.16/GameStore_v4.2.16_debug.apk",
+    "version":  "4.2.17",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.17/GameStore_v4.2.17_debug.apk",
     "changelog":  [
-                      "OTA hizlandirildi - GitHub API kullaniliyor",
-                      "Geri tusu minimize ediyor",
-                      "Arka plan modu iyilestirildi"
+                      "Telefon bildirim cubuguna bildirim eklendi",
+                      "Siparis onayinda telefon bildirimi",
+                      "Siparis reddinde telefon bildirimi"
                   ]
 }
