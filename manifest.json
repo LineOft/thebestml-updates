@@ -1,14 +1,14 @@
 ﻿{
-    "version": "4.2.9",
-    "buildNumber": 259,
-    "minBuildNumber": 150,
-    "releaseDate": "2025-12-27",
-    "changelog": [
-        "Bildirim crash sorunu tamamen düzeltildi",
-        "Push notification listener basitleştirildi",
-        "Java 17 uyumluluğu düzeltildi"
-    ],
-    "required": true,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.9/GameStore_v4.2.9_debug.apk",
-    "fileSize": 6.07
+    "fileSize":  6.07,
+    "buildNumber":  260,
+    "minBuildNumber":  150,
+    "required":  true,
+    "releaseDate":  "2025-12-27",
+    "version":  "4.2.10",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.10/GameStore_v4.2.10_debug.apk",
+    "changelog":  [
+                      "Xiaomi MIUI crash sorunu duzeltildi",
+                      "Custom FCM service devre disi birakildi",
+                      "Capacitor native push notification kullaniliyor"
+                  ]
 }

@@ -1,10 +1,10 @@
-{
-    "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.9/GameStore_v4.2.9_debug.apk",
-    "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🔔 v4.2.9 — Bildirim crash sorunu düzeltildi!",
-    "maintenanceMode": false,
-    "currentVersion": "4.2.9",
-    "forceUpdate": false,
-    "updateMessage": "Bildirim alırken uygulama çökmesi sorunu giderildi."
+﻿{
+    "key":  "THEBEST2024",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.9/GameStore_v4.2.9_debug.apk",
+    "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
+    "announcement":  "ğŸ”” v4.2.9 â€” Bildirim crash sorunu dÃ¼zeltildi!",
+    "maintenanceMode":  false,
+    "currentVersion":  "4.2.10",
+    "forceUpdate":  false,
+    "updateMessage":  "Bildirim alÄ±rken uygulama Ã§Ã¶kmesi sorunu giderildi."
 }
