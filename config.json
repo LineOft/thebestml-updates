@@ -1,10 +1,10 @@
 {
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.2/GameStore_v4.2.2_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.9/GameStore_v4.2.9_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🔔 v4.2.2 — Arka plan bildirimleri güçlendirildi!",
+    "announcement": "🔔 v4.2.9 — Bildirim crash sorunu düzeltildi!",
     "maintenanceMode": false,
-    "currentVersion": "4.2.2",
+    "currentVersion": "4.2.9",
     "forceUpdate": false,
-    "updateMessage": "Uygulama kapalıyken bile bildirim alabilirsiniz!"
+    "updateMessage": "Bildirim alırken uygulama çökmesi sorunu giderildi."
 }
