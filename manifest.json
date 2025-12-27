@@ -1,14 +1,14 @@
 {
-    "version": "4.2.35",
-    "buildNumber": 285,
+    "version": "4.2.36",
+    "buildNumber": 286,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.35/GameStore_v4.2.35_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.36/GameStore_v4.2.36_debug.apk",
     "changelog": [
-        "Admin: FCM (sadece push) seçeneği eklendi",
-        "FCM seçilince Firestore/app-içi bildirim gönderilmez",
-        "Toplu bildirim topic all_users üzerinden"
+        "Bildirim paneli: kayıt tarihinden önceki bildirimler gizlendi",
+        "Yeni kayıt olan kullanıcılar eski bildirimleri görmez",
+        "Bildirim badge sayımı da cutoff'a göre"
     ]
 }

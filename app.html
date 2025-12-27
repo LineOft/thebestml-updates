@@ -2821,7 +2821,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.35';
+    const APP_VERSION = '4.2.36';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4065,6 +4065,60 @@
     let emailNotificationListener = null;
     let userNotifications = [];
     let fcmToken = null;
+
+    let notificationCutoffDate = null; // Kullanıcı kayıt tarihi (bu tarihten önceki bildirimler görünmez)
+
+    function getAuthCreationDate() {
+        try {
+            const t = currentUser?.metadata?.creationTime;
+            if (!t) return null;
+            const d = new Date(t);
+            return isNaN(d.getTime()) ? null : d;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function ensureNotificationCutoffDate() {
+        if (!currentUser || !db) return null;
+
+        // 1) Cache (en hızlı)
+        try {
+            const cached = localStorage.getItem('notifCutoff_' + currentUser.uid);
+            if (cached) {
+                const d = new Date(cached);
+                if (!isNaN(d.getTime())) {
+                    notificationCutoffDate = d;
+                    return notificationCutoffDate;
+                }
+            }
+        } catch (e) {}
+
+        // 2) Auth creation time (senkron fallback)
+        const authCreated = getAuthCreationDate();
+        if (authCreated) {
+            notificationCutoffDate = authCreated;
+        }
+
+        // 3) Firestore user.createdAt (en doğru)
+        try {
+            const doc = await db.collection('users').doc(currentUser.uid).get();
+            if (doc.exists) {
+                const data = doc.data() || {};
+                const created = toDate(data.createdAt);
+                if (created && !isNaN(created.getTime())) {
+                    notificationCutoffDate = created;
+                    try {
+                        localStorage.setItem('notifCutoff_' + currentUser.uid, created.toISOString());
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {
+            // sessiz geç: auth fallback ile devam
+        }
+
+        return notificationCutoffDate;
+    }
     
     // Push Notifications başlat (FCM)
     async function initPushNotifications() {
@@ -4313,6 +4367,10 @@
     function startNotificationListener() {
         if (!currentUser) return;
         stopNotificationListener();
+
+        // Kayıt tarihi cutoff'u ayarla (eski bildirimleri hiç listeleme)
+        notificationCutoffDate = getAuthCreationDate();
+        ensureNotificationCutoffDate();
         
         // Bildirim izni ve kanalı oluştur
         requestNotificationPermission();
@@ -4371,6 +4429,25 @@
             if (change.type === 'added') {
                 const notif = { id: change.doc.id, ...change.doc.data() };
                 console.log('🔔 Bildirim algılandı:', notif.title, 'ID:', notif.id);
+
+                // Bildirim tarihi
+                let notifDate = null;
+                if (notif.createdAt && notif.createdAt.toDate) {
+                    notifDate = notif.createdAt.toDate();
+                } else if (notif.notifiedAt) {
+                    notifDate = new Date(notif.notifiedAt);
+                } else {
+                    notifDate = null;
+                }
+
+                // Kayıt tarihinden eski bildirimleri tamamen yok say
+                if (notificationCutoffDate && notifDate && notifDate < notificationCutoffDate) {
+                    return;
+                }
+                if (notificationCutoffDate && !notifDate) {
+                    // Tarihi olmayan bildirimler: eski kabul et
+                    return;
+                }
                 
                 // Listede zaten var mı kontrol et
                 const existingIndex = userNotifications.findIndex(n => n.id === notif.id);
@@ -4388,13 +4465,8 @@
                 }
                 
                 // Bildirim tarihi kontrolü - listenerStartTime'dan sonra mı oluşturulmuş?
-                let notifDate = null;
-                if (notif.createdAt && notif.createdAt.toDate) {
-                    notifDate = notif.createdAt.toDate();
-                } else if (notif.notifiedAt) {
-                    notifDate = new Date(notif.notifiedAt);
-                } else {
-                    notifDate = new Date(); // Tarih yoksa şimdiki zaman kabul et
+                if (!notifDate) {
+                    notifDate = new Date(); // cutoff'tan geçtiyse, popup kontrolü için şimdiki zaman kabul et
                 }
                 
                 const now = new Date();
@@ -4652,6 +4724,8 @@
             
             const userEmail = currentUser.email.toLowerCase().trim();
             console.log('🔔 Bildirimler yükleniyor... Email:', userEmail);
+
+            await ensureNotificationCutoffDate();
             
             // Genel bildirimleri çek
             const allNotifs = await db.collection('notifications')
@@ -4677,13 +4751,21 @@
             userNotifications = [];
             allNotifs.forEach(doc => {
                 if (!clearedIds.includes(doc.id)) {
-                    userNotifications.push({ id: doc.id, ...doc.data() });
+                    const n = { id: doc.id, ...doc.data() };
+                    const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                    if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                        userNotifications.push(n);
+                    }
                 }
             });
             userNotifs.forEach(doc => {
                 // Duplikasyonu önle ve temizlenenleri hariç tut
                 if (!userNotifications.find(n => n.id === doc.id) && !clearedIds.includes(doc.id)) {
-                    userNotifications.push({ id: doc.id, ...doc.data() });
+                    const n = { id: doc.id, ...doc.data() };
+                    const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                    if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                        userNotifications.push(n);
+                    }
                 }
             });
             
@@ -4703,6 +4785,8 @@
             // Index hatası olabilir - orderBy olmadan dene
             try {
                 const userEmail = currentUser.email.toLowerCase().trim();
+
+                await ensureNotificationCutoffDate();
                 
                 const allNotifs = await db.collection('notifications')
                     .where('targetType', '==', 'all')
@@ -4720,12 +4804,20 @@
                 userNotifications = [];
                 allNotifs.forEach(doc => {
                     if (!clearedIds.includes(doc.id)) {
-                        userNotifications.push({ id: doc.id, ...doc.data() });
+                        const n = { id: doc.id, ...doc.data() };
+                        const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                        if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                            userNotifications.push(n);
+                        }
                     }
                 });
                 userNotifs.forEach(doc => {
                     if (!userNotifications.find(n => n.id === doc.id) && !clearedIds.includes(doc.id)) {
-                        userNotifications.push({ id: doc.id, ...doc.data() });
+                        const n = { id: doc.id, ...doc.data() };
+                        const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                        if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                            userNotifications.push(n);
+                        }
                     }
                 });
                 

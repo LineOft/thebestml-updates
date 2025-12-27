@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.35",
+    "currentVersion": "4.2.36",
     "forceUpdate": false,
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.35/GameStore_v4.2.35_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.36/GameStore_v4.2.36_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.35 – Admin FCM-only eklendi!",
+    "announcement": "📢 v4.2.36 – Eski bildirimler gizlendi!",
     "maintenanceMode": false,
-    "updateMessage": "Admin panelde '📲 FCM (Sadece Push)' seçilince sadece FCM gönderilir; Firestore/app-içi bildirim oluşmaz."
+    "updateMessage": "Yeni kayıt olan kullanıcı bildirim panelinde sadece kayıt tarihinden sonraki bildirimleri görür."
 }
