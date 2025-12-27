@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.10';
+    const APP_VERSION = '4.2.11';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3728,8 +3728,9 @@
         // Chat dinleyiciyi başlat
         startChatListener();
         
-        // Push notification başlat
-        initPushNotifications();
+        // Push notification DEVRE DIŞI - Xiaomi crash testi
+        // initPushNotifications();
+        console.log('⚠️ Push notifications devre dışı - crash testi');
     }
     
     // ==================== KEY DURUMU REALTİME DİNLEYİCİ ====================

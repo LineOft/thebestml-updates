@@ -1,14 +1,13 @@
 ﻿{
     "fileSize":  6.07,
-    "buildNumber":  260,
+    "buildNumber":  261,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.10",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.10/GameStore_v4.2.10_debug.apk",
+    "version":  "4.2.11",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.11/GameStore_v4.2.11_debug.apk",
     "changelog":  [
-                      "Xiaomi MIUI crash sorunu duzeltildi",
-                      "Custom FCM service devre disi birakildi",
-                      "Capacitor native push notification kullaniliyor"
+                      "Push notification devre disi - crash testi",
+                      "Sorunun kaynagi belirleniyor"
                   ]
 }
