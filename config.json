@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.55",
+    "currentVersion": "4.2.56",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.55 – Ban riski bilgilendirme + zorunlu onay!",
+    "announcement": "📢 v4.2.56 – Ban riski uyarısı düzeltildi",
     "maintenanceMode": false,
-    "updateMessage": "Ban riski bilgilendirme eklendi: Kullanıcı tek seferlik onay verir. Onay olmadan satın alma ve destek ekranı açılmaz. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Ban riski bilgilendirme eklendi: Kullanıcı tek seferlik onay verir. Onay olmadan satın alma ve destek ekranı açılmaz. Bu sürümde ayrıca uyarı butonları (Devam Et / Çıkış Yap) düzeltildi. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

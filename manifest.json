@@ -1,6 +1,6 @@
 {
-    "version": "4.2.55",
-    "buildNumber": 305,
+    "version": "4.2.56",
+    "buildNumber": 306,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -14,6 +14,7 @@
         "Destek: Kullanıcı destek ekranındayken admin yanıt bildirimi gönderilmez",
         "Destek: Görüldü (read receipt) eklendi",
         "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
+        "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }
