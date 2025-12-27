@@ -1,14 +1,14 @@
 {
-    "version": "4.2.32",
-    "buildNumber": 282,
+    "version": "4.2.33",
+    "buildNumber": 283,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.32/GameStore_v4.2.32_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.33/GameStore_v4.2.33_debug.apk",
     "changelog": [
-        "Toplu bildirim server-side token listesi (all:true)",
-        "Firestore permission'a takılmadan toplu gönderim",
-        "CORS: X-API-Key header düzeltildi"
+        "FCM: All Test (dryRun) eklendi",
+        "FCM: hasFcmToken alanı ile hızlı toplu gönderim",
+        "Push-server: quota iyileştirmeleri"
     ]
 }

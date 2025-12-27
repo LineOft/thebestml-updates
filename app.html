@@ -2820,7 +2820,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.32';
+    const APP_VERSION = '4.2.33';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3181,6 +3181,32 @@
         } else {
             debugInfo.push('FCM Token: YOK');
             debugInfo.push('Token Test: ⚠️ Token yok, atlandı');
+        }
+
+        // Tüm kullanıcılara gönderim yolunu (all:true) dryRun ile test et (bildirim GÖNDERMEZ)
+        try {
+            const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': PUSH_SERVER.apiKey
+                },
+                body: JSON.stringify({
+                    all: true,
+                    dryRun: true,
+                    title: '🧪 FCM All DryRun',
+                    body: 'Bu test bildirim göndermez',
+                    data: { type: 'test' }
+                })
+            });
+            const result = await response.json();
+            if (result.success) {
+                debugInfo.push('All Test (dryRun): ✅ Tokens: ' + (result.totalTokens != null ? result.totalTokens : '?'));
+            } else {
+                debugInfo.push('All Test (dryRun): ❌ HATA: ' + (result.error || result.details || 'Bilinmeyen hata'));
+            }
+        } catch(e) {
+            debugInfo.push('All Test (dryRun): ❌ HATA: ' + e.message);
         }
         
         // Topic'e de gönder
@@ -4059,6 +4085,7 @@
                                 console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
                                 await db.collection('users').doc(currentUser.uid).update({
                                     fcmToken: fcmToken,
+                                    hasFcmToken: true,
                                     fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                                     fcmPlatform: 'android',
                                     fcmLastUpdate: new Date().toISOString()
