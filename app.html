@@ -2930,7 +2930,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.70';
+    const APP_VERSION = '4.2.71';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14195,6 +14195,53 @@
         return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
     }
 
+    async function archiveApprovedOrderSnapshot(orderId, fallbackData) {
+        try {
+            if (!orderId) return;
+            if (!db) return;
+
+            let data = fallbackData || null;
+            try {
+                const snap = await db.collection('orders').doc(orderId).get();
+                if (snap && snap.exists) data = { id: snap.id, ...(snap.data() || {}) };
+            } catch (e) {}
+
+            if (!data) return;
+
+            const approvedAt = data.approvedAt || new Date();
+            const rawApprovedBy = (data.approvedBy || (currentUser && currentUser.email) || '').toString();
+            let approvedBy = rawApprovedBy;
+            try {
+                if (typeof normalizeEmail === 'function') approvedBy = normalizeEmail(rawApprovedBy);
+            } catch (e) {}
+
+            const amount = computeOrderApprovedAmount(data);
+            const adminShare = Math.round((amount * 0.15) * 100) / 100;
+
+            const archiveDoc = {
+                orderId: orderId,
+                status: 'approved',
+                approvedAt: approvedAt,
+                approvedBy: approvedBy,
+                email: (data.email || data.userEmail || data.resolvedEmail || '').toString(),
+                packageName: (data.packageName || data.label || data.package || data.cheat || '').toString(),
+                game: (data.game || '').toString(),
+                cheat: (data.cheat || '').toString(),
+                keyCode: (data.keyCode || '').toString(),
+                price: (typeof data.price === 'undefined') ? null : data.price,
+                baseAmount: (typeof data.baseAmount === 'undefined') ? null : data.baseAmount,
+                payableAmount: (typeof data.payableAmount === 'undefined') ? null : data.payableAmount,
+                amount: amount,
+                adminShare: adminShare,
+                archivedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('approvedOrdersArchive').doc(orderId).set(archiveDoc, { merge: true });
+        } catch (e) {
+            console.log('archiveApprovedOrderSnapshot error:', e);
+        }
+    }
+
     async function loadMonthlyApprovedOrdersSummary() {
         if (!isAdmin()) return;
 
@@ -14209,17 +14256,36 @@
         container.innerHTML = '<div style="text-align: center; padding: 15px; color: #aaa;">⏳ Yükleniyor...</div>';
 
         try {
-            const snap = await db.collection('orders').where('status', '==', 'approved').get();
+            const merged = new Map();
 
-            if (!snap || snap.empty) {
+            // Önce arşivden çek: sipariş silinse bile ay özeti devam eder.
+            try {
+                const archSnap = await db.collection('approvedOrdersArchive').get();
+                if (archSnap && !archSnap.empty) {
+                    archSnap.forEach((doc) => {
+                        const d = doc.data() || {};
+                        const id = (d.orderId || doc.id || '').toString();
+                        if (!id) return;
+                        merged.set(id, { id, ...d });
+                    });
+                }
+            } catch (e) {}
+
+            // Geçiş uyumluluğu: arşivde olmayan eski onaylıları orders'tan ekle.
+            try {
+                const ordSnap = await db.collection('orders').where('status', '==', 'approved').get();
+                if (ordSnap && !ordSnap.empty) {
+                    ordSnap.forEach((doc) => {
+                        if (!merged.has(doc.id)) merged.set(doc.id, { id: doc.id, ...(doc.data() || {}) });
+                    });
+                }
+            } catch (e) {}
+
+            const items = Array.from(merged.values());
+            if (!items.length) {
                 container.innerHTML = '<div style="text-align: center; padding: 15px;">✅ Onaylanmış sipariş yok</div>';
                 return;
             }
-
-            const items = [];
-            snap.forEach((doc) => {
-                items.push({ id: doc.id, ...(doc.data() || {}) });
-            });
 
             // Sıralama: approvedAt desc, yoksa createdAt desc
             items.sort((a, b) => {
@@ -14247,8 +14313,8 @@
                         orders: []
                     };
                 }
-                const amount = computeOrderApprovedAmount(o);
-                const adminShare = Math.round((amount * 0.15) * 100) / 100;
+                const amount = Number.isFinite(Number(o.amount)) ? Math.floor(Number(o.amount)) : computeOrderApprovedAmount(o);
+                const adminShare = Number.isFinite(Number(o.adminShare)) ? Number(o.adminShare) : (Math.round((amount * 0.15) * 100) / 100);
                 groups[key].count += 1;
                 groups[key].totalAmount += amount;
                 groups[key].adminShareTotal += adminShare;
@@ -14275,6 +14341,8 @@
                                 const email = (o.email || o.userEmail || 'Bilinmiyor').toString();
                                 const pkg = (o.packageName || o.label || o.package || o.cheat || 'Paket').toString();
                                 const dt = o.__approvedDate ? o.__approvedDate.toLocaleString('tr-TR') : '-';
+                                const approvedBy = (o.approvedBy || '').toString();
+                                const approvedByLine = approvedBy ? `<div style="font-size: 11px; color: #bbb; margin-top: 4px;">👤 Onaylayan: ${escapeHtml(approvedBy)}</div>` : '';
                                 const amount = formatTryAmountTL(o.__amount);
                                 const payable = Number(o.payableAmount);
                                 const payableLabel = Number.isFinite(payable) ? (' • Ödenecek: ' + Math.floor(payable) + '₺') : '';
@@ -14288,6 +14356,7 @@
                                                 <div style="font-weight: 700; color: #fff; font-size: 13px;">${escapeHtml(email)}</div>
                                                 <div style="font-size: 12px; color: #ddd; margin-top: 4px;">📦 ${escapeHtml(pkg)}</div>
                                                 <div style="font-size: 11px; color: #888; margin-top: 4px;">📅 ${dt}</div>
+                                                ${approvedByLine}
                                                 ${keyLine}
                                             </div>
                                             <div style="text-align:right; min-width: 110px;">
@@ -14605,7 +14674,7 @@
                     game: gameName,
                     cheat: cheatName,
                     approvedAt: new Date(),
-                    approvedBy: currentUser.email
+                    approvedBy: (typeof normalizeEmail === 'function') ? normalizeEmail(currentUser.email) : currentUser.email
                 };
                 if (!alreadyGranted) {
                     orderUpdate.loyaltyPointsGranted = earnedPoints;
@@ -14613,6 +14682,19 @@
                 }
                 tx.update(orderRef, orderUpdate);
             });
+
+            // Arşive yaz: sipariş silinse bile ay özetinde kalsın
+            try {
+                await archiveApprovedOrderSnapshot(currentOrderId, {
+                    ...currentOrderData,
+                    status: 'approved',
+                    keyCode: keyCode,
+                    game: gameName,
+                    cheat: cheatName,
+                    approvedAt: new Date(),
+                    approvedBy: (typeof normalizeEmail === 'function') ? normalizeEmail(currentUser.email) : currentUser.email
+                });
+            } catch (e) {}
             
             // Kullanıcıya bildirim gönder
             const packageNames = {
@@ -14714,6 +14796,16 @@
                 }
                 tx.update(orderRef, orderUpdate);
             });
+
+            // Arşive yaz: sipariş silinse bile ay özetinde kalsın
+            try {
+                await archiveApprovedOrderSnapshot(currentOrderId, {
+                    ...currentOrderData,
+                    status: 'approved',
+                    approvedAt: new Date(),
+                    approvedBy: (typeof normalizeEmail === 'function') ? normalizeEmail(currentUser.email) : currentUser.email
+                });
+            } catch (e) {}
 
             try { await incrementAdminStatField('approvedOrdersCount', 1); } catch (e) {}
             
