@@ -1077,6 +1077,7 @@
                 <span class="icon">👥</span>
                 <span>Üye Yönetimi</span>
                 <span id="totalUsersCount" style="background: #2196F3; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
+                <span id="totalOnlineCount" style="background: #4CAF50; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
                 <span class="permission-badge" style="background: #2196F3; padding: 2px 6px; border-radius: 5px; font-size: 10px;">members_view</span>
             </div>
             <span class="admin-section-toggle">▼</span>
@@ -2836,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.45';
+    const APP_VERSION = '4.2.47';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3716,6 +3717,71 @@
     // Firebase Auth State
     let currentUser = null;
     let orderListener = null; // Real-time listener
+
+    // Presence / Online durum takibi
+    let presenceHeartbeatInterval = null;
+    let presenceInitializedUid = null;
+    const PRESENCE_HEARTBEAT_MS = 30000;
+
+    function stopPresenceHeartbeat() {
+        if (presenceHeartbeatInterval) {
+            clearInterval(presenceHeartbeatInterval);
+            presenceHeartbeatInterval = null;
+        }
+    }
+
+    async function touchPresence({ isLogin } = { isLogin: false }) {
+        try {
+            if (!currentUser) return;
+
+            const payload = {
+                email: currentUser.email || null,
+                isOnline: true,
+                lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (isLogin) {
+                payload.lastLogin = firebase.firestore.FieldValue.serverTimestamp();
+            }
+
+            await db.collection('users').doc(currentUser.uid).set(payload, { merge: true });
+        } catch (e) {
+            console.log('Presence güncelleme hatası:', e);
+        }
+    }
+
+    async function markCurrentUserOffline() {
+        try {
+            if (!currentUser) return;
+            await db.collection('users').doc(currentUser.uid).set({
+                isOnline: false,
+                lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (e) {
+            console.log('Presence offline hatası:', e);
+        }
+    }
+
+    function startPresenceHeartbeat() {
+        stopPresenceHeartbeat();
+        if (!currentUser) return;
+
+        touchPresence({ isLogin: false });
+        presenceHeartbeatInterval = setInterval(() => {
+            touchPresence({ isLogin: false });
+        }, PRESENCE_HEARTBEAT_MS);
+    }
+
+    // Web kapanışında/offline işaretle (best-effort)
+    window.addEventListener('beforeunload', () => {
+        try { markCurrentUserOffline(); } catch (e) {}
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            try { markCurrentUserOffline(); } catch (e) {}
+        } else {
+            try { touchPresence({ isLogin: false }); } catch (e) {}
+        }
+    });
     
     auth.onAuthStateChanged(async (user) => {
         currentUser = user;
@@ -3743,9 +3809,23 @@
             
             // Arka plan bildirimleri için email'i native'e kaydet
             saveUserEmailForBackgroundNotifications(user.email);
+
+            // Presence başlangıcı
+            if (presenceInitializedUid !== user.uid) {
+                presenceInitializedUid = user.uid;
+                await touchPresence({ isLogin: true });
+            } else {
+                await touchPresence({ isLogin: false });
+            }
+            startPresenceHeartbeat();
         } else {
             updateAuthUI();
             stopOrderListener();
+
+            stopPresenceHeartbeat();
+            presenceInitializedUid = null;
+
+            stopUsersRealtimeListener();
 
             // Çıkışta bildirim dinleyicilerini de kapat (eski snapshot'lar state'e geri dolmasın)
             stopNotificationListener();
@@ -7152,6 +7232,58 @@
     let userChatMessages = [];
     let currentAdminChatId = null;
     let adminChatListener = null;
+
+    function canCurrentAdminSeeChat(chat) {
+        if (isOwner()) return true;
+        if (!currentUser) return false;
+        if (!chat) return false;
+
+        const claimedBy = chat.claimedBy || null;
+        const claimedByEmail = normalizeEmail(chat.claimedByEmail || '');
+
+        // Unclaimed: visible to all admins
+        if (!claimedBy && !claimedByEmail) return true;
+
+        // Claimed: visible only to claimant
+        if (claimedBy && currentUser.uid && claimedBy === currentUser.uid) return true;
+        if (claimedByEmail && normalizeEmail(currentUser.email) === claimedByEmail) return true;
+
+        return false;
+    }
+
+    async function claimSupportChat(chatId) {
+        if (!requirePermission('support', 'destek mesajını devralmak')) return;
+        if (!currentUser) return;
+
+        try {
+            const ref = db.collection('chats').doc(chatId);
+            let didClaim = false;
+
+            await db.runTransaction(async (tx) => {
+                const snap = await tx.get(ref);
+                if (!snap.exists) throw new Error('Sohbet bulunamadı');
+                const data = snap.data() || {};
+
+                // Already claimed
+                if (data.claimedBy || data.claimedByEmail) {
+                    return;
+                }
+
+                tx.update(ref, {
+                    claimedBy: currentUser.uid,
+                    claimedByEmail: normalizeEmail(currentUser.email),
+                    claimedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                didClaim = true;
+            });
+
+            showToast(didClaim ? '✅ Sohbet devralındı' : '⚠️ Sohbet zaten devralınmış');
+            loadAdminChats();
+        } catch (e) {
+            showToast('❌ Devralma hatası: ' + (e?.message || e));
+        }
+    }
     
     // Kullanıcı: Chat dinleyici başlat
     function startChatListener() {
@@ -7582,7 +7714,7 @@
 
             // Admin'lere yeni destek mesajı bildirimi gönder
             try {
-                await sendNewSupportMessageNotificationToAdmins(currentUser.email, lastMsgPreview);
+                await sendNewSupportMessageNotificationToAdmins(currentUser.uid, currentUser.email, lastMsgPreview);
             } catch (e) {}
             
         } catch(e) {
@@ -7617,18 +7749,39 @@
             } else {
                 snapshot.forEach(doc => {
                     const chat = doc.data();
+
+                    // Visibility: owner sees all, other admins see only unclaimed or claimed by themselves
+                    if (!canCurrentAdminSeeChat(chat)) {
+                        return;
+                    }
                     const unread = chat.unreadAdmin || 0;
                     totalUnread += unread;
                     
                     const lastTime = chat.lastMessageAt?.toDate ? chat.lastMessageAt.toDate().toLocaleString('tr-TR') : '';
                     
+                    const claimedByEmail = normalizeEmail(chat.claimedByEmail || '');
+                    const isClaimed = !!(chat.claimedBy || claimedByEmail);
+                    const isClaimedByMe = isClaimed && (chat.claimedBy === currentUser?.uid || claimedByEmail === normalizeEmail(currentUser?.email));
+
+                    const claimInfo = isClaimed
+                        ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">🤝 Devralındı${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
+                        : '';
+
+                    const claimButton = (!isClaimed)
+                        ? `<button onclick="event.stopPropagation(); claimSupportChat('${doc.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🤝 Devral</button>`
+                        : '';
+
                     html += `
                         <div onclick="openAdminChat('${doc.id}')" style="background: ${unread > 0 ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid ${unread > 0 ? '#00BCD4' : 'transparent'};">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                                 <div style="font-weight: bold; color: #fff;">👤 ${chat.userEmail}</div>
-                                ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
+                                <div style="display:flex; align-items:center; gap: 6px;">
+                                    ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
+                                    ${claimButton}
+                                </div>
                             </div>
                             <div style="color: #aaa; font-size: 12px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(chat.lastMessage || '')}</div>
+                            ${claimInfo}
                             <div style="color: #666; font-size: 10px; margin-top: 5px;">${lastTime}</div>
                         </div>
                     `;
@@ -7658,6 +7811,14 @@
             }
             
             const chat = chatDoc.data();
+
+            // Visibility guard: if another admin claimed it, non-owner admins cannot open
+            if (!canCurrentAdminSeeChat(chat)) {
+                showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
+                currentAdminChatId = null;
+                loadAdminChats();
+                return;
+            }
             
             // Header güncelle
             document.getElementById('adminChatTitle').textContent = '💬 ' + chat.userEmail;
@@ -7676,7 +7837,17 @@
             adminChatListener = db.collection('chats').doc(chatId)
                 .onSnapshot((doc) => {
                     if (doc.exists) {
-                        renderAdminChatMessages(doc.data().messages || []);
+                        const data = doc.data() || {};
+                        if (!canCurrentAdminSeeChat(data)) {
+                            // Devralma değiştiyse modalı kapat
+                            try { closeModal('adminChatModal'); } catch(e) {}
+                            showToast('🔒 Sohbet devralındı');
+                            if (adminChatListener) { adminChatListener(); adminChatListener = null; }
+                            currentAdminChatId = null;
+                            loadAdminChats();
+                            return;
+                        }
+                        renderAdminChatMessages(data.messages || []);
                     }
                 });
             
@@ -8591,9 +8762,14 @@
         }
     }
     
-    function logout() {
-        auth.signOut();
-        showToast('👋 Çıkış yapıldı');
+    async function logout() {
+        try { await markCurrentUserOffline(); } catch (e) {}
+        stopPresenceHeartbeat();
+        try {
+            await auth.signOut();
+        } finally {
+            showToast('👋 Çıkış yapıldı');
+        }
     }
     
     async function loadUserData() {
@@ -12278,6 +12454,40 @@
     }
     
     // ==================== ÜYE YÖNETİMİ ====================
+
+    let usersRealtimeListener = null;
+
+    function stopUsersRealtimeListener() {
+        try {
+            if (usersRealtimeListener) {
+                usersRealtimeListener();
+                usersRealtimeListener = null;
+            }
+        } catch (e) {
+            usersRealtimeListener = null;
+        }
+    }
+
+    function isUserOnline(user) {
+        try {
+            if (!user) return false;
+            if (user.isOnline !== true) return false;
+            const lastSeen = toDate(user.lastSeenAt);
+            if (!lastSeen) return false;
+            return (Date.now() - lastSeen.getTime()) <= 90000;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function formatTrDateTime(date) {
+        try {
+            if (!date) return 'Bilinmiyor';
+            return date.toLocaleString('tr-TR');
+        } catch (e) {
+            return 'Bilinmiyor';
+        }
+    }
     
     // Tüm üyeleri yükle
     async function loadAllUsers() {
@@ -12287,115 +12497,136 @@
         }
         const container = document.getElementById('usersListContainer');
         const countEl = document.getElementById('totalUsersCount');
+        const onlineCountEl = document.getElementById('totalOnlineCount');
         
         container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">⏳ Yükleniyor...</div>';
         
         try {
-            const usersSnapshot = await db.collection('users').get();
-            countEl.textContent = usersSnapshot.size;
-            
-            if (usersSnapshot.empty) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Henüz üye yok</div>';
-                return;
-            }
-            
-            const now = new Date();
-            
-            // Kullanıcıları admin ve normal olarak ayır
-            let adminUsers = [];
-            let normalUsers = [];
-            
-            usersSnapshot.forEach(doc => {
-                const user = doc.data();
-                const userId = doc.id;
-                const email = user.email || 'E-posta yok';
-                
-                // Kurucu/Admin kontrolü
-                const isUserOwner = isOwnerEmail(email);
-                const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
-                
-                const userData = {
-                    userId,
-                    email,
-                    user,
-                    isAdmin: isUserAdmin,
-                    isOwner: isUserOwner
-                };
-                
-                if (isUserAdmin) {
-                    adminUsers.push(userData);
-                } else {
-                    normalUsers.push(userData);
+            stopUsersRealtimeListener();
+
+            usersRealtimeListener = db.collection('users').onSnapshot((usersSnapshot) => {
+                countEl.textContent = usersSnapshot.size;
+                if (onlineCountEl) onlineCountEl.textContent = '0';
+
+                if (usersSnapshot.empty) {
+                    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Henüz üye yok</div>';
+                    return;
                 }
-            });
-            
-            // HTML oluştur
-            let usersHtml = '';
-            
-            // Önce adminleri göster
-            [...adminUsers, ...normalUsers].forEach(({ userId, email, user, isAdmin: isUserAdmin, isOwner: isUserOwner }) => {
-                const keys = user.keys || [];
-                
-                // Aktif key sayısı
-                const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
-                const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
-                
-                // Durum belirleme
-                let statusBadge = '';
-                let statusIcon = '';
-                if (activeKeys.length > 0) {
-                    statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTİF</span>`;
-                    statusIcon = '🟢';
-                } else if (expiredKeys.length > 0) {
-                    statusBadge = `<span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">DOLDU</span>`;
-                    statusIcon = '🟠';
-                } else {
-                    statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENİ</span>`;
-                    statusIcon = '⚪';
-                }
-                
-                // Kurucu/Admin badge - Kurucu ve Admin için farklı etiket
-                let roleBadge = '';
-                if (isUserOwner) {
-                    roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👑 KURUCU</span>`;
-                } else if (isUserAdmin) {
-                    roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👮 ADMİN</span>`;
-                }
-                
-                // Kayıt tarihi
-                const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleDateString('tr-TR') : 'Bilinmiyor';
-                
-                // Kurucu/Admin için özel border
-                let cardStyle = 'background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                if (isUserOwner) {
-                    cardStyle = 'background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                } else if (isUserAdmin) {
-                    cardStyle = 'background: rgba(156,39,176,0.15); border: 1px solid rgba(156,39,176,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                }
-                
-                usersHtml += `
-                    <div style="${cardStyle}" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                        <div style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;" onclick="openUserDetail('${userId}')">>
-                                <span style="font-size: 18px;">${isUserOwner ? '👑' : (isUserAdmin ? '👮' : statusIcon)}</span>
-                                <div style="min-width: 0;">
-                                    <div style="font-size: 13px; color: #fff; word-break: break-all;">${email}</div>
-                                    <div style="font-size: 11px; color: #888; margin-top: 2px;">📅 ${createdAt} • 🔑 ${activeKeys.length} aktif, ${expiredKeys.length} dolmuş</div>
+
+                const now = new Date();
+
+                // Kullanıcıları admin ve normal olarak ayır
+                let adminUsers = [];
+                let normalUsers = [];
+                let onlineCount = 0;
+
+                usersSnapshot.forEach(doc => {
+                    const user = doc.data();
+                    const userId = doc.id;
+                    const email = user.email || 'E-posta yok';
+
+                    // Kurucu/Admin kontrolü
+                    const isUserOwner = isOwnerEmail(email);
+                    const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
+
+                    if (isUserOnline(user)) onlineCount++;
+
+                    const userData = {
+                        userId,
+                        email,
+                        user,
+                        isAdmin: isUserAdmin,
+                        isOwner: isUserOwner
+                    };
+
+                    if (isUserAdmin) {
+                        adminUsers.push(userData);
+                    } else {
+                        normalUsers.push(userData);
+                    }
+                });
+
+                if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
+
+                // HTML oluştur
+                let usersHtml = '';
+
+                // Önce adminleri göster
+                [...adminUsers, ...normalUsers].forEach(({ userId, email, user, isAdmin: isUserAdmin, isOwner: isUserOwner }) => {
+                    const keys = user.keys || [];
+
+                    // Aktif key sayısı
+                    const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
+                    const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
+
+                    // Durum belirleme
+                    let statusBadge = '';
+                    let statusIcon = '';
+                    if (activeKeys.length > 0) {
+                        statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTİF</span>`;
+                        statusIcon = '🟢';
+                    } else if (expiredKeys.length > 0) {
+                        statusBadge = `<span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">DOLDU</span>`;
+                        statusIcon = '🟠';
+                    } else {
+                        statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENİ</span>`;
+                        statusIcon = '⚪';
+                    }
+
+                    // Kurucu/Admin badge - Kurucu ve Admin için farklı etiket
+                    let roleBadge = '';
+                    if (isUserOwner) {
+                        roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👑 KURUCU</span>`;
+                    } else if (isUserAdmin) {
+                        roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👮 ADMİN</span>`;
+                    }
+
+                    // Kayıt tarihi
+                    const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleDateString('tr-TR') : 'Bilinmiyor';
+
+                    const online = isUserOnline(user);
+                    const lastLoginDate = toDate(user.lastLogin) || toDate(user.lastLoginAt);
+                    const lastLoginText = formatTrDateTime(lastLoginDate);
+
+                    const onlineOrLastLogin = online
+                        ? `<span style="color: #4CAF50; font-weight: bold;">🟢 ÇEVRİMİÇİ</span>`
+                        : `<span style="color: #888;">🕒 Son giriş: ${lastLoginText}</span>`;
+
+                    // Kurucu/Admin için özel border
+                    let cardStyle = 'background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                    if (isUserOwner) {
+                        cardStyle = 'background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                    } else if (isUserAdmin) {
+                        cardStyle = 'background: rgba(156,39,176,0.15); border: 1px solid rgba(156,39,176,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                    }
+
+                    usersHtml += `
+                        <div style="${cardStyle}" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                            <div style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;" onclick="openUserDetail('${userId}')">>
+                                    <span style="font-size: 18px;">${isUserOwner ? '👑' : (isUserAdmin ? '👮' : statusIcon)}</span>
+                                    <div style="min-width: 0;">
+                                        <div style="font-size: 13px; color: #fff; word-break: break-all;">${email}</div>
+                                        <div style="font-size: 11px; color: #888; margin-top: 2px;">📅 ${createdAt} • 🔑 ${activeKeys.length} aktif, ${expiredKeys.length} dolmuş • ${onlineOrLastLogin}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    ${roleBadge}
+                                    ${!isUserAdmin && !isUserOwner ? statusBadge : ''}
+                                    ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Üyeyi Sil">🗑️</button>` : ''}
+                                    <span style="color: #666;" onclick="openUserDetail('${userId}')">›</span>
                                 </div>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                ${roleBadge}
-                                ${!isUserAdmin && !isUserOwner ? statusBadge : ''}
-                                ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Üyeyi Sil">🗑️</button>` : ''}
-                                <span style="color: #666;" onclick="openUserDetail('${userId}')">›</span>
-                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                });
+
+                container.innerHTML = usersHtml;
+            }, (e) => {
+                console.error('Üye dinleme hatası:', e);
+                container.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
             });
-            
-            container.innerHTML = usersHtml;
-        } catch(e) {
+        } catch (e) {
             console.error('Üye yükleme hatası:', e);
             container.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
         }
@@ -13246,26 +13477,98 @@
 
     async function sendNewSupportMessageNotificationToAdmins(userEmail, lastMessagePreview) {
         try {
-            const safeEmail = (userEmail || '').toString();
-            const safePreview = (lastMessagePreview || '').toString();
+            // Backward compatible arg parsing:
+            // - old: (userEmail, preview)
+            // - new: (chatId, userEmail, preview)
+            let chatId = null;
+            let safeEmail = '';
+            let safePreview = '';
 
-            // Push: topic tabanlı
-            await sendPushToAdmins(
-                '💬 Yeni Destek Mesajı',
-                `${safeEmail}: ${safePreview}`,
-                { type: 'support_new', page: 'admin' }
-            );
+            const a0 = (arguments[0] || '').toString();
+            const a1 = (arguments[1] || '').toString();
+            const a2 = (arguments[2] || '').toString();
 
-            // Firestore: admin normal bildirimi
-            await db.collection('notifications').add({
-                targetType: 'admins',
-                title: '💬 Yeni Destek Mesajı',
-                message: `${safeEmail}: ${safePreview}`,
-                type: 'support_new',
-                userEmail: safeEmail,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                read: false
-            });
+            const looksLikeEmail = a0.includes('@');
+            if (looksLikeEmail) {
+                // old
+                safeEmail = a0;
+                safePreview = a1;
+            } else {
+                // new
+                chatId = a0;
+                safeEmail = a1;
+                safePreview = a2;
+            }
+
+            const bodyText = `${safeEmail}: ${safePreview}`;
+
+            // If chat is claimed, do NOT broadcast to all admins.
+            let claimedByEmail = '';
+            if (chatId) {
+                try {
+                    const chatDoc = await db.collection('chats').doc(chatId).get();
+                    if (chatDoc.exists) {
+                        const chat = chatDoc.data() || {};
+                        claimedByEmail = normalizeEmail(chat.claimedByEmail || '');
+                    }
+                } catch(e) {}
+            }
+
+            if (!claimedByEmail) {
+                // Unclaimed: notify all admins (topic + Firestore admins)
+                await sendPushToAdmins(
+                    '💬 Yeni Destek Mesajı',
+                    bodyText,
+                    { type: 'support_new', page: 'admin' }
+                );
+
+                await db.collection('notifications').add({
+                    targetType: 'admins',
+                    title: '💬 Yeni Destek Mesajı',
+                    message: bodyText,
+                    type: 'support_new',
+                    userEmail: safeEmail,
+                    chatId: chatId || null,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    read: false
+                });
+                return;
+            }
+
+            // Claimed: notify only claimant + owner (best-effort per-user push + per-user Firestore notifications)
+            const ownerEmail = normalizeEmail(OWNER_EMAIL);
+            const targets = Array.from(new Set([ownerEmail, claimedByEmail].filter(Boolean)));
+
+            for (const targetEmail of targets) {
+                try {
+                    await db.collection('notifications').add({
+                        targetType: targetEmail,
+                        targetEmail: targetEmail,
+                        title: '💬 Yeni Destek Mesajı',
+                        message: bodyText,
+                        type: 'support_new',
+                        userEmail: safeEmail,
+                        chatId: chatId || null,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        read: false
+                    });
+                } catch(e) {}
+
+                try {
+                    const userDocs = await db.collection('users').where('email', '==', targetEmail).get();
+                    if (!userDocs.empty) {
+                        const userData = userDocs.docs[0].data() || {};
+                        if (userData.fcmToken) {
+                            await sendPushNotification(
+                                userData.fcmToken,
+                                '💬 Yeni Destek Mesajı',
+                                bodyText,
+                                { type: 'support_new', page: 'admin', chatId: chatId || null }
+                            );
+                        }
+                    }
+                } catch(e) {}
+            }
         } catch (e) {
             console.error('Destek admin bildirimi hatası:', e);
         }

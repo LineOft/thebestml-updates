@@ -1,16 +1,15 @@
 {
-    "version": "4.2.45",
-    "buildNumber": 295,
+    "version": "4.2.47",
+    "buildNumber": 297,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
-        "Admin panel: Oyun/Hile Yönetimi sayfasına 'Hile Güncelleme' bölümü eklendi (sürüm / apkUrl)",
-        "Bildirimler: hile güncellemesi sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gönderilir",
-        "Kurulum: Hile güncellemesinde kurulum adımlarındaki APK indirme linki (downloadUrl) yeni apkUrl ile her zaman güncellenir",
-        "Kurulum (IMGUI modal): 'IMGUI APK İNDİR' butonu, açık olan hilenin apkUrl'ini kullanır",
+        "Üye Yönetimi: Üyelerin son giriş tarihi/saatini gösterir",
+        "Üye Yönetimi: Anlık çevrimiçi durumu ve toplam çevrimiçi sayısı eklendi",
+        "Presence: lastSeen/isOnline takibi (aktif kullanımda otomatik güncellenir)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.45",
+    "currentVersion": "4.2.47",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.45 – IMGUI APK link düzeltme!",
+    "announcement": "📢 v4.2.47 – Üye çevrimiçi + son giriş!",
     "maintenanceMode": false,
-    "updateMessage": "IMGUI kurulum rehberi: 'IMGUI APK İNDİR' butonu artık açık olan hilenin apkUrl değerini kullanır. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Üye Yönetimi: Üyelerin son giriş tarihi/saatini ve anlık çevrimiçi durumunu görebilirsiniz. Ayrıca toplam çevrimiçi sayısı eklendi. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
