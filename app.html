@@ -3728,6 +3728,11 @@
         } else {
             updateAuthUI();
             stopOrderListener();
+
+            // Çıkışta bildirim dinleyicilerini de kapat (eski snapshot'lar state'e geri dolmasın)
+            stopNotificationListener();
+            notificationCutoffDate = null;
+            listenerStartTime = null;
             
             // Çıkış yapıldığında email'i temizle
             clearUserEmailForBackgroundNotifications();
@@ -4153,11 +4158,17 @@
     async function ensureNotificationCutoffDate() {
         if (!currentUser || !db) return null;
 
+        // Not: "Tüm bildirimleri temizle" cihazlar arası çalışsın diye
+        // localStorage (hızlı) + Firestore (en doğru) birlikte değerlendirilir.
+
+        // Mevcut değeri baz al (varsa)
         if (notificationCutoffDate && !isNaN(notificationCutoffDate.getTime())) {
-            return notificationCutoffDate;
+            // devam et: localStorage/Firestore daha yeni bir değer taşıyabilir
+        } else {
+            notificationCutoffDate = null;
         }
 
-        let hasAny = false;
+        let hasLocalCache = false;
 
         // 1) Cache (en hızlı)
         try {
@@ -4165,8 +4176,10 @@
             if (cached) {
                 const d = new Date(cached);
                 if (!isNaN(d.getTime())) {
-                    notificationCutoffDate = d;
-                    hasAny = true;
+                    if (!notificationCutoffDate || d > notificationCutoffDate) {
+                        notificationCutoffDate = d;
+                    }
+                    hasLocalCache = true;
                 }
             }
         } catch (e) {}
@@ -4179,7 +4192,7 @@
                     if (!notificationCutoffDate || cd > notificationCutoffDate) {
                         notificationCutoffDate = cd;
                     }
-                    hasAny = true;
+                    hasLocalCache = true;
                 }
             }
         } catch (e) {}
@@ -4190,15 +4203,14 @@
             if (!notificationCutoffDate || authCreated > notificationCutoffDate) {
                 notificationCutoffDate = authCreated;
             }
-            hasAny = true;
         }
 
-        // Cache/auth ile zaten bir değer bulduysak, gereksiz Firestore okuması yapma
-        if (hasAny) {
+        // Local cache varsa, Firestore okumasını atla (quota dostu)
+        if (hasLocalCache) {
             return notificationCutoffDate;
         }
 
-        // 3) Firestore user.createdAt (en doğru)
+        // 3) Firestore user.createdAt + notificationsClearedAt (cihazlar arası en doğru)
         try {
             const doc = await db.collection('users').doc(currentUser.uid).get();
             if (doc.exists) {
@@ -4477,13 +4489,15 @@
     // Bildirim dinleyici başlat
     let listenerStartTime = null; // Dinleyici başlangıç zamanı
     
-    function startNotificationListener() {
+    async function startNotificationListener() {
         if (!currentUser) return;
         stopNotificationListener();
 
-        // Kayıt tarihi cutoff'u ayarla (eski bildirimleri hiç listeleme)
-        notificationCutoffDate = getAuthCreationDate();
-        ensureNotificationCutoffDate();
+        // Kayıt/temizleme cutoff'unu ayarla (eski bildirimleri hiç listeleme)
+        // ÖNEMLİ: Çıkış-giriş sonrası temizlenen bildirimlerin geri gelmemesi için
+        // listener'lar kurulmadan önce cache/Firestore'dan cutoff okunmalı.
+        notificationCutoffDate = null;
+        await ensureNotificationCutoffDate();
         
         // Bildirim izni ve kanalı oluştur
         requestNotificationPermission();
