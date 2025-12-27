@@ -2820,7 +2820,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.28';
+    const APP_VERSION = '4.2.29';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3258,76 +3258,11 @@
         }
     }
     
-    // Tüm kullanıcılara push bildirim gönder - FCM token sistemi
+    // Tüm kullanıcılara push bildirim gönder - DEVRE DIŞI (topic kullan)
     async function sendPushToAll(title, body, data = {}) {
-        if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
-            console.log('⚠️ Push server yapılandırılmamış');
-            showToast('⚠️ Push server yapılandırılmamış');
-            return false;
-        }
-        
-        if (!db) {
-            console.log('⚠️ Firestore bağlantısı yok');
-            showToast('⚠️ Veritabanı bağlantısı yok');
-            return false;
-        }
-        
-        try {
-            console.log('📤 Tüm kullanıcılara bildirim gönderiliyor...');
-            
-            // Firestore'dan tüm kullanıcıların FCM token'larını al (WHERE kullanma - crash risk!)
-            const usersSnapshot = await db.collection('users').get();
-            
-            if (usersSnapshot.empty) {
-                console.log('⚠️ Kullanıcı bulunamadı');
-                showToast('⚠️ Bildirim alacak kullanıcı yok');
-                return false;
-            }
-            
-            const tokens = [];
-            usersSnapshot.forEach(doc => {
-                const userData = doc.data();
-                if (userData.fcmToken && typeof userData.fcmToken === 'string' && userData.fcmToken.length > 10) {
-                    tokens.push(userData.fcmToken);
-                }
-            });
-            
-            if (tokens.length === 0) {
-                console.log('⚠️ FCM token\'ı olan kullanıcı yok');
-                showToast('⚠️ Bildirim alacak kullanıcı yok');
-                return false;
-            }
-            
-            console.log(`📤 ${tokens.length} kullanıcıya bildirim gönderiliyor...`);
-            
-            // Vercel push server'a istek gönder
-            const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': PUSH_SERVER.apiKey
-                },
-                body: JSON.stringify({ 
-                    tokens: tokens,  // Çoklu token
-                    title, 
-                    body, 
-                    data 
-                })
-            });
-            
-            const result = await response.json();
-            console.log('✅ Toplu bildirim sonucu:', result);
-            
-            if (result.success) {
-                showToast(`✅ ${tokens.length} kullanıcıya bildirim gönderildi!`);
-            }
-            
-            return result.success;
-        } catch (e) {
-            console.error('❌ Toplu push bildirim hatası:', e);
-            showToast('❌ Bildirim gönderme hatası: ' + e.message);
-            return false;
-        }
+        console.log('sendPushToAll şimdilik devre dışı');
+        showToast('📢 Bildirim sistemi şimdilik devre dışı');
+        return false;
     }
     
     // ==================== MERKEZİ ÖDEME SİSTEMİ ====================
