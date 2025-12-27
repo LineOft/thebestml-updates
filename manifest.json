@@ -1,6 +1,6 @@
 {
-    "version": "4.2.65",
-    "buildNumber": 315,
+    "version": "4.2.66",
+    "buildNumber": 316,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -19,6 +19,7 @@
         "Güncelleme: Otomatik Bilgi içine telefon bilgisi eklendi",
         "Güncelleme: ℹ️ Otomatik Bilgi butonu daha belirgin yapıldı",
         "Düzeltme: Admin panel destek sohbetlerinde kullanıcı adı 'undefined' yerine email olarak gösterilir",
+        "Düzeltme: Uygulama içi sürüm gösterimi güncellendi",
         "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
         "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
         "Yeni: Sadakat puanı eklendi (profilde puan görüntüleme, onaylanan siparişlerden puan kazanma)",
