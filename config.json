@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.51",
+    "currentVersion": "4.2.52",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.51 – Destek: Profil foto avatar!",
+    "announcement": "📢 v4.2.52 – Destek: Admin yanıt bildirimi!",
     "maintenanceMode": false,
-    "updateMessage": "Destek sistemi: Admin cevaplarında animasyonlu uygulama logosu (avatar) gösterilir. Kullanıcı mesajlarında profil fotoğrafı avatar olarak gösterilir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Destek sistemi: Admin yanıtlarında kullanıcıya uygulama içi bildirim + FCM push bildirimi tek seferlik gönderilir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

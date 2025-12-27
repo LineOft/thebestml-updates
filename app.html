@@ -2837,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.51';
+    const APP_VERSION = '4.2.52';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8151,6 +8151,14 @@
                 lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
                 unreadUser: firebase.firestore.FieldValue.increment(1)
             });
+
+            // Kullanıcıya tek seferlik bildirim (FCM + uygulama içi)
+            try {
+                const chatData = chatDoc.data() || {};
+                const targetEmail = chatData.userEmail || '';
+                const targetUserId = chatData.userId || currentAdminChatId;
+                await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfo);
+            } catch (e) {}
             
             showToast('✅ Mesaj gönderildi');
             
@@ -13699,6 +13707,76 @@
             }
         } catch (e) {
             console.error('Destek admin bildirimi hatası:', e);
+        }
+    }
+
+    // Admin destek yanıtı: kullanıcıya tek seferlik tüm bildirimler (Firestore + FCM)
+    async function sendSupportReplyNotificationToUser(userId, userEmail, lastMessagePreview, adminInfo = null) {
+        try {
+            const normalizedEmail = (userEmail || '').toLowerCase().trim();
+            if (!normalizedEmail) return;
+
+            const role = adminInfo?.role || 'Destek';
+            const name = adminInfo?.name || 'Destek Ekibi';
+
+            const title = '💬 Destekten Yanıt Var';
+            const preview = (lastMessagePreview || '').toString().trim() || 'Yeni mesaj';
+            const message = `${role}: ${preview}`;
+
+            // 1) Uygulama içi + native local bildirim zinciri (client listener tetikler)
+            try {
+                await db.collection('notifications').add({
+                    targetType: normalizedEmail,
+                    targetEmail: normalizedEmail,
+                    title: title,
+                    message: message,
+                    type: 'info',
+                    category: 'support_reply',
+                    chatId: userId || null,
+                    fromRole: role,
+                    fromName: name,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    createdBy: currentUser?.email || 'admin',
+                    read: false,
+                    notifiedAt: new Date().toISOString()
+                });
+            } catch (e) {
+                // Firestore bildirimi olmasa da FCM gönderimi denenir
+            }
+
+            // 2) FCM push (uygulama kapalıyken de gitsin)
+            let token = '';
+            try {
+                if (userId) {
+                    const userDoc = await db.collection('users').doc(userId).get();
+                    if (userDoc.exists) {
+                        const ud = userDoc.data() || {};
+                        token = (ud.fcmToken || '').toString();
+                    }
+                }
+            } catch (e) {}
+
+            if (!token) {
+                try {
+                    const userDocs = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+                    if (!userDocs.empty) {
+                        const ud = userDocs.docs[0].data() || {};
+                        token = (ud.fcmToken || '').toString();
+                    }
+                } catch (e) {}
+            }
+
+            if (token && token.length > 20) {
+                try {
+                    await sendPushNotification(token, title, message, {
+                        type: 'support_reply',
+                        page: 'support',
+                        chatId: userId || ''
+                    });
+                } catch (e) {}
+            }
+        } catch (e) {
+            console.error('Kullanıcı destek yanıt bildirimi hatası:', e);
         }
     }
     
