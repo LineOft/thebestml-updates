@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.15';
+    const APP_VERSION = '4.2.16';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12934,11 +12934,14 @@
             let manifest = null;
             
             try {
-                // jsDelivr CDN kullan - daha hızlı cache güncellemesi
-                const manifestUrl = `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/manifest.json?_t=${timestamp}`;
+                // GitHub API kullan - cache sorunu yok, anında güncellenir
+                const manifestUrl = `https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?_t=${timestamp}`;
                 const response = await fetch(manifestUrl, { 
                     cache: 'no-store',
-                    headers: { 'Cache-Control': 'no-cache' }
+                    headers: { 
+                        'Cache-Control': 'no-cache',
+                        'Accept': 'application/vnd.github.v3.raw'
+                    }
                 });
                 
                 if (response.ok) {
@@ -13036,10 +13039,13 @@
         if (banner) banner.remove();
         
         try {
-            // GitHub'dan güncel app.html'i çek (jsDelivr CDN)
+            // GitHub API kullan - cache sorunu yok
             const timestamp = Date.now();
-            const appUrl = `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=${timestamp}`;
-            const response = await fetch(appUrl, { cache: 'no-store' });
+            const appUrl = `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${timestamp}`;
+            const response = await fetch(appUrl, { 
+                cache: 'no-store',
+                headers: { 'Accept': 'application/vnd.github.v3.raw' }
+            });
             const appHtml = await response.text();
             
             // İçerik kontrolü
@@ -13091,9 +13097,12 @@
                 // Yeni sürüm var - OTA güncelleme
                 showToast('🆕 Yeni sürüm: v' + manifest.version + ' - İndiriliyor...');
                 
-                // app.html'i indir (jsDelivr CDN)
-                const appUrl = 'https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=' + Date.now();
-                const appRes = await fetch(appUrl, { cache: 'no-store' });
+                // app.html'i indir (GitHub API - anında güncelleme)
+                const appUrl = 'https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=' + Date.now();
+                const appRes = await fetch(appUrl, { 
+                    cache: 'no-store',
+                    headers: { 'Accept': 'application/vnd.github.v3.raw' }
+                });
                 const appHtml = await appRes.text();
                 
                 // İçerik kontrolü
