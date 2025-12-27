@@ -8602,6 +8602,8 @@
                 
                 await chatRef.update({
                     messages: existingMessages,
+                    userEmail: currentUser.email,
+                    userId: currentUser.uid,
                     lastMessage: lastMsgPreview,
                     lastMessageAt: firebase.firestore.FieldValue.serverTimestamp(),
                     unreadAdmin: firebase.firestore.FieldValue.increment(1)
@@ -8633,6 +8635,32 @@
         input.disabled = false;
         input.focus();
     }
+
+    // Admin: sohbet listesinde email yoksa users/{uid} üzerinden çöz
+    const supportEmailCache = {};
+    async function resolveSupportUserEmail(chatId, chatData) {
+        const direct = (chatData && chatData.userEmail) ? String(chatData.userEmail) : '';
+        if (direct) return direct;
+        if (supportEmailCache[chatId]) return supportEmailCache[chatId];
+
+        try {
+            const u = await db.collection('users').doc(chatId).get();
+            if (u && u.exists) {
+                const data = u.data() || {};
+                const email = data.email || data.userEmail || '';
+                if (email) {
+                    supportEmailCache[chatId] = email;
+                    // Kalıcı düzeltme: sohbet dokümanına da yaz
+                    try {
+                        await db.collection('chats').doc(chatId).set({ userEmail: email, userId: chatId }, { merge: true });
+                    } catch (e) {}
+                    return email;
+                }
+            }
+        } catch (e) {}
+
+        return '';
+    }
     
     // Admin: Tüm sohbetleri yükle
     async function loadAdminChats() {
@@ -8655,12 +8683,12 @@
             if (snapshot.empty) {
                 html = '<div style="text-align: center; padding: 20px; color: #666;">Henüz mesaj yok</div>';
             } else {
-                snapshot.forEach(doc => {
-                    const chat = doc.data();
+                for (const doc of snapshot.docs) {
+                    const chat = doc.data() || {};
 
                     // Visibility: owner sees all, other admins see only unclaimed or claimed by themselves
                     if (!canCurrentAdminSeeChat(chat)) {
-                        return;
+                        continue;
                     }
                     const unread = chat.unreadAdmin || 0;
                     totalUnread += unread;
@@ -8679,10 +8707,13 @@
                         ? `<button onclick="event.stopPropagation(); claimSupportChat('${doc.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🤝 Devral</button>`
                         : '';
 
+                    const resolvedEmail = chat.userEmail || (await resolveSupportUserEmail(doc.id, chat)) || '';
+                    const displayEmail = resolvedEmail || doc.id;
+
                     html += `
                         <div onclick="openAdminChat('${doc.id}')" style="background: ${unread > 0 ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid ${unread > 0 ? '#00BCD4' : 'transparent'};">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                                <div style="font-weight: bold; color: #fff;">👤 ${chat.userEmail}</div>
+                                <div style="font-weight: bold; color: #fff;">👤 ${escapeHtml(displayEmail)}</div>
                                 <div style="display:flex; align-items:center; gap: 6px;">
                                     ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
                                     ${claimButton}
@@ -8693,7 +8724,7 @@
                             <div style="color: #666; font-size: 10px; margin-top: 5px;">${lastTime}</div>
                         </div>
                     `;
-                });
+                }
             }
             
             container.innerHTML = html;
@@ -8722,6 +8753,9 @@
             
             const chat = chatDoc.data();
 
+            const resolvedEmail = chat.userEmail || (await resolveSupportUserEmail(chatId, chat)) || '';
+            const displayEmail = resolvedEmail || chatId;
+
             // Visibility guard: if another admin claimed it, non-owner admins cannot open
             if (!canCurrentAdminSeeChat(chat)) {
                 showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
@@ -8731,7 +8765,7 @@
             }
             
             // Header güncelle
-            document.getElementById('adminChatTitle').textContent = '💬 ' + chat.userEmail;
+            document.getElementById('adminChatTitle').textContent = '💬 ' + displayEmail;
             document.getElementById('adminChatUserInfo').textContent = 'Kullanıcı ID: ' + chatId;
 
             currentAdminChatLastUserSeenAtMs = getFirestoreTimeMs(chat.lastUserSeenAt);
