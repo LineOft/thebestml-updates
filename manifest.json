@@ -1,6 +1,6 @@
 {
-    "version": "4.2.57",
-    "buildNumber": 307,
+    "version": "4.2.58",
+    "buildNumber": 308,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -16,6 +16,7 @@
         "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
         "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
         "Yeni: Sadakat puanı eklendi (profilde puan görüntüleme, onaylanan siparişlerden puan kazanma)",
+        "Yeni: Sadakat puanı ile indirim (havale siparişinde puan kullanma, reddedilince otomatik iade)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

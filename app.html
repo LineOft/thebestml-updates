@@ -1719,7 +1719,20 @@
             <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
                 <div style="font-size: 12px; color: #aaa;">Ödenecek Tutar</div>
                 <div style="font-size: 32px; font-weight: bold; color: #FF9800;" id="unifiedHavaleAmount">-</div>
+                <div id="unifiedHavaleDiscountLine" style="display: none; font-size: 12px; color: #aaa; margin-top: 6px;">Sadakat indirimi: -0₺</div>
                 <div style="font-size: 13px; color: #aaa; margin-top: 5px;" id="unifiedHavaleInfo">-</div>
+            </div>
+
+            <!-- Sadakat Puanı Kullan (İndirim) -->
+            <div id="unifiedLoyaltySpendBox" style="background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.35); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
+                    <div style="font-size: 13px; font-weight: bold;">🎁 Sadakat Puanı Kullan</div>
+                    <div style="font-size: 12px; color: #aaa;">Mevcut: <span id="unifiedLoyaltyAvailablePoints">0</span></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+                    <input id="unifiedLoyaltyUsePoints" type="number" min="0" step="1" placeholder="Kullanılacak puan (0)" class="auth-input" oninput="updateUnifiedLoyaltySpendUI()" style="margin-bottom: 0;" />
+                    <div id="unifiedLoyaltySpendHint" style="font-size: 11px; color: #aaa;">1 puan = 1₺ indirim. En fazla ödeme tutarı kadar kullanılabilir.</div>
+                </div>
             </div>
             
             <!-- Banka Bilgileri -->
@@ -2882,7 +2895,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.57';
+    const APP_VERSION = '4.2.58';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3646,12 +3659,57 @@
         return null;
     }
     
+    // Sadakat puanı kullanımı (havale)
+    let unifiedBaseAmount = 0;
+
+    function normalizeNonNegativeInt(value, fallback = 0) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return fallback;
+        return Math.max(0, Math.floor(n));
+    }
+
+    function updateUnifiedLoyaltySpendUI() {
+        try {
+            const input = document.getElementById('unifiedLoyaltyUsePoints');
+            const availableEl = document.getElementById('unifiedLoyaltyAvailablePoints');
+            const discountLine = document.getElementById('unifiedHavaleDiscountLine');
+            const amountEl = document.getElementById('unifiedHavaleAmount');
+
+            if (!input || !availableEl || !amountEl) return;
+
+            const available = normalizeNonNegativeInt(availableEl.textContent, 0);
+            const maxUsable = Math.min(available, normalizeNonNegativeInt(unifiedBaseAmount, 0));
+
+            let usePts = normalizeNonNegativeInt(input.value, 0);
+            if (usePts > maxUsable) usePts = maxUsable;
+            input.value = String(usePts);
+
+            const payable = Math.max(0, normalizeNonNegativeInt(unifiedBaseAmount, 0) - usePts);
+            amountEl.textContent = payable + '₺';
+
+            if (discountLine) {
+                if (usePts > 0) {
+                    discountLine.style.display = 'block';
+                    discountLine.textContent = 'Sadakat indirimi: -' + usePts + '₺';
+                } else {
+                    discountLine.style.display = 'none';
+                }
+            }
+        } catch (e) {}
+    }
+
+    window.updateUnifiedLoyaltySpendUI = updateUnifiedLoyaltySpendUI;
+
     // Merkezi havale modalını aç
-    function openUnifiedHavaleModal() {
+    async function openUnifiedHavaleModal() {
         if (!currentPaymentOrder) return;
+
+        unifiedBaseAmount = parsePriceToAmount(currentPaymentOrder.price);
         
         // Bilgileri doldur
-        document.getElementById('unifiedHavaleAmount').textContent = currentPaymentOrder.price;
+        document.getElementById('unifiedHavaleAmount').textContent = unifiedBaseAmount + '₺';
+        const discountLine = document.getElementById('unifiedHavaleDiscountLine');
+        if (discountLine) discountLine.style.display = 'none';
         
         let infoText = currentPaymentOrder.type === 'extension' 
             ? `${currentPaymentOrder.game} - ${currentPaymentOrder.cheat} için ${currentPaymentOrder.packageName}`
@@ -3662,6 +3720,28 @@
         document.getElementById('unifiedBankName').textContent = paymentSettings.bankInfo.name;
         document.getElementById('unifiedBankBank').textContent = paymentSettings.bankInfo.bank;
         document.getElementById('unifiedBankIban').textContent = paymentSettings.bankInfo.iban;
+
+        // Sadakat puanı göster
+        try {
+            const points = await refreshLoyaltyUI(true);
+            const availableEl = document.getElementById('unifiedLoyaltyAvailablePoints');
+            const input = document.getElementById('unifiedLoyaltyUsePoints');
+            if (availableEl) availableEl.textContent = String(points);
+            if (input) {
+                input.value = '0';
+                input.max = String(Math.min(points, unifiedBaseAmount));
+            }
+            updateUnifiedLoyaltySpendUI();
+        } catch (e) {
+            const availableEl = document.getElementById('unifiedLoyaltyAvailablePoints');
+            const input = document.getElementById('unifiedLoyaltyUsePoints');
+            if (availableEl) availableEl.textContent = '0';
+            if (input) {
+                input.value = '0';
+                input.max = '0';
+            }
+            updateUnifiedLoyaltySpendUI();
+        }
         
         // Dekont önizlemeyi sıfırla
         document.getElementById('unifiedDekontFile').value = '';
@@ -3720,37 +3800,72 @@
             });
             
             // Sipariş objesi
-            const orderData = {
-                userId: currentUser.uid,
-                email: currentUser.email,
-                userEmail: currentUser.email,
-                type: currentPaymentOrder.type || 'purchase',
-                game: currentPaymentOrder.game || '',
-                cheat: currentPaymentOrder.cheat || '',
-                package: currentPaymentOrder.package,
-                packageName: currentPaymentOrder.packageName,
-                price: currentPaymentOrder.price,
-                days: currentPaymentOrder.days,
-                dekont: dekontBase64,
-                paymentMethod: 'havale',
-                status: 'pending',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            };
+            const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
+            const baseAmount = parsePriceToAmount(currentPaymentOrder.price);
+
+            const userRef = db.collection('users').doc(currentUser.uid);
+            const orderRef = db.collection('orders').doc();
+            let pointsUsed = 0;
+
+            await db.runTransaction(async (tx) => {
+                const userSnap = await tx.get(userRef);
+                if (!userSnap.exists) throw new Error('Kullanıcı kaydı bulunamadı');
+                const userData = userSnap.data() || {};
+                const currentPoints = getLoyaltyPoints(userData);
+
+                pointsUsed = Math.min(requestedPoints, currentPoints, baseAmount);
+                if (!Number.isFinite(pointsUsed) || pointsUsed < 0) pointsUsed = 0;
+                pointsUsed = Math.floor(pointsUsed);
+
+                const payableAmount = Math.max(0, baseAmount - pointsUsed);
+
+                const orderData = {
+                    userId: currentUser.uid,
+                    email: currentUser.email,
+                    userEmail: currentUser.email,
+                    type: currentPaymentOrder.type || 'purchase',
+                    game: currentPaymentOrder.game || '',
+                    cheat: currentPaymentOrder.cheat || '',
+                    package: currentPaymentOrder.package,
+                    packageName: currentPaymentOrder.packageName,
+                    price: currentPaymentOrder.price,
+                    baseAmount: baseAmount,
+                    payableAmount: payableAmount,
+                    loyaltyUsedPoints: pointsUsed,
+                    loyaltyDiscountAmount: pointsUsed,
+                    days: currentPaymentOrder.days,
+                    dekont: dekontBase64,
+                    paymentMethod: 'havale',
+                    status: 'pending',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+
+                // Süre uzatma için ek alanlar
+                if (currentPaymentOrder.type === 'extension') {
+                    orderData.keyCode = currentPaymentOrder.keyCode;
+                    orderData.keyId = currentPaymentOrder.keyId;
+                    orderData.currentExpiry = currentPaymentOrder.currentExpiry;
+                    orderData.newExpiry = currentPaymentOrder.newExpiry;
+                    orderData.extensionDays = currentPaymentOrder.days;
+                }
+
+                if (pointsUsed > 0) {
+                    tx.update(userRef, {
+                        loyaltyPoints: firebase.firestore.FieldValue.increment(-pointsUsed),
+                        loyaltyUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    orderData.loyaltyUsedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
+
+                tx.set(orderRef, orderData);
+            });
             
-            // Süre uzatma için ek alanlar
-            if (currentPaymentOrder.type === 'extension') {
-                orderData.keyCode = currentPaymentOrder.keyCode;
-                orderData.keyId = currentPaymentOrder.keyId;
-                orderData.currentExpiry = currentPaymentOrder.currentExpiry;
-                orderData.newExpiry = currentPaymentOrder.newExpiry;
-                orderData.extensionDays = currentPaymentOrder.days;
-            }
-            
-            await db.collection('orders').add(orderData);
+            // UI'da puanı anlık güncelle
+            try { await refreshLoyaltyUI(true); } catch (e) {}
 
             // Admin'lere yeni sipariş bildirimi gönder
             try {
-                await sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price);
+                await sendNewOrderNotificationToAdmins(currentUser.email, currentPaymentOrder.packageName, currentPaymentOrder.price);
             } catch (e) {}
             
             closeModal('unifiedHavaleModal');
@@ -13906,14 +14021,37 @@
         if (!confirm('Bu siparişi reddetmek istediğinize emin misiniz?')) return;
         
         try {
-            // Sipariş bilgilerini al
-            const orderDoc = await db.collection('orders').doc(currentOrderId).get();
-            const orderData = orderDoc.data();
-            
-            await db.collection('orders').doc(currentOrderId).update({
-                status: 'rejected',
-                rejectedAt: new Date(),
-                rejectedBy: currentUser.email
+            const orderRef = db.collection('orders').doc(currentOrderId);
+            let orderData = null;
+
+            await db.runTransaction(async (tx) => {
+                const orderSnap = await tx.get(orderRef);
+                if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
+                orderData = orderSnap.data() || {};
+
+                const usedPoints = normalizeNonNegativeInt(orderData.loyaltyUsedPoints, 0);
+                const alreadyRefunded = !!orderData.loyaltyRefundedAt || typeof orderData.loyaltyRefundedPoints === 'number';
+
+                if (usedPoints > 0 && !alreadyRefunded) {
+                    const userId = orderData.userId;
+                    if (userId) {
+                        const userRef = db.collection('users').doc(userId);
+                        tx.update(userRef, {
+                            loyaltyPoints: firebase.firestore.FieldValue.increment(usedPoints),
+                            loyaltyUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                        tx.update(orderRef, {
+                            loyaltyRefundedPoints: usedPoints,
+                            loyaltyRefundedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        });
+                    }
+                }
+
+                tx.update(orderRef, {
+                    status: 'rejected',
+                    rejectedAt: new Date(),
+                    rejectedBy: currentUser.email
+                });
             });
             
             // Kullanıcıya red bildirimi gönder
