@@ -2837,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.48';
+    const APP_VERSION = '4.2.49';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -7485,10 +7485,11 @@
     }
 
     function getSupportAppLogoAvatarHtml(size = 28) {
-        const fontSize = Math.max(10, Math.round(size * 0.45));
         const radius = Math.max(8, Math.round(size / 3));
+        const v = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? `?v=${encodeURIComponent(APP_VERSION)}` : '';
+        const logoSrc = `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/logo.png${v}`;
         return `
-            <div style="width:${size}px; height:${size}px; border-radius:${radius}px; background: linear-gradient(135deg, #00BCD4, #673AB7); display:flex; align-items:center; justify-content:center; font-weight: 900; color:#fff; font-size:${fontSize}px; box-shadow: 0 6px 16px rgba(0,0,0,0.35); flex-shrink: 0;">GS</div>
+            <img src="${logoSrc}" alt="Logo" style="width:${size}px; height:${size}px; border-radius:${radius}px; object-fit: cover; background: rgba(0,0,0,0.25); box-shadow: 0 6px 16px rgba(0,0,0,0.35); flex-shrink: 0;" />
         `;
     }
 
