@@ -853,6 +853,12 @@
                 <div class="profile-key-title">🔑 Key Durumu</div>
                 <div class="profile-key-value" id="sidebarKeyText">Aktif Key Yok</div>
             </div>
+
+            <!-- Sadakat Puanı -->
+            <div class="profile-key-status" id="sidebarLoyaltyStatus" onclick="openLoyaltyModal(); toggleProfilePanel();">
+                <div class="profile-key-title">🎁 Sadakat Puanı</div>
+                <div class="profile-key-value" id="sidebarLoyaltyPoints">0</div>
+            </div>
             
             <!-- Menü Öğeleri -->
             <div class="profile-menu-item" onclick="openModal('redeemKeyModal'); toggleProfilePanel();">
@@ -1777,6 +1783,23 @@
                 <button type="button" class="btn" onclick="window.declineBanRiskDisclosure && window.declineBanRiskDisclosure()" style="flex: 1; background: rgba(255,255,255,0.08); color: #fff;">🚪 Çıkış Yap</button>
             </div>
             <div style="text-align: center; margin-top: 10px; font-size: 11px; color: #aaa;">Bu uyarı tek seferlik gösterilir.</div>
+        </div>
+    </div>
+</div>
+
+<!-- SADAKAT PUANI MODAL -->
+<div class="modal-overlay" id="loyaltyModal" onclick="closeModalOutside(event, 'loyaltyModal')">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
+            <div class="modal-title">🎁 Sadakat Puanı</div>
+            <button class="modal-close" onclick="closeModal('loyaltyModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; text-align: center;">
+                <div style="font-size: 12px; color: #aaa;">Mevcut Puan</div>
+                <div id="loyaltyPointsValue" style="font-size: 34px; font-weight: bold; color: #FF9800; margin-top: 4px;">0</div>
+                <div style="font-size: 12px; color: #aaa; margin-top: 6px;">Siparişiniz onaylandığında puan otomatik eklenir.</div>
+            </div>
         </div>
     </div>
 </div>
@@ -2859,7 +2882,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.56';
+    const APP_VERSION = '4.2.57';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3757,6 +3780,9 @@
     let banRiskAcceptedCached = false;
     let banRiskLastCheckedAtMs = 0;
 
+    // Sadakat puanı
+    const LOYALTY_EARN_PERCENT = 5; // %5 (TL bazlı) — basit MVP
+
     function stopPresenceHeartbeat() {
         if (presenceHeartbeatInterval) {
             clearInterval(presenceHeartbeatInterval);
@@ -3864,6 +3890,7 @@
             currentUserDocData = null;
             banRiskAcceptedCached = false;
             banRiskLastCheckedAtMs = 0;
+            updateLoyaltyUI(null);
 
             stopPresenceHeartbeat();
             presenceInitializedUid = null;
@@ -3879,6 +3906,41 @@
             clearUserEmailForBackgroundNotifications();
         }
     });
+
+    function getLoyaltyPoints(userData) {
+        const raw = userData && typeof userData.loyaltyPoints !== 'undefined' ? userData.loyaltyPoints : 0;
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 0) return 0;
+        return Math.floor(n);
+    }
+
+    function updateLoyaltyUI(userData) {
+        const points = getLoyaltyPoints(userData);
+        const sidebarPoints = document.getElementById('sidebarLoyaltyPoints');
+        if (sidebarPoints) sidebarPoints.textContent = String(points);
+        const modalPoints = document.getElementById('loyaltyPointsValue');
+        if (modalPoints) modalPoints.textContent = String(points);
+    }
+
+    async function refreshLoyaltyUI(force = false) {
+        try {
+            await refreshCurrentUserDocData(force);
+        } catch (e) {}
+        updateLoyaltyUI(currentUserDocData || null);
+        return getLoyaltyPoints(currentUserDocData || null);
+    }
+
+    async function openLoyaltyModal() {
+        if (!currentUser) {
+            showToast('⚠️ Giriş yapmanız gerekiyor');
+            openModal('loginModal');
+            return;
+        }
+        await refreshLoyaltyUI(true);
+        openModal('loyaltyModal');
+    }
+
+    window.openLoyaltyModal = openLoyaltyModal;
 
     function isBanRiskAccepted(userData) {
         if (!userData) return false;
@@ -9152,7 +9214,8 @@
                 email, 
                 password: password,
                 createdAt: new Date(), 
-                keys: [] 
+                keys: [],
+                loyaltyPoints: 0
             });
             showToast('✅ Kayıt başarılı!');
             navigateTo('homePage');
@@ -9181,6 +9244,7 @@
                 banRiskAcceptedCached = isBanRiskAccepted(currentUserDocData);
                 banRiskLastCheckedAtMs = Date.now();
                 updateKeyStatus(data.keys || []);
+                updateLoyaltyUI(data);
             }
         } catch (e) { console.log(e); }
     }
@@ -13506,6 +13570,24 @@
     async function approveOrder() {
         // Eski fonksiyon - artık kullanılmıyor
     }
+
+    function parsePriceToAmount(priceValue) {
+        if (priceValue === null || typeof priceValue === 'undefined') return 0;
+        if (typeof priceValue === 'number' && Number.isFinite(priceValue)) return Math.max(0, Math.floor(priceValue));
+        const str = String(priceValue);
+        const digits = str.replace(/[^0-9]/g, '');
+        if (!digits) return 0;
+        const n = Number(digits);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.floor(n));
+    }
+
+    function computeLoyaltyEarnedPoints(orderData) {
+        const amount = parsePriceToAmount(orderData && orderData.price);
+        if (!amount) return 0;
+        const pts = Math.floor(amount * (LOYALTY_EARN_PERCENT / 100));
+        return Math.max(0, pts);
+    }
     
     async function approveOrderWithKey() {
         if (!requirePermission('orders', 'siparişi onaylamak')) return;
@@ -13542,38 +13624,62 @@
             }
             
             const userDoc = users.docs[0];
+            const userRef = db.collection('users').doc(userDoc.id);
+            const orderRef = db.collection('orders').doc(currentOrderId);
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + days);
             
-            // Key ekle - Oyun ve Hile bilgisi ile
-            const userData = userDoc.data();
             // Oyun ve hile bilgisini al (dinamik siparişler için)
             const gameName = currentOrderData.game || 'Mobile Legends';
             const cheatName = currentOrderData.cheat || 'TheBestML IMGUI';
-            
-            const keys = userData.keys || [];
-            keys.push({
-                keyCode: keyCode,
-                code: keyCode,
-                orderId: currentOrderId,
-                activatedAt: new Date(),
-                expiresAt: expiresAt,
-                days: days,
-                game: gameName,
-                cheat: cheatName,
-                activatedBy: currentUser.email
-            });
-            
-            await db.collection('users').doc(userDoc.id).update({ keys });
-            
-            // Siparişi onayla
-            await db.collection('orders').doc(currentOrderId).update({
-                status: 'approved',
-                keyCode: keyCode,
-                game: gameName,
-                cheat: cheatName,
-                approvedAt: new Date(),
-                approvedBy: currentUser.email
+
+            let earnedPoints = 0;
+            await db.runTransaction(async (tx) => {
+                const [orderSnap, userSnap] = await Promise.all([tx.get(orderRef), tx.get(userRef)]);
+                if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
+                if (!userSnap.exists) throw new Error('Kullanıcı bulunamadı');
+
+                const orderData = orderSnap.data() || {};
+                const alreadyGranted = !!orderData.loyaltyGrantedAt || typeof orderData.loyaltyPointsGranted === 'number';
+                earnedPoints = computeLoyaltyEarnedPoints(orderData);
+
+                const userData = userSnap.data() || {};
+                const keys = userData.keys || [];
+                const alreadyHasOrderKey = keys.some(k => k && k.orderId === currentOrderId);
+                if (!alreadyHasOrderKey) {
+                    keys.push({
+                        keyCode: keyCode,
+                        code: keyCode,
+                        orderId: currentOrderId,
+                        activatedAt: new Date(),
+                        expiresAt: expiresAt,
+                        days: days,
+                        game: gameName,
+                        cheat: cheatName,
+                        activatedBy: currentUser.email
+                    });
+                }
+
+                const userUpdate = { keys };
+                if (!alreadyGranted && earnedPoints > 0) {
+                    userUpdate.loyaltyPoints = firebase.firestore.FieldValue.increment(earnedPoints);
+                    userUpdate.loyaltyUpdatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
+                tx.update(userRef, userUpdate);
+
+                const orderUpdate = {
+                    status: 'approved',
+                    keyCode: keyCode,
+                    game: gameName,
+                    cheat: cheatName,
+                    approvedAt: new Date(),
+                    approvedBy: currentUser.email
+                };
+                if (!alreadyGranted) {
+                    orderUpdate.loyaltyPointsGranted = earnedPoints;
+                    orderUpdate.loyaltyGrantedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
+                tx.update(orderRef, orderUpdate);
             });
             
             // Kullanıcıya bildirim gönder
@@ -13625,6 +13731,9 @@
             }
             
             const userDoc = users.docs[0];
+            const userRef = db.collection('users').doc(userDoc.id);
+            const orderRef = db.collection('orders').doc(currentOrderId);
+
             const userData = userDoc.data();
             const keys = userData.keys || [];
             
@@ -13644,14 +13753,34 @@
             keys[keyIndex].expiresAt = newExpiry;
             keys[keyIndex].extendedAt = new Date();
             keys[keyIndex].extendedBy = currentUser.email;
-            
-            await db.collection('users').doc(userDoc.id).update({ keys });
-            
-            // Siparişi onayla
-            await db.collection('orders').doc(currentOrderId).update({
-                status: 'approved',
-                approvedAt: new Date(),
-                approvedBy: currentUser.email
+
+            let earnedPoints = 0;
+            await db.runTransaction(async (tx) => {
+                const [orderSnap, userSnap] = await Promise.all([tx.get(orderRef), tx.get(userRef)]);
+                if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
+                if (!userSnap.exists) throw new Error('Kullanıcı bulunamadı');
+
+                const orderData = orderSnap.data() || {};
+                const alreadyGranted = !!orderData.loyaltyGrantedAt || typeof orderData.loyaltyPointsGranted === 'number';
+                earnedPoints = computeLoyaltyEarnedPoints(orderData);
+
+                const userUpdate = { keys: keys };
+                if (!alreadyGranted && earnedPoints > 0) {
+                    userUpdate.loyaltyPoints = firebase.firestore.FieldValue.increment(earnedPoints);
+                    userUpdate.loyaltyUpdatedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
+                tx.update(userRef, userUpdate);
+
+                const orderUpdate = {
+                    status: 'approved',
+                    approvedAt: new Date(),
+                    approvedBy: currentUser.email
+                };
+                if (!alreadyGranted) {
+                    orderUpdate.loyaltyPointsGranted = earnedPoints;
+                    orderUpdate.loyaltyGrantedAt = firebase.firestore.FieldValue.serverTimestamp();
+                }
+                tx.update(orderRef, orderUpdate);
             });
             
             // Kullanıcıya bildirim gönder (Firestore)
