@@ -3687,7 +3687,7 @@
     }
     
     // Sipariş dinleyici başlat
-    function startOrderListener() {
+    async function startOrderListener() {
         if (!currentUser || isAdmin()) return;
         stopOrderListener();
         
