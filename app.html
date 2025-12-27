@@ -914,8 +914,8 @@
                 <span class="menu-arrow">›</span>
             </div>
             
-            <!-- FCM Test Butonu -->
-            <div class="profile-menu-item" onclick="testFcmNotification(); toggleProfilePanel();">
+            <!-- FCM Test Butonu (gizli) -->
+            <div class="profile-menu-item" id="sidebarNotifTestBtn" style="display: none;" onclick="testFcmNotification(); toggleProfilePanel();">
                 <span class="menu-icon">🔔</span>
                 <div class="menu-text">
                     <div class="menu-title">Bildirim Test</div>
@@ -3208,6 +3208,9 @@
     
     // FCM Debug - Bildirim durumunu test et
     async function testFcmNotification() {
+        // Güvenlik/UX: test aracı son kullanıcıdan gizli tutulur
+        showToast('ℹ️ Bu bölüm devre dışı');
+        return;
         showToast('🔔 FCM test başlatılıyor...');
         
         const debugInfo = [];
