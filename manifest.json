@@ -1,6 +1,6 @@
 {
-    "version": "4.2.49",
-    "buildNumber": 299,
+    "version": "4.2.50",
+    "buildNumber": 300,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -8,7 +8,7 @@
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
         "Destek: Mesaj görünümü geliştirildi (daha modern sohbet baloncukları)",
-        "Destek: Admin mesajlarında gerçek uygulama logosu (avatar) gösterilir",
+        "Destek: Admin mesajlarında animasyonlu uygulama logosu (avatar) gösterilir",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

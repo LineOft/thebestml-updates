@@ -2837,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.49';
+    const APP_VERSION = '4.2.50';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -7486,10 +7486,20 @@
 
     function getSupportAppLogoAvatarHtml(size = 28) {
         const radius = Math.max(8, Math.round(size / 3));
-        const v = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? `?v=${encodeURIComponent(APP_VERSION)}` : '';
-        const logoSrc = `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/logo.png${v}`;
+        const base = 90;
+        const scale = Math.max(0.2, Math.min(1, size / base));
         return `
-            <img src="${logoSrc}" alt="Logo" style="width:${size}px; height:${size}px; border-radius:${radius}px; object-fit: cover; background: rgba(0,0,0,0.25); box-shadow: 0 6px 16px rgba(0,0,0,0.35); flex-shrink: 0;" />
+            <div style="width:${size}px; height:${size}px; border-radius:${radius}px; overflow:hidden; background: rgba(0,0,0,0.25); box-shadow: 0 6px 16px rgba(0,0,0,0.35); flex-shrink: 0; position: relative;">
+                <div style="position:absolute; left:50%; top:50%; transform: translate(-50%, -50%) scale(${scale}); transform-origin: center;">
+                    <div class="app-logo-svg">
+                        <div class="laser-g"></div>
+                        <div class="laser-s"></div>
+                        <div class="logo-impact"></div>
+                        <span class="logo-letter-g">G</span>
+                        <span class="logo-letter-s">S</span>
+                    </div>
+                </div>
+            </div>
         `;
     }
 
