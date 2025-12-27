@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.8';
+    const APP_VERSION = '4.2.9';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3933,43 +3933,10 @@
                 });
                 
                 // Bildirim alındığında (uygulama açıkken)
-                // DATA-ONLY mesajlarda title/body data içinde gelir
+                // NOT: Bildirimler sistem tarafından gösteriliyor, burada sadece log
                 PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                    try {
-                        console.log('Push bildirim alındı (raw):', JSON.stringify(notification));
-                        
-                        // Data-only mesajda title/body data içinde olabilir
-                        const title = notification.title || notification.data?.title || 'Bildirim';
-                        const body = notification.body || notification.data?.body || '';
-                        const type = notification.data?.type || 'info';
-                        
-                        console.log('İşlenmiş bildirim:', { title, body, type });
-                        
-                        // Basit toast göster (güvenli)
-                        showToast('🔔 ' + title + ': ' + body);
-                        
-                        // Uygulama içi popup göster (try-catch ile)
-                        try {
-                            showNotificationPopup({
-                                title: title,
-                                message: body,
-                                type: type
-                            });
-                        } catch(popupErr) {
-                            console.error('Popup hatası:', popupErr);
-                        }
-                        
-                        // Native bildirim (try-catch ile)
-                        try {
-                            sendNativeNotification(title, body, { type: type });
-                        } catch(nativeErr) {
-                            console.error('Native bildirim hatası:', nativeErr);
-                        }
-                    } catch(e) {
-                        console.error('Push bildirim işleme hatası:', e);
-                        // En azından bir toast göster
-                        try { showToast('🔔 Yeni bildirim alındı!'); } catch(x) {}
-                    }
+                    console.log('Push bildirim alındı:', JSON.stringify(notification));
+                    // Hiçbir şey yapma - crash önleme
                 });
                 
                 // Bildirime tıklandığında
