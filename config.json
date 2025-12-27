@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.36",
+    "currentVersion": "4.2.37",
     "forceUpdate": false,
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.36/GameStore_v4.2.36_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.37/GameStore_v4.2.37_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.36 – Eski bildirimler gizlendi!",
+    "announcement": "📢 v4.2.37 – Temizle butonu sabit!",
     "maintenanceMode": false,
-    "updateMessage": "Yeni kayıt olan kullanıcı bildirim panelinde sadece kayıt tarihinden sonraki bildirimleri görür."
+    "updateMessage": "Bildirimler ekranında 'Tüm Bildirimleri Temizle' butonu artık sabit, bildirim geldikçe aşağı kaymaz."
 }
