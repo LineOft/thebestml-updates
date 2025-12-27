@@ -3265,41 +3265,10 @@
             showToast('⚠️ Push server ayarlanmamış');
             return false;
         }
-        
-        if (!db) {
-            console.log('Firestore bağlantısı yok');
-            showToast('⚠️ Veritabanı bağlantısı yok');
-            return false;
-        }
-        
+
         try {
-            console.log('📤 FCM token\'ları alınıyor...');
-            
-            // Tüm kullanıcıları al
-            const usersSnapshot = await db.collection('users').get();
-            
-            if (usersSnapshot.empty) {
-                showToast('⚠️ Kullanıcı bulunamadı');
-                return false;
-            }
-            
-            // FCM token'ları topla
-            const tokens = [];
-            usersSnapshot.forEach(function(doc) {
-                var userData = doc.data();
-                if (userData.fcmToken && userData.fcmToken.length > 20) {
-                    tokens.push(userData.fcmToken);
-                }
-            });
-            
-            if (tokens.length === 0) {
-                showToast('⚠️ FCM token\'ı olan kullanıcı yok');
-                return false;
-            }
-            
-            console.log('📤 ' + tokens.length + ' token bulundu, bildirim gönderiliyor...');
-            
-            // Vercel'e gönder
+            console.log('📤 Tüm kullanıcılara bildirim (server-side token listesi)');
+
             const response = await fetch(PUSH_SERVER.url + '/api/send-notification', {
                 method: 'POST',
                 headers: {
@@ -3307,7 +3276,7 @@
                     'X-API-Key': PUSH_SERVER.apiKey
                 },
                 body: JSON.stringify({ 
-                    tokens: tokens,
+                    all: true,
                     title: title, 
                     body: body, 
                     data: data 
@@ -3318,10 +3287,12 @@
             console.log('Bildirim sonucu:', result);
             
             if (result.success) {
-                showToast('✅ ' + tokens.length + ' kullanıcıya bildirim gönderildi!');
+                const ok = result.successCount != null ? result.successCount : '?';
+                const fail = result.failureCount != null ? result.failureCount : 0;
+                showToast('✅ Bildirim: ' + ok + ' başarılı, ' + fail + ' hatalı');
                 return true;
             } else {
-                showToast('❌ Bildirim gönderilemedi: ' + (result.error || 'Bilinmeyen hata'));
+                showToast('❌ Bildirim gönderilemedi: ' + (result.error || result.details || 'Bilinmeyen hata'));
                 return false;
             }
         } catch (e) {
