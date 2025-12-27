@@ -1,14 +1,14 @@
 {
-    "version": "4.2.33",
-    "buildNumber": 283,
+    "version": "4.2.34",
+    "buildNumber": 284,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.33/GameStore_v4.2.33_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.34/GameStore_v4.2.34_debug.apk",
     "changelog": [
-        "FCM: All Test (dryRun) eklendi",
-        "FCM: hasFcmToken alanı ile hızlı toplu gönderim",
-        "Push-server: quota iyileştirmeleri"
+        "FCM: Server-side topic aboneliği (registerToken)",
+        "Toplu bildirim: Firestore taraması yok (topic all_users)",
+        "Admin toplu bildirim daha stabil"
     ]
 }
