@@ -1,10 +1,10 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.20/GameStore_v4.2.20_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.21/GameStore_v4.2.21_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "🔋 v4.2.20 – Arka plan izinleri otomatik!",
+    "announcement":  "🔋 v4.2.21 – Arka plan izinleri iyileştirildi!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.20",
+    "currentVersion":  "4.2.21",
     "forceUpdate":  false,
-    "updateMessage":  "Uygulama artık arka planda açık kalıyor, batarya optimizasyonu kapalı."
+    "updateMessage":  "Batarya ve Xiaomi özel izinleri açıklamalı dialog ile isteniyor."
 }
