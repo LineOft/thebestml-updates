@@ -1,14 +1,14 @@
-﻿{
-    "fileSize":  6.4,
-    "buildNumber":  280,
-    "minBuildNumber":  150,
-    "required":  true,
-    "releaseDate":  "2025-12-27",
-    "version":  "4.2.30",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.30/GameStore_v4.2.30_debug.apk",
-    "changelog":  [
-                      "Topic-based FCM bildirimleri aktif",
-                      "Admin panel bildirim sistemi calisiyor",
-                      "Stabilite iyilestirmeleri"
-                  ]
+{
+    "version": "4.2.31",
+    "buildNumber": 281,
+    "minBuildNumber": 150,
+    "required": false,
+    "releaseDate": "2025-12-27",
+    "fileSize": 6.4,
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.31/GameStore_v4.2.31_debug.apk",
+    "changelog": [
+        "Token-based FCM bildirimleri aktif",
+        "Admin panelden toplu bildirim",
+        "Stabilite iyilestirmeleri"
+    ]
 }

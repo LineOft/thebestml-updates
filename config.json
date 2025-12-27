@@ -1,11 +1,10 @@
-﻿{
-    "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.30/GameStore_v4.2.30_debug.apk",
-    "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "📢 v4.2.30 – Bildirim sistemi aktif!",
-    "maintenanceMode":  false,
-    "currentVersion":  "4.2.30",
-    "forceUpdate":  false,
-    "updateMessage":  "Topic-based FCM bildirimleri calisiyor."
-}
+{
+    "currentVersion": "4.2.31",
+    "forceUpdate": false,
+    "key": "THEBEST2024",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.31/GameStore_v4.2.31_debug.apk",
+    "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
+    "announcement": " v4.2.31  Token-based bildirim sistemi!",
+    "maintenanceMode": false,
+    "updateMessage": "FCM token bildirimleri calisiyor."
 }
