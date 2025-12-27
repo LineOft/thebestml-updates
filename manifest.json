@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  267,
+    "buildNumber":  268,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.17",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.17/GameStore_v4.2.17_debug.apk",
+    "version":  "4.2.18",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.18/GameStore_v4.2.18_debug.apk",
     "changelog":  [
-                      "Telefon bildirim cubuguna bildirim eklendi",
-                      "Siparis onayinda telefon bildirimi",
-                      "Siparis reddinde telefon bildirimi"
+                      "Telefon bildirimi icin izin ve kanal eklendi",
+                      "LocalNotifications tam kurulum",
+                      "orders kanali olusturuldu"
                   ]
 }

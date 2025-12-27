@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.17';
+    const APP_VERSION = '4.2.18';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3679,17 +3679,18 @@
                                 if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                                     const { LocalNotifications } = Capacitor.Plugins;
                                     if (LocalNotifications) {
+                                        const notifId = Math.floor(Math.random() * 100000);
+                                        console.log('📱 Bildirim gönderiliyor, ID:', notifId);
                                         await LocalNotifications.schedule({
                                             notifications: [{
-                                                title: '🎉 Siparişiniz Onaylandı!',
-                                                body: `Key'iniz aktif: ${order.keyCode}`,
-                                                id: Date.now(),
-                                                schedule: { at: new Date(Date.now() + 100) },
+                                                title: 'Siparişiniz Onaylandı!',
+                                                body: 'Key aktif: ' + order.keyCode,
+                                                id: notifId,
+                                                channelId: 'orders',
                                                 sound: 'default',
-                                                smallIcon: 'ic_launcher',
-                                                largeIcon: 'ic_launcher',
-                                                channelId: 'default',
-                                                autoCancel: true
+                                                smallIcon: 'ic_stat_icon_config_sample',
+                                                autoCancel: true,
+                                                extra: { orderId: order.orderId }
                                             }]
                                         });
                                         console.log('✅ Telefon bildirimi gönderildi!');
@@ -3729,17 +3730,18 @@
                                 if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                                     const { LocalNotifications } = Capacitor.Plugins;
                                     if (LocalNotifications) {
+                                        const notifId = Math.floor(Math.random() * 100000);
+                                        console.log('📱 Red bildirimi gönderiliyor, ID:', notifId);
                                         await LocalNotifications.schedule({
                                             notifications: [{
-                                                title: '❌ Sipariş Reddedildi',
+                                                title: 'Sipariş Reddedildi',
                                                 body: order.rejectReason || 'Sebep belirtilmedi',
-                                                id: Date.now(),
-                                                schedule: { at: new Date(Date.now() + 100) },
+                                                id: notifId,
+                                                channelId: 'orders',
                                                 sound: 'default',
-                                                smallIcon: 'ic_launcher',
-                                                largeIcon: 'ic_launcher',
-                                                channelId: 'default',
-                                                autoCancel: true
+                                                smallIcon: 'ic_stat_icon_config_sample',
+                                                autoCancel: true,
+                                                extra: { orderId: order.orderId }
                                             }]
                                         });
                                         console.log('✅ Telefon bildirimi gönderildi (red)!');
@@ -3781,8 +3783,68 @@
         // Push notification - Xiaomi MIUI uyumlu minimal kurulum
         initPushNotifications();
         
+        // Local Notifications - Telefon bildirim çubuğu için izin ve kanal
+        initLocalNotifications();
+        
         // Arka planda çalışma - geri tuşunda minimize et, kapatma
         setupBackgroundMode();
+    }
+    
+    // ==================== LOCAL NOTIFICATIONS KURULUMU ====================
+    async function initLocalNotifications() {
+        try {
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+                const { LocalNotifications } = Capacitor.Plugins;
+                if (LocalNotifications) {
+                    // 1. İzin iste
+                    const permStatus = await LocalNotifications.checkPermissions();
+                    console.log('📱 LocalNotifications izin durumu:', permStatus.display);
+                    
+                    if (permStatus.display !== 'granted') {
+                        const result = await LocalNotifications.requestPermissions();
+                        console.log('📱 LocalNotifications izin istendi:', result.display);
+                    }
+                    
+                    // 2. Bildirim kanalı oluştur (Android 8+)
+                    try {
+                        await LocalNotifications.createChannel({
+                            id: 'orders',
+                            name: 'Sipariş Bildirimleri',
+                            description: 'Sipariş onay ve red bildirimleri',
+                            importance: 5, // MAX importance
+                            visibility: 1, // PUBLIC
+                            sound: 'default',
+                            vibration: true,
+                            lights: true
+                        });
+                        console.log('📱 ✅ Bildirim kanalı oluşturuldu: orders');
+                    } catch(chErr) {
+                        console.log('Kanal zaten var veya hata:', chErr);
+                    }
+                    
+                    // 3. Default kanal da oluştur
+                    try {
+                        await LocalNotifications.createChannel({
+                            id: 'default',
+                            name: 'Genel Bildirimler',
+                            description: 'Uygulama bildirimleri',
+                            importance: 5,
+                            visibility: 1,
+                            sound: 'default',
+                            vibration: true,
+                            lights: true
+                        });
+                        console.log('📱 ✅ Bildirim kanalı oluşturuldu: default');
+                    } catch(chErr2) {
+                        console.log('Default kanal zaten var veya hata:', chErr2);
+                    }
+                    
+                    console.log('📱 ✅ LocalNotifications hazır!');
+                }
+            }
+        } catch(e) {
+            console.log('LocalNotifications kurulum hatası:', e);
+        }
     }
     
     // ==================== ARKA PLANDA ÇALIŞMA ====================
