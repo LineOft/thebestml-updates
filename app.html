@@ -2821,7 +2821,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.37';
+    const APP_VERSION = '4.2.40';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3152,6 +3152,56 @@
             return !!result.success;
         } catch (e) {
             console.log('registerFcmTokenOnServer hata:', e.message);
+            return false;
+        }
+    }
+
+    async function sendPushToAdmins(title, body, data = {}) {
+        if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
+            console.log('Push server yapılandırılmamış');
+            return false;
+        }
+
+        try {
+            console.log('📤 Adminlere bildirim (topic: admin_users)');
+
+            const response = await fetch(PUSH_SERVER.url + '/api/send-notification', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': PUSH_SERVER.apiKey
+                },
+                body: JSON.stringify({
+                    topic: 'admin_users',
+                    title: title,
+                    body: body,
+                    data: data
+                })
+            });
+
+            const result = await response.json();
+            return !!result.success;
+        } catch (e) {
+            console.error('Admin push bildirim hatası:', e);
+            return false;
+        }
+    }
+
+    async function ensureAdminTopicSubscription() {
+        try {
+            if (!currentUser || !fcmToken) return false;
+            if (!isAdmin()) return false;
+
+            const key = 'adminTopicSub_' + currentUser.uid;
+            const already = localStorage.getItem(key) === '1';
+            if (already) return true;
+
+            const ok = await registerFcmTokenOnServer(fcmToken, 'admin_users');
+            if (ok) {
+                try { localStorage.setItem(key, '1'); } catch (e) {}
+            }
+            return ok;
+        } catch (e) {
             return false;
         }
     }
@@ -3627,6 +3677,11 @@
             }
             
             await db.collection('orders').add(orderData);
+
+            // Admin'lere yeni sipariş bildirimi gönder
+            try {
+                await sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price);
+            } catch (e) {}
             
             closeModal('unifiedHavaleModal');
             showOrderSuccessModal();
@@ -3652,6 +3707,21 @@
             updateAuthUI();
             await loadUserData();
             startOrderListener(); // Anlık sipariş dinleme başlat
+
+            // Admin/Kurucu hesapları için: sipariş dinleyici çalışmadığı için bildirim/push kurulumunu burada yap
+            if (isAdmin() || isOwner()) {
+                startNotificationListener();
+                try {
+                    await initPushNotifications();
+                } catch (e) {
+                    console.log('FCM init hatası (admin, atlanıyor):', e.message);
+                }
+                try {
+                    await initLocalNotifications();
+                } catch (e) {
+                    console.log('Local notifications hatası (admin, atlanıyor):', e.message);
+                }
+            }
             
             // Arka plan bildirimleri için email'i native'e kaydet
             saveUserEmailForBackgroundNotifications(user.email);
@@ -4063,10 +4133,11 @@
     let notificationListener = null;
     let allNotificationListener = null;
     let emailNotificationListener = null;
+    let adminNotificationListener = null;
     let userNotifications = [];
     let fcmToken = null;
 
-    let notificationCutoffDate = null; // Kullanıcı kayıt tarihi (bu tarihten önceki bildirimler görünmez)
+    let notificationCutoffDate = null; // max(kayıt tarihi, kullanıcı temizleme tarihi)
 
     function getAuthCreationDate() {
         try {
@@ -4082,6 +4153,12 @@
     async function ensureNotificationCutoffDate() {
         if (!currentUser || !db) return null;
 
+        if (notificationCutoffDate && !isNaN(notificationCutoffDate.getTime())) {
+            return notificationCutoffDate;
+        }
+
+        let hasAny = false;
+
         // 1) Cache (en hızlı)
         try {
             const cached = localStorage.getItem('notifCutoff_' + currentUser.uid);
@@ -4089,7 +4166,20 @@
                 const d = new Date(cached);
                 if (!isNaN(d.getTime())) {
                     notificationCutoffDate = d;
-                    return notificationCutoffDate;
+                    hasAny = true;
+                }
+            }
+        } catch (e) {}
+
+        try {
+            const clearedCached = localStorage.getItem('notifClearedAt_' + currentUser.uid);
+            if (clearedCached) {
+                const cd = new Date(clearedCached);
+                if (!isNaN(cd.getTime())) {
+                    if (!notificationCutoffDate || cd > notificationCutoffDate) {
+                        notificationCutoffDate = cd;
+                    }
+                    hasAny = true;
                 }
             }
         } catch (e) {}
@@ -4097,7 +4187,15 @@
         // 2) Auth creation time (senkron fallback)
         const authCreated = getAuthCreationDate();
         if (authCreated) {
-            notificationCutoffDate = authCreated;
+            if (!notificationCutoffDate || authCreated > notificationCutoffDate) {
+                notificationCutoffDate = authCreated;
+            }
+            hasAny = true;
+        }
+
+        // Cache/auth ile zaten bir değer bulduysak, gereksiz Firestore okuması yapma
+        if (hasAny) {
+            return notificationCutoffDate;
         }
 
         // 3) Firestore user.createdAt (en doğru)
@@ -4107,9 +4205,21 @@
                 const data = doc.data() || {};
                 const created = toDate(data.createdAt);
                 if (created && !isNaN(created.getTime())) {
-                    notificationCutoffDate = created;
+                    if (!notificationCutoffDate || created > notificationCutoffDate) {
+                        notificationCutoffDate = created;
+                    }
                     try {
                         localStorage.setItem('notifCutoff_' + currentUser.uid, created.toISOString());
+                    } catch (e) {}
+                }
+
+                const clearedAt = toDate(data.notificationsClearedAt);
+                if (clearedAt && !isNaN(clearedAt.getTime())) {
+                    if (!notificationCutoffDate || clearedAt > notificationCutoffDate) {
+                        notificationCutoffDate = clearedAt;
+                    }
+                    try {
+                        localStorage.setItem('notifClearedAt_' + currentUser.uid, clearedAt.toISOString());
                     } catch (e) {}
                 }
             }
@@ -4170,6 +4280,9 @@
                                 // Server-side topic subscription: toplu bildirim için kritik
                                 // Firestore'dan tüm users taramaya gerek kalmaz.
                                 registerFcmTokenOnServer(fcmToken, 'all_users');
+
+                                // Admin hesapları: admin topic'e de abone et
+                                ensureAdminTopicSubscription();
                             } catch(e) {
                                 console.error('🔔 ❌ FCM token kaydetme hatası:', e);
                             }
@@ -4417,6 +4530,19 @@
             }, (error) => {
                 console.error('Email bildirim dinleyici hatası:', error);
             });
+
+        // Admin hedefli bildirimleri dinle
+        if (isAdmin()) {
+            adminNotificationListener = db.collection('notifications')
+                .where('targetType', '==', 'admins')
+                .limit(50)
+                .onSnapshot((snapshot) => {
+                    console.log('🔔 Admin bildirim snapshot (admins):', snapshot.size, 'adet');
+                    processNotificationSnapshot(snapshot);
+                }, (error) => {
+                    console.error('Admin bildirim dinleyici hatası:', error);
+                });
+        }
     }
     
     // Bildirim snapshot işle - YENİ VERSİYON
@@ -4540,6 +4666,10 @@
         if (emailNotificationListener) {
             emailNotificationListener();
             emailNotificationListener = null;
+        }
+        if (adminNotificationListener) {
+            adminNotificationListener();
+            adminNotificationListener = null;
         }
         userNotifications = [];
     }
@@ -4740,27 +4870,33 @@
                 .orderBy('createdAt', 'desc')
                 .limit(50)
                 .get();
+
+            // Admin hedefli bildirimleri çek
+            let adminNotifs = null;
+            if (isAdmin()) {
+                adminNotifs = await db.collection('notifications')
+                    .where('targetType', '==', 'admins')
+                    .orderBy('createdAt', 'desc')
+                    .limit(50)
+                    .get();
+            }
             
             console.log('🔔 Genel bildirim sayısı:', allNotifs.size);
             console.log('🔔 Kullanıcı bildirim sayısı:', userNotifs.size);
-            
-            // Temizlenmiş bildirimleri al
-            const clearedIds = JSON.parse(localStorage.getItem('clearedNotifications') || '[]');
+            if (adminNotifs) console.log('🔔 Admin bildirim sayısı:', adminNotifs.size);
             
             // Bildirimleri birleştir (temizlenenleri hariç tut)
             userNotifications = [];
             allNotifs.forEach(doc => {
-                if (!clearedIds.includes(doc.id)) {
-                    const n = { id: doc.id, ...doc.data() };
-                    const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
-                    if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
-                        userNotifications.push(n);
-                    }
+                const n = { id: doc.id, ...doc.data() };
+                const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                    userNotifications.push(n);
                 }
             });
             userNotifs.forEach(doc => {
-                // Duplikasyonu önle ve temizlenenleri hariç tut
-                if (!userNotifications.find(n => n.id === doc.id) && !clearedIds.includes(doc.id)) {
+                // Duplikasyonu önle
+                if (!userNotifications.find(n => n.id === doc.id)) {
                     const n = { id: doc.id, ...doc.data() };
                     const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
                     if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
@@ -4768,6 +4904,18 @@
                     }
                 }
             });
+
+            if (adminNotifs) {
+                adminNotifs.forEach(doc => {
+                    if (!userNotifications.find(n => n.id === doc.id)) {
+                        const n = { id: doc.id, ...doc.data() };
+                        const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                        if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                            userNotifications.push(n);
+                        }
+                    }
+                });
+            }
             
             // Tarihe göre sırala
             userNotifications.sort((a, b) => {
@@ -4797,22 +4945,25 @@
                     .where('targetType', '==', userEmail)
                     .limit(50)
                     .get();
-                
-                // Temizlenmiş bildirimleri al
-                const clearedIds = JSON.parse(localStorage.getItem('clearedNotifications') || '[]');
+
+                let adminNotifs = null;
+                if (isAdmin()) {
+                    adminNotifs = await db.collection('notifications')
+                        .where('targetType', '==', 'admins')
+                        .limit(50)
+                        .get();
+                }
                 
                 userNotifications = [];
                 allNotifs.forEach(doc => {
-                    if (!clearedIds.includes(doc.id)) {
-                        const n = { id: doc.id, ...doc.data() };
-                        const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
-                        if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
-                            userNotifications.push(n);
-                        }
+                    const n = { id: doc.id, ...doc.data() };
+                    const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                    if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                        userNotifications.push(n);
                     }
                 });
                 userNotifs.forEach(doc => {
-                    if (!userNotifications.find(n => n.id === doc.id) && !clearedIds.includes(doc.id)) {
+                    if (!userNotifications.find(n => n.id === doc.id)) {
                         const n = { id: doc.id, ...doc.data() };
                         const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
                         if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
@@ -4820,6 +4971,18 @@
                         }
                     }
                 });
+
+                if (adminNotifs) {
+                    adminNotifs.forEach(doc => {
+                        if (!userNotifications.find(n => n.id === doc.id)) {
+                            const n = { id: doc.id, ...doc.data() };
+                            const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
+                            if (!notificationCutoffDate || (d && d >= notificationCutoffDate)) {
+                                userNotifications.push(n);
+                            }
+                        }
+                    });
+                }
                 
                 renderNotificationsList(container);
             } catch(e2) {
@@ -4883,23 +5046,73 @@
     }
     
     // Tüm bildirimleri temizle
-    function clearAllNotifications() {
+    async function clearAllNotifications() {
         if (userNotifications.length === 0) {
             showToast('📭 Temizlenecek bildirim yok');
             return;
         }
-        
-        // Tüm bildirim ID'lerini "temizlendi" listesine ekle
-        const clearedIds = JSON.parse(localStorage.getItem('clearedNotifications') || '[]');
-        const allIds = userNotifications.map(n => n.id);
-        const newClearedIds = [...new Set([...clearedIds, ...allIds])];
-        localStorage.setItem('clearedNotifications', JSON.stringify(newClearedIds));
-        
-        // Okundu listesine de ekle
-        localStorage.setItem('readNotifications', JSON.stringify(newClearedIds));
-        
-        // Listeyi temizle
-        userNotifications = [];
+
+        try {
+            const now = new Date();
+            notificationCutoffDate = now;
+
+            if (currentUser?.uid) {
+                try {
+                    localStorage.setItem('notifClearedAt_' + currentUser.uid, now.toISOString());
+                } catch (e) {}
+            }
+
+            try {
+                localStorage.setItem('clearedNotifications', '[]');
+                localStorage.setItem('readNotifications', '[]');
+                localStorage.setItem('notifiedNotifications', '[]');
+            } catch (e) {}
+
+            if (db && currentUser?.uid) {
+                try {
+                    await db.collection('users').doc(currentUser.uid).set({
+                        notificationsClearedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        notificationsClearedAtClient: now.toISOString()
+                    }, { merge: true });
+                } catch (e) {}
+            }
+
+            const email = (currentUser?.email || '').toLowerCase().trim();
+            if (db && email) {
+                try {
+                    const batchLimit = 200;
+                    while (true) {
+                        const snap = await db.collection('notifications')
+                            .where('targetType', '==', email)
+                            .limit(batchLimit)
+                            .get();
+                        if (snap.empty) break;
+                        const batch = db.batch();
+                        snap.docs.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                        if (snap.size < batchLimit) break;
+                    }
+
+                    while (true) {
+                        const snap = await db.collection('notifications')
+                            .where('email', '==', email)
+                            .limit(batchLimit)
+                            .get();
+                        if (snap.empty) break;
+                        const batch = db.batch();
+                        snap.docs.forEach(d => batch.delete(d.ref));
+                        await batch.commit();
+                        if (snap.size < batchLimit) break;
+                    }
+                } catch (e) {
+                    // security rules izin vermediyse sadece gizleme çalışır
+                }
+            }
+
+            userNotifications = [];
+        } catch (e) {
+            userNotifications = [];
+        }
         
         // UI güncelle
         const container = document.getElementById('notificationsList');
@@ -7328,6 +7541,11 @@
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             }
+
+            // Admin'lere yeni destek mesajı bildirimi gönder
+            try {
+                await sendNewSupportMessageNotificationToAdmins(currentUser.email, lastMsgPreview);
+            } catch (e) {}
             
         } catch(e) {
             console.error('Mesaj gönderme hatası:', e);
@@ -7798,6 +8016,15 @@
                 status: 'pending',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
+
+            // Admin'lere yeni sipariş bildirimi gönder
+            try {
+                await sendNewOrderNotificationToAdmins(
+                    currentUser.email,
+                    `Süre Uzatma - ${selectedExtendOption.label}`,
+                    selectedExtendOption.price
+                );
+            } catch (e) {}
             
             // Modalları kapat
             closeModal('extendHavaleModal');
@@ -8143,7 +8370,7 @@
         if (!requirePermission('members_edit', 'üye silmek')) return;
         
         // Kurucu kendini silemez
-        if (email === OWNER_EMAIL) {
+        if (isOwnerEmail(email)) {
             showToast('❌ Kurucu hesabı silinemez!');
             return;
         }
@@ -8816,7 +9043,18 @@
     // ==================== YETKİ SİSTEMİ ====================
     
     // Kurucu (Owner) - TÜM yetkiler
-    const OWNER_EMAIL = 'onurtenk0@gmail.com';
+    const OWNER_EMAILS = ['onurtenk0@gmail.com'];
+    const OWNER_EMAIL = OWNER_EMAILS[0];
+
+    function normalizeEmail(email) {
+        return (email || '').toString().toLowerCase().trim();
+    }
+
+    function isOwnerEmail(email) {
+        const e = normalizeEmail(email);
+        if (!e) return false;
+        return OWNER_EMAILS.map(x => normalizeEmail(x)).includes(e);
+    }
     
     // Yetki tanımları
     const PERMISSIONS = {
@@ -8894,7 +9132,7 @@
             return false;
         }
         
-        if (email === OWNER_EMAIL) {
+        if (isOwnerEmail(email)) {
             showToast('⚠️ Kurucu zaten en üst yetkiye sahip');
             return false;
         }
@@ -8996,13 +9234,14 @@
     
     // Kurucu mu kontrol et (tüm yetkiler)
     function isOwner() {
-        return currentUser && currentUser.email === OWNER_EMAIL;
+        return !!currentUser && isOwnerEmail(currentUser.email);
     }
     
     // Admin mi kontrol et (kurucu dahil)
     function isAdmin() {
         if (!currentUser) return false;
-        return currentUser.email === OWNER_EMAIL || adminEmails.includes(currentUser.email.toLowerCase());
+        const email = normalizeEmail(currentUser.email);
+        return isOwnerEmail(email) || adminEmails.includes(email);
     }
     
     // Yetki kontrolü - belirli bir yetki için
@@ -9863,6 +10102,11 @@
             
             await db.collection('orders').add(orderData);
             updateOrderBadge();
+
+            // Admin'lere yeni sipariş bildirimi gönder
+            try {
+                await sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price);
+            } catch (e) {}
             
             // Fiyat seçimini sıfırla
             selectedDynamicPrice = null;
@@ -11895,7 +12139,7 @@
                 const email = user.email || 'E-posta yok';
                 
                 // Kurucu/Admin kontrolü
-                const isUserOwner = email === OWNER_EMAIL;
+                const isUserOwner = isOwnerEmail(email);
                 const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
                 
                 const userData = {
@@ -12802,40 +13046,17 @@
     async function sendNewOrderNotificationToAdmins(userEmail, packageName, price) {
         try {
             console.log('📩 Admin\'lere yeni sipariş bildirimi gönderiliyor...');
-            
-            // Admin kullanıcıları bul (role === 'admin')
-            const adminDocs = await db.collection('users').where('role', '==', 'admin').get();
-            
-            if (adminDocs.empty) {
-                console.log('Admin bulunamadı');
-                return;
-            }
-            
-            const fcmTokens = [];
-            
-            adminDocs.forEach(doc => {
-                const adminData = doc.data();
-                if (adminData.fcmToken) {
-                    fcmTokens.push(adminData.fcmToken);
-                }
-            });
-            
-            console.log(`${fcmTokens.length} admin'e bildirim gönderilecek`);
-            
-            // Tüm admin'lere push notification gönder
-            if (fcmTokens.length > 0) {
-                await sendPushToMultiple(
-                    fcmTokens,
-                    '🛒 Yeni Sipariş!',
-                    `${userEmail} - ${packageName} (${price}₺)`,
-                    { type: 'order_new', page: 'admin' }
-                );
-                console.log('📱 Admin bildirimler gönderildi!');
-            }
+
+            // Push: topic tabanlı (admin_users)
+            await sendPushToAdmins(
+                '🛒 Yeni Sipariş!',
+                `${userEmail} - ${packageName} (${price}₺)`,
+                { type: 'order_new', page: 'admin' }
+            );
             
             // Firestore'a da admin bildirimi kaydet
             await db.collection('notifications').add({
-                targetType: 'admin',
+                targetType: 'admins',
                 title: '🛒 Yeni Sipariş Geldi!',
                 message: `${userEmail} kullanıcısı ${packageName} paketi sipariş etti. Fiyat: ${price}₺`,
                 type: 'order_new',
@@ -12848,6 +13069,33 @@
             
         } catch(e) {
             console.error('Admin bildirim hatası:', e);
+        }
+    }
+
+    async function sendNewSupportMessageNotificationToAdmins(userEmail, lastMessagePreview) {
+        try {
+            const safeEmail = (userEmail || '').toString();
+            const safePreview = (lastMessagePreview || '').toString();
+
+            // Push: topic tabanlı
+            await sendPushToAdmins(
+                '💬 Yeni Destek Mesajı',
+                `${safeEmail}: ${safePreview}`,
+                { type: 'support_new', page: 'admin' }
+            );
+
+            // Firestore: admin normal bildirimi
+            await db.collection('notifications').add({
+                targetType: 'admins',
+                title: '💬 Yeni Destek Mesajı',
+                message: `${safeEmail}: ${safePreview}`,
+                type: 'support_new',
+                userEmail: safeEmail,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                read: false
+            });
+        } catch (e) {
+            console.error('Destek admin bildirimi hatası:', e);
         }
     }
     

@@ -1,14 +1,14 @@
 {
-    "version": "4.2.37",
-    "buildNumber": 287,
+    "version": "4.2.40",
+    "buildNumber": 290,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.37/GameStore_v4.2.37_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.40/GameStore_v4.2.40_debug.apk",
     "changelog": [
-        "Bildirimler: Temizle butonu sabitlendi",
-        "Bildirim geldikçe buton aşağı kaymaz",
-        "Kayıt tarihinden önceki bildirimler gizlenmeye devam"
+        "Kurucu (owner): Yeni sipariş/destek bildirimleri aktif (FCM + uygulama içi)",
+        "Kurucu hesabı admin yetkisiyle aynı bildirim akışını alır",
+        "Yetki kontrolü: kurucu e-posta kontrolü iyileştirildi"
     ]
 }
