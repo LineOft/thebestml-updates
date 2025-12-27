@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.19';
+    const APP_VERSION = '4.2.20';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3844,6 +3844,25 @@
             }
         } catch(e) {
             console.log('LocalNotifications kurulum hatası:', e);
+        }
+    }
+    
+    // ==================== ARKA PLAN İZİNLERİ ====================
+    async function requestBackgroundPermissions() {
+        try {
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+                console.log('🔋 Arka plan izinleri kontrol ediliyor...');
+                
+                // Native tarafta MainActivity.onCreate() otomatik olarak batarya optimizasyonu izni istiyor
+                // Kullanıcıya bilgi ver
+                setTimeout(() => {
+                    showToast('💡 Arka plan için batarya optimizasyonunu kapatın');
+                }, 2000);
+                
+                console.log('🔋 ✅ Arka plan izin bildirimi gösterildi');
+            }
+        } catch(e) {
+            console.log('Arka plan izin hatası:', e);
         }
     }
     
@@ -12757,6 +12776,14 @@
             console.log('[APP] Bildirim kanalları hazır');
         } catch(e) {
             console.log('[APP] Bildirim kanal hatası:', e);
+        }
+        
+        // Arka plan izinlerini iste (uygulama kapanmasın)
+        try {
+            await requestBackgroundPermissions();
+            console.log('[APP] Arka plan izinleri OK');
+        } catch(e) {
+            console.log('[APP] Arka plan izin hatası:', e);
         }
         
         try {

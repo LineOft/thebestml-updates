@@ -1,10 +1,10 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.19/GameStore_v4.2.19_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.20/GameStore_v4.2.20_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "🔔 v4.2.19 – Admin bildirimleri telefona düşüyor!",
+    "announcement":  "🔋 v4.2.20 – Arka plan izinleri otomatik!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.19",
+    "currentVersion":  "4.2.20",
     "forceUpdate":  false,
-    "updateMessage":  "Admin panel bildirimleri artık telefon bildirim çubuğunda görünüyor."
+    "updateMessage":  "Uygulama artık arka planda açık kalıyor, batarya optimizasyonu kapalı."
 }

@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  269,
+    "buildNumber":  270,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.19",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.19/GameStore_v4.2.19_debug.apk",
+    "version":  "4.2.20",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.20/GameStore_v4.2.20_debug.apk",
     "changelog":  [
-                      "Admin bildirim sistemi telefon cubuguna dusecek",
-                      "Tum bildirimler orders kanalini kullaniyor",
-                      "Aninda bildirim gonderiyor (schedule yok)"
+                      "Arka plan izinleri otomatik isteniyor",
+                      "Batarya optimizasyonu kapatiliyor",
+                      "Uygulama arka planda acik kaliyor"
                   ]
 }
