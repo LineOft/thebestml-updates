@@ -2836,7 +2836,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.43';
+    const APP_VERSION = '4.2.44';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10366,9 +10366,7 @@
                 if (Array.isArray(cheat.setupSteps)) {
                     cheat.setupSteps.forEach(step => {
                         if ((step?.actionType || 'none') === 'download') {
-                            if (!step.downloadUrl || step.downloadUrl === oldApkUrl) {
-                                step.downloadUrl = newApkUrl;
-                            }
+                            step.downloadUrl = newApkUrl;
                         }
                     });
                 }
