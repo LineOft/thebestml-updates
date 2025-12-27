@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  273,
+    "buildNumber":  276,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.23",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.23/GameStore_v4.2.23_debug.apk",
+    "version":  "4.2.26",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.26/GameStore_v4.2.26_debug.apk",
     "changelog":  [
-                      "Admin panel tum kullanicilara FCM ile bildirim gonderiyor",
-                      "Toplu bildirim sistemi iyilestirildi",
-                      "Push notification tam entegre"
+                      "UTF-8 encoding fix - butonlar ve oyunlar duzeltildi",
+                      "FCM sistemi gecici devre disi",
+                      "Kritik JavaScript hatalari giderildi"
                   ]
 }

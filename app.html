@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
@@ -36,14 +36,6 @@
         var firebaseReady = false;
         var auth = null;
         var db = null;
-        
-        // Başlatma logu
-        document.addEventListener('DOMContentLoaded', function() {
-            const grid = document.getElementById('homeGamesGrid');
-            if (grid) {
-                grid.innerHTML = '<div style="padding: 20px; color: #4CAF50;">⏳ Oyunlar yükleniyor...</div>';
-            }
-        });
         
         try {
             const firebaseConfig = {
@@ -2828,7 +2820,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.23';
+    const APP_VERSION = '4.2.26';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3270,19 +3262,24 @@
     async function sendPushToAll(title, body, data = {}) {
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
             console.log('⚠️ Push server yapılandırılmamış');
+            showToast('⚠️ Push server yapılandırılmamış');
+            return false;
+        }
+        
+        if (!db) {
+            console.log('⚠️ Firestore bağlantısı yok');
+            showToast('⚠️ Veritabanı bağlantısı yok');
             return false;
         }
         
         try {
             console.log('📤 Tüm kullanıcılara bildirim gönderiliyor...');
             
-            // Firestore'dan tüm kullanıcıların FCM token'larını al
-            const usersSnapshot = await db.collection('users')
-                .where('fcmToken', '!=', null)
-                .get();
+            // Firestore'dan tüm kullanıcıların FCM token'larını al (WHERE kullanma - crash risk!)
+            const usersSnapshot = await db.collection('users').get();
             
             if (usersSnapshot.empty) {
-                console.log('⚠️ FCM token\'ı olan kullanıcı bulunamadı');
+                console.log('⚠️ Kullanıcı bulunamadı');
                 showToast('⚠️ Bildirim alacak kullanıcı yok');
                 return false;
             }
@@ -3290,10 +3287,16 @@
             const tokens = [];
             usersSnapshot.forEach(doc => {
                 const userData = doc.data();
-                if (userData.fcmToken) {
+                if (userData.fcmToken && typeof userData.fcmToken === 'string' && userData.fcmToken.length > 10) {
                     tokens.push(userData.fcmToken);
                 }
             });
+            
+            if (tokens.length === 0) {
+                console.log('⚠️ FCM token\'ı olan kullanıcı yok');
+                showToast('⚠️ Bildirim alacak kullanıcı yok');
+                return false;
+            }
             
             console.log(`📤 ${tokens.length} kullanıcıya bildirim gönderiliyor...`);
             
@@ -3818,11 +3821,8 @@
         // Chat dinleyiciyi başlat
         startChatListener();
         
-        // Push notification - Xiaomi MIUI uyumlu minimal kurulum
-        initPushNotifications();
-        
-        // Local Notifications - Telefon bildirim çubuğu için izin ve kanal
-        initLocalNotifications();
+        // GEÇICI: FCM ve Local Notifications DEVRE DIŞI - crash testi
+        console.log('⚠️ FCM ve Local Notifications geçici olarak devre dışı');
         
         // Arka planda çalışma - geri tuşunda minimize et, kapatma
         setupBackgroundMode();
@@ -4078,29 +4078,31 @@
                 
                 // Token alındığında
                 PushNotifications.addListener('registration', async (token) => {
-                    console.log('🔔 ========== FCM TOKEN ALINDI ==========');
-                    console.log('🔔 Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
-                    fcmToken = token.value;
-                    
-                    // Token'ı Firestore'a kaydet
-                    if (currentUser && fcmToken) {
-                        try {
-                            console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
-                            await db.collection('users').doc(currentUser.uid).update({
-                                fcmToken: fcmToken,
-                                fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                                fcmPlatform: 'android',
-                                fcmLastUpdate: new Date().toISOString()
-                            });
-                            console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
-                            // Bildirim ayarları açık olduğunu göster
-                            showToast('✅ Bildirimler aktif! Sipariş onaylandığında bildirim alacaksınız.');
-                        } catch(e) {
-                            console.error('🔔 ❌ FCM token kaydetme hatası:', e);
-                            showToast('⚠️ Bildirim kaydı başarısız: ' + e.message);
+                    try {
+                        console.log('🔔 ========== FCM TOKEN ALINDI ==========');
+                        console.log('🔔 Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
+                        fcmToken = token.value;
+                        
+                        // Token'ı Firestore'a kaydet
+                        if (currentUser && fcmToken && db) {
+                            try {
+                                console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
+                                await db.collection('users').doc(currentUser.uid).update({
+                                    fcmToken: fcmToken,
+                                    fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                                    fcmPlatform: 'android',
+                                    fcmLastUpdate: new Date().toISOString()
+                                });
+                                console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
+                                showToast('✅ Bildirimler aktif!');
+                            } catch(e) {
+                                console.error('🔔 ❌ FCM token kaydetme hatası:', e);
+                            }
+                        } else {
+                            console.log('🔔 ⚠️ Token kaydedilemedi - currentUser veya db yok');
                         }
-                    } else {
-                        console.log('🔔 ⚠️ currentUser veya fcmToken yok:', { hasUser: !!currentUser, hasToken: !!fcmToken });
+                    } catch(outerErr) {
+                        console.log('🔔 Token listener hatası:', outerErr.message);
                     }
                 });
                 
@@ -12879,10 +12881,28 @@
             // Hatırlanan giriş bilgilerini doldur
             loadRememberedCredentials();
             
+            // Dekont önizleme
+            setTimeout(() => {
+                const fileInput = document.getElementById('dekontFile');
+                if (fileInput) {
+                    fileInput.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                document.getElementById('dekontImg').src = e.target.result;
+                                document.getElementById('dekontPreview').style.display = 'block';
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                }
+            }, 1000);
+            
             // Hoşgeldin mesajı - HER ZAMAN APP_VERSION kullan
             setTimeout(() => {
                 showToast('✅ Game Store v' + APP_VERSION);
-            }, 1000);
+            }, 1500);
             
             // Otomatik güncelleme kontrolü başlat (30 saniyede bir)
             startAutoUpdateCheck();
@@ -14124,25 +14144,7 @@
         // Artık kullanılmıyor
     }
     
-    // Dekont önizleme
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(() => {
-            const fileInput = document.getElementById('dekontFile');
-            if (fileInput) {
-                fileInput.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = function(e) {
-                            document.getElementById('dekontImg').src = e.target.result;
-                            document.getElementById('dekontPreview').style.display = 'block';
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                });
-            }
-        }, 1000);
-    });
+    // Dekont önizleme - moved to main DOMContentLoaded
     
     // Sipariş gönder
     async function submitOrder() {
