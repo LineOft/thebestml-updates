@@ -1,15 +1,14 @@
 {
-    "version": "4.2.47",
-    "buildNumber": 297,
+    "version": "4.2.48",
+    "buildNumber": 298,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
-        "Üye Yönetimi: Üyelerin son giriş tarihi/saatini gösterir",
-        "Üye Yönetimi: Anlık çevrimiçi durumu ve toplam çevrimiçi sayısı eklendi",
-        "Presence: lastSeen/isOnline takibi (aktif kullanımda otomatik güncellenir)",
+        "Destek: Mesaj görünümü geliştirildi (daha modern sohbet baloncukları)",
+        "Destek: Admin mesajlarında uygulama logosu (avatar) gösterilir",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }
