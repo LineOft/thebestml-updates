@@ -1139,6 +1139,21 @@
                 <button class="btn btn-purple btn-small" onclick="openSortModal()" style="flex: 1;">⬍ Sıralama</button>
                 <button class="btn btn-warning btn-small" onclick="loadGameCheatList()" style="flex: 1;">🔄 Yenile</button>
             </div>
+
+            <!-- Hile Güncelleme (dosya/version) -->
+            <div style="background: rgba(233,30,99,0.08); border: 1px solid rgba(233,30,99,0.25); border-radius: 10px; padding: 12px; margin-top: 15px;">
+                <div style="font-size: 12px; font-weight: bold; color: #E91E63; margin-bottom: 10px;">🛠️ Hile Güncelleme</div>
+                <select id="cheatUpdateGame" class="auth-input" style="color: #fff;" onchange="updateCheatUpdateOptions()">
+                    <option value="">🎮 Oyun Seçin...</option>
+                </select>
+                <select id="cheatUpdateCheat" class="auth-input" style="color: #fff;" onchange="fillCheatUpdateFields()" disabled>
+                    <option value="">🛡️ Önce oyun seçin...</option>
+                </select>
+                <input type="text" id="cheatUpdateVersion" class="auth-input" placeholder="🔖 Yeni Versiyon (opsiyonel)">
+                <input type="text" id="cheatUpdateApkUrl" class="auth-input" placeholder="⬇️ Yeni APK/Dosya URL (apkUrl)">
+                <div style="font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 10px;">💡 Kaydedince tüm kullanıcılara uygulama içi + FCM topic bildirimi gider.</div>
+                <button class="btn btn-primary" onclick="adminUpdateCheatFilesAndNotify()" style="width: 100%;">📤 Güncelle ve Bildirim Gönder</button>
+            </div>
         </div>
     </div>
     
@@ -2821,7 +2836,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.41';
+    const APP_VERSION = '4.2.42';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10213,7 +10228,7 @@
     
     // Tüm oyun selectlerini güncelle
     function updateGameSelects() {
-        const selects = ['adminGame', 'cheatGameSelect'];
+        const selects = ['adminGame', 'cheatGameSelect', 'cheatUpdateGame'];
         
         selects.forEach(selectId => {
             const select = document.getElementById(selectId);
@@ -10256,6 +10271,128 @@
                 }
             });
             cheatSelect.disabled = false;
+        }
+    }
+
+    // Hile Güncelleme: oyun seçilince hile listesini güncelle
+    function updateCheatUpdateOptions() {
+        const gameSelect = document.getElementById('cheatUpdateGame');
+        const cheatSelect = document.getElementById('cheatUpdateCheat');
+        const versionInput = document.getElementById('cheatUpdateVersion');
+        const apkUrlInput = document.getElementById('cheatUpdateApkUrl');
+
+        const selectedGameId = gameSelect?.value;
+
+        if (!selectedGameId || !gamesData[selectedGameId]) {
+            if (cheatSelect) {
+                cheatSelect.innerHTML = '<option value="">🛡️ Önce oyun seçin...</option>';
+                cheatSelect.disabled = true;
+            }
+            if (versionInput) versionInput.value = '';
+            if (apkUrlInput) apkUrlInput.value = '';
+            return;
+        }
+
+        const cheats = gamesData[selectedGameId].cheats || {};
+        const cheatIds = Object.keys(cheats);
+
+        if (!cheatSelect) return;
+
+        cheatSelect.innerHTML = '';
+        if (cheatIds.length === 0) {
+            cheatSelect.innerHTML = '<option value="">🛡️ Bu oyun için hile yok</option>';
+            cheatSelect.disabled = true;
+            if (versionInput) versionInput.value = '';
+            if (apkUrlInput) apkUrlInput.value = '';
+            return;
+        }
+
+        cheatIds.forEach(cheatId => {
+            const cheat = cheats[cheatId] || {};
+            const status = cheat.status ? ` (${cheat.status})` : '';
+            cheatSelect.innerHTML += `<option value="${cheatId}">🛡️ ${cheat.name || cheatId}${status}</option>`;
+        });
+
+        cheatSelect.disabled = false;
+        fillCheatUpdateFields();
+    }
+
+    // Hile Güncelleme: seçili hilenin mevcut alanlarını inputlara bas
+    function fillCheatUpdateFields() {
+        const gameId = document.getElementById('cheatUpdateGame')?.value;
+        const cheatId = document.getElementById('cheatUpdateCheat')?.value;
+        const versionInput = document.getElementById('cheatUpdateVersion');
+        const apkUrlInput = document.getElementById('cheatUpdateApkUrl');
+
+        if (!gameId || !cheatId || !gamesData[gameId]?.cheats?.[cheatId]) {
+            if (versionInput) versionInput.value = '';
+            if (apkUrlInput) apkUrlInput.value = '';
+            return;
+        }
+
+        const cheat = gamesData[gameId].cheats[cheatId];
+        if (versionInput) versionInput.value = cheat.version || '';
+        if (apkUrlInput) apkUrlInput.value = cheat.apkUrl || '';
+    }
+
+    // Hile Güncelleme: kaydet + tüm kullanıcılara bildirim (Firestore + FCM topic)
+    async function adminUpdateCheatFilesAndNotify() {
+        if (!requirePermission('games', 'hile güncellemek')) return;
+
+        const gameId = document.getElementById('cheatUpdateGame')?.value;
+        const cheatId = document.getElementById('cheatUpdateCheat')?.value;
+        const newVersion = document.getElementById('cheatUpdateVersion')?.value.trim();
+        const newApkUrl = document.getElementById('cheatUpdateApkUrl')?.value.trim();
+
+        if (!gameId || !gamesData[gameId]) { showToast('❌ Oyun seçin'); return; }
+        if (!cheatId || !gamesData[gameId]?.cheats?.[cheatId]) { showToast('❌ Hile seçin'); return; }
+
+        if (!newVersion && !newApkUrl) {
+            showToast('⚠️ En az bir alan girin (versiyon veya apkUrl)');
+            return;
+        }
+
+        try {
+            const game = gamesData[gameId];
+            const cheat = gamesData[gameId].cheats[cheatId];
+
+            // Değişiklikleri uygula
+            if (newVersion) cheat.version = newVersion;
+            if (newApkUrl) cheat.apkUrl = newApkUrl;
+            cheat.lastUpdatedAt = new Date().toISOString();
+            cheat.lastUpdatedBy = currentUser?.email || 'admin';
+
+            // Firestore'a kaydet (oyun dokümanı içinde)
+            const saved = await saveGameData(gameId);
+            if (!saved) return;
+
+            const title = '🛡️ Hile Güncellendi';
+            const versionPart = cheat.version ? ` v${cheat.version}` : '';
+            const message = `${game.name} • ${cheat.name}${versionPart} güncellendi. Uygulamadan indirip kullanabilirsiniz.`;
+
+            // 1) Uygulama içi (Firestore) bildirim
+            await db.collection('notifications').add({
+                targetType: 'all',
+                targetEmail: null,
+                title,
+                message,
+                type: 'info',
+                event: 'cheat_updated',
+                gameId: gameId,
+                cheatId: cheatId,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                createdBy: currentUser?.email || 'system',
+                read: false,
+                notifiedAt: new Date().toISOString()
+            });
+
+            // 2) FCM topic push (all_users)
+            await sendPushToAll(title, message, { type: 'info', event: 'cheat_updated', gameId, cheatId });
+
+            showToast('✅ Güncellendi ve bildirim gönderildi');
+        } catch (e) {
+            console.error('Hile güncelleme hatası:', e);
+            showToast('❌ Hata: ' + e.message);
         }
     }
     

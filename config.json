@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.41",
+    "currentVersion": "4.2.42",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.41 – Bildirim temizleme düzeltmesi!",
+    "announcement": "📢 v4.2.42 – Admin hile güncelleme + bildirim!",
     "maintenanceMode": false,
-    "updateMessage": "Bildirimler: 'Tüm bildirimleri temizle' yaptıktan sonra çıkış-girişte bildirimlerin geri gelmesi sorunu düzeltildi (admin + kurucu + kullanıcı)."
+    "updateMessage": "Admin panel: Oyun/Hile Yönetimi > Hile Güncelleme bölümü eklendi. Güncelleme sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gider."
 }
