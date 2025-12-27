@@ -1,10 +1,10 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.18/GameStore_v4.2.18_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.19/GameStore_v4.2.19_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "🔔 v4.2.18 – Telefon bildirimi izin ve kanal düzeltmesi!",
+    "announcement":  "🔔 v4.2.19 – Admin bildirimleri telefona düşüyor!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.18",
+    "currentVersion":  "4.2.19",
     "forceUpdate":  false,
-    "updateMessage":  "Bildirim izinleri ve kanal oluşturma eklendi."
+    "updateMessage":  "Admin panel bildirimleri artık telefon bildirim çubuğunda görünüyor."
 }

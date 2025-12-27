@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.18';
+    const APP_VERSION = '4.2.19';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4135,54 +4135,49 @@
     
     // Native Push Notification gönder
     async function sendNativeNotification(title, body, data = {}) {
-        console.log('sendNativeNotification çağrıldı:', title, body);
+        console.log('📱 sendNativeNotification çağrıldı:', title, body);
         
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
-                console.log('Capacitor native platform algılandı');
-                
-                // Önce kanalların oluşturulduğundan emin ol
-                await createNotificationChannel();
+                console.log('📱 Capacitor native platform algılandı');
                 
                 // Capacitor Local Notifications
                 const { LocalNotifications } = Capacitor.Plugins;
                 if (LocalNotifications) {
-                    console.log('LocalNotifications plugin mevcut');
+                    console.log('📱 LocalNotifications plugin mevcut');
                     
                     // Önce izin kontrol et
                     const permStatus = await LocalNotifications.checkPermissions();
-                    console.log('Bildirim izin durumu:', permStatus.display);
+                    console.log('📱 Bildirim izin durumu:', permStatus.display);
                     
                     if (permStatus.display !== 'granted') {
                         const reqResult = await LocalNotifications.requestPermissions();
-                        console.log('İzin istek sonucu:', reqResult.display);
+                        console.log('📱 İzin istek sonucu:', reqResult.display);
                         if (reqResult.display !== 'granted') {
-                            console.log('Bildirim izni reddedildi');
+                            console.log('📱 Bildirim izni reddedildi');
                             return;
                         }
                     }
                     
                     const notifId = Math.floor(Math.random() * 100000);
-                    console.log('Bildirim ID:', notifId);
+                    console.log('📱 Bildirim gönderiliyor, ID:', notifId);
                     
-                    // Hep default kanalı kullan (order-channel sorun çıkarıyor)
+                    // orders kanalını kullan (MAX importance)
                     await LocalNotifications.schedule({
                         notifications: [{
                             title: title,
                             body: body,
                             id: notifId,
-                            schedule: { at: new Date(Date.now() + 100) }, // Hemen göster
+                            channelId: 'orders',
                             sound: 'default',
                             smallIcon: 'ic_stat_icon_config_sample',
-                            largeIcon: 'ic_launcher',
-                            channelId: 'default',
                             autoCancel: true,
                             extra: data
                         }]
                     });
-                    console.log('✅ Native bildirim gönderildi:', title);
+                    console.log('📱 ✅ Native bildirim gönderildi:', title);
                 } else {
-                    console.log('LocalNotifications plugin bulunamadı');
+                    console.log('📱 LocalNotifications plugin bulunamadı');
                 }
             } else if ('Notification' in window) {
                 console.log('Web Notification API kullanılıyor');
@@ -4204,7 +4199,7 @@
                 console.log('Bildirim desteklenmiyor');
             }
         } catch(e) {
-            console.error('Native bildirim hatası:', e);
+            console.error('📱 Native bildirim hatası:', e);
         }
     }
     
@@ -4223,16 +4218,16 @@
                         id: 'default',
                         name: 'Game Store Bildirimleri',
                         description: 'Genel bildirimler',
-                        importance: 4, // HIGH
+                        importance: 5, // MAX
                         visibility: 1, // PUBLIC
                         sound: 'default',
                         vibration: true,
                         lights: true
                     });
                     
-                    // Sipariş bildirim kanalı (daha yüksek öncelik)
+                    // Sipariş bildirim kanalı (MAX öncelik)
                     await LocalNotifications.createChannel({
-                        id: 'order-channel',
+                        id: 'orders',
                         name: 'Sipariş Bildirimleri',
                         description: 'Sipariş onay ve red bildirimleri',
                         importance: 5, // MAX
@@ -4243,7 +4238,7 @@
                     });
                     
                     channelsCreated = true;
-                    console.log('✅ Bildirim kanalları oluşturuldu');
+                    console.log('📱 ✅ Bildirim kanalları oluşturuldu (default, orders)');
                 }
             }
         } catch(e) {
