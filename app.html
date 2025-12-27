@@ -1759,6 +1759,28 @@
     </div>
 </div>
 
+<!-- BAN RİSKİ BİLGİLENDİRME MODAL (TEK SEFERLİK) -->
+<div class="modal-overlay" id="banRiskModal" style="z-index: 10010;" onclick="event.stopPropagation()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #f44336, #d32f2f);">
+            <div class="modal-title">⚠️ Ban Riski Bilgilendirme</div>
+        </div>
+        <div class="modal-body">
+            <div style="background: rgba(244,67,54,0.12); border: 1px solid rgba(244,67,54,0.45); padding: 14px; border-radius: 12px; font-size: 13px; color: #eee; line-height: 1.45;">
+                <div style="font-weight: bold; margin-bottom: 8px;">Önemli</div>
+                <div style="color: #ddd;">Bu uygulamadaki içerik/ürünlerin kullanımı oyun hesabınızda <b>ban</b> / kısıtlama gibi yaptırımlara yol açabilir. Bu risk tamamen kullanıcı sorumluluğundadır.</div>
+                <div style="color: #ddd; margin-top: 8px;">Satın alma ve destek dahil uygulamayı kullanmaya devam ederek bu riski anladığınızı kabul etmiş olursunuz.</div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 16px;">
+                <button class="btn btn-primary" onclick="acceptBanRiskDisclosure()" style="flex: 1; background: linear-gradient(135deg, #4CAF50, #45a049);">✅ Anladım, Devam Et</button>
+                <button class="btn" onclick="declineBanRiskDisclosure()" style="flex: 1; background: rgba(255,255,255,0.08); color: #fff;">🚪 Çıkış Yap</button>
+            </div>
+            <div style="text-align: center; margin-top: 10px; font-size: 11px; color: #aaa;">Bu uyarı tek seferlik gösterilir.</div>
+        </div>
+    </div>
+</div>
+
 <!-- DİNAMİK ÖDEME MODAL -->
 <div class="modal-overlay" id="dynamicPaymentModal" onclick="closeModalOutside(event, 'dynamicPaymentModal')">
     <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
@@ -2837,7 +2859,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.54';
+    const APP_VERSION = '4.2.55';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3465,8 +3487,11 @@
     }
     
     // Merkezi ödeme modalını aç (tüm satın alma işlemleri için)
-    function openUnifiedPaymentModal(orderData) {
+    async function openUnifiedPaymentModal(orderData) {
         // orderData: { type, game, cheat, package, packageName, price, days, keyCode?, currentExpiry?, newExpiry? }
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Satın alma yapmadan önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        if (!canProceed) return;
+
         currentPaymentOrder = orderData;
         
         // Modal içeriğini oluştur
@@ -3645,6 +3670,9 @@
             showToast('❌ Giriş yapmanız gerekiyor');
             return;
         }
+
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Sipariş göndermeden önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        if (!canProceed) return;
         
         if (!currentPaymentOrder) {
             showToast('❌ Sipariş bilgisi bulunamadı');
@@ -3723,6 +3751,12 @@
     let presenceInitializedUid = null;
     const PRESENCE_HEARTBEAT_MS = 30000;
 
+    // Ban riski bilgilendirme (tek seferlik kabul)
+    const BAN_RISK_DISCLOSURE_VERSION = '1';
+    let currentUserDocData = null;
+    let banRiskAcceptedCached = false;
+    let banRiskLastCheckedAtMs = 0;
+
     function stopPresenceHeartbeat() {
         if (presenceHeartbeatInterval) {
             clearInterval(presenceHeartbeatInterval);
@@ -3792,6 +3826,11 @@
             await loadUserData();
             startOrderListener(); // Anlık sipariş dinleme başlat
 
+            // Ban risk bilgilendirme (girişte prompt)
+            try {
+                await ensureBanRiskAccepted({ prompt: true, reason: 'Devam etmek için lütfen ban riski bilgilendirmesini onaylayın.' });
+            } catch (e) {}
+
             // Admin/Kurucu hesapları için: sipariş dinleyici çalışmadığı için bildirim/push kurulumunu burada yap
             if (isAdmin() || isOwner()) {
                 startNotificationListener();
@@ -3822,6 +3861,10 @@
             updateAuthUI();
             stopOrderListener();
 
+            currentUserDocData = null;
+            banRiskAcceptedCached = false;
+            banRiskLastCheckedAtMs = 0;
+
             stopPresenceHeartbeat();
             presenceInitializedUid = null;
 
@@ -3836,6 +3879,85 @@
             clearUserEmailForBackgroundNotifications();
         }
     });
+
+    function isBanRiskAccepted(userData) {
+        if (!userData) return false;
+        return userData.banRiskAcceptedVersion === BAN_RISK_DISCLOSURE_VERSION;
+    }
+
+    async function refreshCurrentUserDocData(force = false) {
+        if (!currentUser) {
+            currentUserDocData = null;
+            banRiskAcceptedCached = false;
+            return null;
+        }
+
+        const now = Date.now();
+        if (!force && currentUserDocData && (now - banRiskLastCheckedAtMs) < 15000) {
+            return currentUserDocData;
+        }
+
+        try {
+            const doc = await db.collection('users').doc(currentUser.uid).get();
+            currentUserDocData = doc.exists ? (doc.data() || {}) : {};
+            banRiskAcceptedCached = isBanRiskAccepted(currentUserDocData);
+            banRiskLastCheckedAtMs = now;
+            return currentUserDocData;
+        } catch (e) {
+            return currentUserDocData;
+        }
+    }
+
+    async function ensureBanRiskAccepted({ prompt = false, reason = '' } = {}) {
+        if (!currentUser) return true;
+
+        // En güncel durumu çek
+        await refreshCurrentUserDocData(true);
+
+        if (banRiskAcceptedCached) return true;
+
+        if (prompt) {
+            try {
+                if (reason) {
+                    showToast('⚠️ ' + reason, 'info');
+                }
+            } catch (e) {}
+            openModal('banRiskModal');
+        }
+
+        return false;
+    }
+
+    async function acceptBanRiskDisclosure() {
+        try {
+            if (!currentUser) {
+                showToast('⚠️ Giriş yapmanız gerekiyor');
+                return;
+            }
+
+            await db.collection('users').doc(currentUser.uid).set({
+                banRiskAcceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                banRiskAcceptedVersion: BAN_RISK_DISCLOSURE_VERSION
+            }, { merge: true });
+
+            banRiskAcceptedCached = true;
+            banRiskLastCheckedAtMs = Date.now();
+
+            closeModal('banRiskModal');
+            showToast('✅ Teşekkürler, devam edebilirsiniz');
+        } catch (e) {
+            console.log('Ban risk onay hatası:', e);
+            showToast('❌ Bir hata oluştu, tekrar deneyin');
+        }
+    }
+
+    async function declineBanRiskDisclosure() {
+        try {
+            await logout();
+        } catch (e) {
+            try { await auth.signOut(); } catch (e2) {}
+        }
+    }
     
     // Arka plan bildirimleri için kullanıcı email'ini native'e kaydet
     async function saveUserEmailForBackgroundNotifications(email) {
@@ -7485,6 +7607,9 @@
             showToast('⚠️ Giriş yapmanız gerekiyor');
             return;
         }
+
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Desteğe yazmadan önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        if (!canProceed) return;
         
         // Modalı aç
         openModal('userChatModal');
@@ -9049,6 +9174,9 @@
             const doc = await db.collection('users').doc(currentUser.uid).get();
             if (doc.exists) {
                 const data = doc.data();
+                currentUserDocData = data || {};
+                banRiskAcceptedCached = isBanRiskAccepted(currentUserDocData);
+                banRiskLastCheckedAtMs = Date.now();
                 updateKeyStatus(data.keys || []);
             }
         } catch (e) { console.log(e); }
@@ -15382,6 +15510,9 @@
     // Sipariş gönder
     async function submitOrder() {
         if (!currentUser) { showToast('❌ Önce giriş yapın'); return; }
+
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Sipariş göndermeden önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        if (!canProceed) return;
         
         // Dinamik sipariş mi yoksa TheBestML siparişi mi kontrol et
         const isDynamic = window.isDynamicOrder && window.pendingDynamicOrder;

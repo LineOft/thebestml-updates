@@ -1,6 +1,6 @@
 {
-    "version": "4.2.54",
-    "buildNumber": 304,
+    "version": "4.2.55",
+    "buildNumber": 305,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -13,6 +13,7 @@
         "Destek: Admin yanıtlarında kullanıcıya uygulama içi + FCM bildirim (tek sefer, çift bildirim engelli)",
         "Destek: Kullanıcı destek ekranındayken admin yanıt bildirimi gönderilmez",
         "Destek: Görüldü (read receipt) eklendi",
+        "Güvenlik: Ban riski bilgilendirme eklendi (tek seferlik onay, satın alma/destek öncesi zorunlu)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }
