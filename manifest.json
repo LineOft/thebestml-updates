@@ -1,12 +1,13 @@
 {
-    "version": "4.2.68",
-    "buildNumber": 318,
+    "version": "4.2.69",
+    "buildNumber": 319,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Yeni (Admin): Aylık onaylanan sipariş detayında %10 admin payı toplamı gösterimi",
         "Yeni (Admin): Bekleyen Siparişler altında aylık onaylanan sipariş özeti (ay bazında adet + toplam tutar + detay liste)",
         "Yeni (Admin): Admin Yönetimi ekranında admin istatistikleri (toplam süre, onaylanan sipariş, devralınan destek)",
         "Destek: Mesaj görünümü geliştirildi (daha modern sohbet baloncukları)",
