@@ -12891,7 +12891,8 @@
             let manifest = null;
             
             try {
-                const manifestUrl = `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?_t=${timestamp}&_r=${random}`;
+                // jsDelivr CDN kullan - daha hızlı cache güncellemesi
+                const manifestUrl = `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/manifest.json?_t=${timestamp}`;
                 const response = await fetch(manifestUrl, { 
                     cache: 'no-store',
                     headers: { 'Cache-Control': 'no-cache' }
@@ -12992,9 +12993,9 @@
         if (banner) banner.remove();
         
         try {
-            // GitHub'dan güncel app.html'i çek
+            // GitHub'dan güncel app.html'i çek (jsDelivr CDN)
             const timestamp = Date.now();
-            const appUrl = `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=${timestamp}`;
+            const appUrl = `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=${timestamp}`;
             const response = await fetch(appUrl, { cache: 'no-store' });
             const appHtml = await response.text();
             
@@ -13047,8 +13048,8 @@
                 // Yeni sürüm var - OTA güncelleme
                 showToast('🆕 Yeni sürüm: v' + manifest.version + ' - İndiriliyor...');
                 
-                // app.html'i indir
-                const appUrl = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=' + Date.now();
+                // app.html'i indir (jsDelivr CDN)
+                const appUrl = 'https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=' + Date.now();
                 const appRes = await fetch(appUrl, { cache: 'no-store' });
                 const appHtml = await appRes.text();
                 
