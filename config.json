@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.59",
+    "currentVersion": "4.2.60",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.59 – Admin sadakat ayarları",
+    "announcement": "📢 v4.2.60 – Destek push düzeltmesi",
     "maintenanceMode": false,
-    "updateMessage": "Admin paneli güncellendi: Sipariş detayında sadakat puanı/indirim/ödenecek tutar bilgisi gösterilir. Ayrıca sadakat puanı kazanımı admin panelden ayarlanabilir (oran veya sipariş başına sabit puan). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Düzeltme: Admin/Owner destek yanıtlarında kullanıcıya FCM push bildirim artık email alanı eksik olsa bile gönderilir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

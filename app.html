@@ -2904,7 +2904,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.59';
+    const APP_VERSION = '4.2.60';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14464,8 +14464,23 @@
     // Admin destek yanıtı: kullanıcıya tek seferlik tüm bildirimler (Firestore + FCM)
     async function sendSupportReplyNotificationToUser(userId, userEmail, lastMessagePreview, adminInfo = null) {
         try {
-            const normalizedEmail = (userEmail || '').toLowerCase().trim();
-            if (!normalizedEmail) return;
+            let normalizedEmail = (userEmail || '').toLowerCase().trim();
+            let token = '';
+
+            // Önce userId (chatId = uid) üzerinden kullanıcı kaydını çöz
+            try {
+                if (userId) {
+                    const userDoc = await db.collection('users').doc(userId).get();
+                    if (userDoc.exists) {
+                        const ud = userDoc.data() || {};
+                        if (!normalizedEmail && ud.email) normalizedEmail = (ud.email || '').toLowerCase().trim();
+                        token = (ud.fcmToken || '').toString();
+                    }
+                }
+            } catch (e) {}
+
+            // userId yok + email yoksa hedef bulunamaz
+            if (!userId && !normalizedEmail) return;
 
             // Kullanıcı destek ekranındaysa bildirimleri durdur
             try {
@@ -14492,43 +14507,36 @@
 
             // 1) Uygulama içi + native local bildirim zinciri (client listener tetikler)
             try {
-                await db.collection('notifications').add({
-                    targetType: normalizedEmail,
-                    targetEmail: normalizedEmail,
-                    title: title,
-                    message: message,
-                    type: 'info',
-                    category: 'support_reply',
-                    chatId: userId || null,
-                    fromRole: role,
-                    fromName: name,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    createdBy: currentUser?.email || 'admin',
-                    read: false,
-                    notifiedAt: new Date().toISOString()
-                });
+                if (normalizedEmail) {
+                    await db.collection('notifications').add({
+                        targetType: normalizedEmail,
+                        targetEmail: normalizedEmail,
+                        title: title,
+                        message: message,
+                        type: 'info',
+                        category: 'support_reply',
+                        chatId: userId || null,
+                        fromRole: role,
+                        fromName: name,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        createdBy: currentUser?.email || 'admin',
+                        read: false,
+                        notifiedAt: new Date().toISOString()
+                    });
+                }
             } catch (e) {
                 // Firestore bildirimi olmasa da FCM gönderimi denenir
             }
 
             // 2) FCM push (uygulama kapalıyken de gitsin)
-            let token = '';
-            try {
-                if (userId) {
-                    const userDoc = await db.collection('users').doc(userId).get();
-                    if (userDoc.exists) {
-                        const ud = userDoc.data() || {};
-                        token = (ud.fcmToken || '').toString();
-                    }
-                }
-            } catch (e) {}
-
             if (!token) {
                 try {
-                    const userDocs = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
-                    if (!userDocs.empty) {
-                        const ud = userDocs.docs[0].data() || {};
-                        token = (ud.fcmToken || '').toString();
+                    if (normalizedEmail) {
+                        const userDocs = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+                        if (!userDocs.empty) {
+                            const ud = userDocs.docs[0].data() || {};
+                            token = (ud.fcmToken || '').toString();
+                        }
                     }
                 } catch (e) {}
             }
