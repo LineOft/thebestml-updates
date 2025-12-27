@@ -1,13 +1,14 @@
 ﻿{
-    "fileSize":  6,
-    "buildNumber":  262,
+    "fileSize":  6.4,
+    "buildNumber":  265,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.12",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.12/GameStore_v4.2.12_debug.apk",
+    "version":  "4.2.15",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.15/GameStore_v4.2.15_debug.apk",
     "changelog":  [
-                      "Firebase ve Push Notifications tamamen kaldirildi",
-                      "Xiaomi MIUI crash testi"
+                      "Geri tusu artik minimize ediyor, kapatmiyor",
+                      "Uygulama acikken Local Notification bildirimi",
+                      "Arka planda calisma iyilestirildi"
                   ]
 }

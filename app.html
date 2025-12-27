@@ -2828,7 +2828,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.12';
+    const APP_VERSION = '4.2.15';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3728,9 +3728,35 @@
         // Chat dinleyiciyi başlat
         startChatListener();
         
-        // Push notification DEVRE DIŞI - Xiaomi crash testi
-        // initPushNotifications();
-        console.log('⚠️ Push notifications devre dışı - crash testi');
+        // Push notification - Xiaomi MIUI uyumlu minimal kurulum
+        initPushNotifications();
+        
+        // Arka planda çalışma - geri tuşunda minimize et, kapatma
+        setupBackgroundMode();
+    }
+    
+    // ==================== ARKA PLANDA ÇALIŞMA ====================
+    function setupBackgroundMode() {
+        try {
+            if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
+                const { App } = Capacitor.Plugins;
+                if (App) {
+                    // Geri tuşuna basıldığında uygulamayı kapat değil, minimize et
+                    App.addListener('backButton', ({ canGoBack }) => {
+                        if (!canGoBack) {
+                            // Ana sayfadaysa minimize et (kapatma)
+                            App.minimizeApp();
+                        } else {
+                            // Geri gidilebiliyorsa normal geri git
+                            window.history.back();
+                        }
+                    });
+                    console.log('✅ Arka plan modu aktif - geri tuşu minimize yapacak');
+                }
+            }
+        } catch(e) {
+            console.log('Arka plan modu hatası:', e);
+        }
     }
     
     // ==================== KEY DURUMU REALTİME DİNLEYİCİ ====================
@@ -3934,19 +3960,35 @@
                 });
                 
                 // Bildirim alındığında (uygulama açıkken)
-                // NOT: Bildirimler sistem tarafından gösteriliyor, burada sadece log
-                PushNotifications.addListener('pushNotificationReceived', (notification) => {
-                    console.log('Push bildirim alındı:', JSON.stringify(notification));
-                    // Hiçbir şey yapma - crash önleme
+                // Xiaomi MIUI uyumlu - Local Notification ile göster
+                PushNotifications.addListener('pushNotificationReceived', async (notification) => {
+                    try {
+                        console.log('Push bildirim alındı:', notification.title);
+                        // Local notification ile göster
+                        const { LocalNotifications } = Capacitor.Plugins;
+                        if (LocalNotifications) {
+                            await LocalNotifications.schedule({
+                                notifications: [{
+                                    id: Date.now(),
+                                    title: notification.title || 'Game Store',
+                                    body: notification.body || '',
+                                    schedule: { at: new Date(Date.now() + 100) },
+                                    sound: 'default',
+                                    smallIcon: 'ic_launcher',
+                                    largeIcon: 'ic_launcher'
+                                }]
+                            });
+                        }
+                    } catch(e) {
+                        console.log('Local notification hatası:', e);
+                    }
                 });
                 
                 // Bildirime tıklandığında
                 PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
-                    console.log('Push bildirime tıklandı:', notification);
-                    // İlgili sayfaya yönlendir
-                    if (notification.notification.data?.page) {
-                        navigateTo(notification.notification.data.page);
-                    }
+                    try {
+                        console.log('Push bildirime tıklandı');
+                    } catch(e) {}
                 });
                 
                 console.log('Push notifications başlatıldı');
