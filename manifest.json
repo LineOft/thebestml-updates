@@ -20,8 +20,7 @@
         "Yeni (Admin): Sipariş detayında sadakat puanı/indirim/ödenecek tutar bilgisi",
         "Yeni (Admin): Sadakat puanı kazanım ayarı (oran veya sipariş başına sabit puan)",
         "Düzeltme: Admin destek yanıtlarında kullanıcıya FCM push (email eksik olsa da)",
-        "Düzeltme: FCM token kaydı (user dökümanı yoksa da) artık güvenli şekilde kaydedilir",
-        "Düzeltme: Destek yanıtı push token bulma iyileştirildi (emailLower/email fallback)",
+        "Düzeltme: FCM token kaydı daha güvenli (users dokümanı yoksa oluşturur)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

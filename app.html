@@ -4795,12 +4795,12 @@
                             try {
                                 console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
                                 await db.collection('users').doc(currentUser.uid).set({
+                                    email: currentUser.email || null,
                                     fcmToken: fcmToken,
                                     hasFcmToken: true,
                                     fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                                     fcmPlatform: 'android',
-                                    fcmLastUpdate: new Date().toISOString(),
-                                    emailLower: (currentUser?.email || '').toLowerCase().trim()
+                                    fcmLastUpdate: new Date().toISOString()
                                 }, { merge: true });
                                 console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
                                 showToast('✅ Bildirimler aktif!');
@@ -8757,13 +8757,7 @@
                 const chatData = chatDoc.data() || {};
                 const targetEmail = chatData.userEmail || '';
                 const targetUserId = chatData.userId || currentAdminChatId;
-                const pushRes = await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfo);
-                try {
-                    if (isOwner() && pushRes) {
-                        if (!pushRes.attempted) showToast('⚠️ FCM: kullanıcı token yok');
-                        else if (!pushRes.success) showToast('⚠️ FCM: gönderim başarısız');
-                    }
-                } catch (e) {}
+                await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfo);
             } catch (e) {}
             
             showToast('✅ Mesaj gönderildi');
@@ -14471,8 +14465,7 @@
     // Admin destek yanıtı: kullanıcıya tek seferlik tüm bildirimler (Firestore + FCM)
     async function sendSupportReplyNotificationToUser(userId, userEmail, lastMessagePreview, adminInfo = null) {
         try {
-            const rawEmail = (userEmail || '').toString().trim();
-            let normalizedEmail = rawEmail.toLowerCase().trim();
+            let normalizedEmail = (userEmail || '').toLowerCase().trim();
             let token = '';
 
             // Önce userId (chatId = uid) üzerinden kullanıcı kaydını çöz
@@ -14540,31 +14533,10 @@
             if (!token) {
                 try {
                     if (normalizedEmail) {
-                        // Önce emailLower ile dene (case sorunlarını azaltır)
-                        try {
-                            const q1 = await db.collection('users').where('emailLower', '==', normalizedEmail).limit(1).get();
-                            if (!q1.empty) {
-                                const ud = q1.docs[0].data() || {};
-                                token = (ud.fcmToken || '').toString();
-                            }
-                        } catch (e) {}
-
-                        // Sonra email alanı ile dene (bazı kayıtlarda email raw saklanmış olabilir)
-                        if (!token) {
-                            const q2 = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
-                            if (!q2.empty) {
-                                const ud = q2.docs[0].data() || {};
-                                token = (ud.fcmToken || '').toString();
-                            }
-                        }
-
-                        // Son olarak raw email ile dene
-                        if (!token && rawEmail && rawEmail !== normalizedEmail) {
-                            const q3 = await db.collection('users').where('email', '==', rawEmail).limit(1).get();
-                            if (!q3.empty) {
-                                const ud = q3.docs[0].data() || {};
-                                token = (ud.fcmToken || '').toString();
-                            }
+                        const userDocs = await db.collection('users').where('email', '==', normalizedEmail).limit(1).get();
+                        if (!userDocs.empty) {
+                            const ud = userDocs.docs[0].data() || {};
+                            token = (ud.fcmToken || '').toString();
                         }
                     }
                 } catch (e) {}
@@ -14572,21 +14544,15 @@
 
             if (token && token.length > 20) {
                 try {
-                    const ok = await sendPushNotification(token, title, message, {
+                    await sendPushNotification(token, title, message, {
                         type: 'support_reply',
                         page: 'support',
                         chatId: userId || ''
                     });
-                    return { attempted: true, success: !!ok, hasToken: true };
-                } catch (e) {
-                    return { attempted: true, success: false, hasToken: true, error: (e?.message || String(e)) };
-                }
+                } catch (e) {}
             }
-
-            return { attempted: false, success: false, hasToken: false };
         } catch (e) {
             console.error('Kullanıcı destek yanıt bildirimi hatası:', e);
-            return { attempted: false, success: false, hasToken: false, error: (e?.message || String(e)) };
         }
     }
     

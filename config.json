@@ -4,7 +4,7 @@
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.61 – Destek push + token düzeltmesi",
+    "announcement": "📢 v4.2.61 – FCM token düzeltmesi",
     "maintenanceMode": false,
-    "updateMessage": "Düzeltme: Destek yanıtlarında push bildirim için token kaydı ve token bulma iyileştirildi. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Düzeltme: Admin/Owner destek yanıtlarında kullanıcıya FCM push bildirim gönderimi iyileştirildi. Ayrıca FCM token kaydı artık users dokümanı yoksa da oluşturularak kaydedilir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
