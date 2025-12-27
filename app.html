@@ -1228,6 +1228,7 @@
                     <option value="success">✅ Başarılı</option>
                     <option value="warning">⚠️ Uyarı</option>
                     <option value="promo">🎁 Promosyon</option>
+                    <option value="fcm">📲 FCM (Sadece Push)</option>
                 </select>
             </div>
             <button class="btn btn-primary" onclick="sendNotification()">📤 Bildirim Gönder</button>
@@ -2820,7 +2821,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.34';
+    const APP_VERSION = '4.2.35';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -6609,6 +6610,41 @@
         if (!title) { showToast('❌ Başlık girin'); return; }
         if (!message) { showToast('❌ Mesaj girin'); return; }
         if (targetType === 'user' && !userEmail) { showToast('❌ E-posta girin'); return; }
+
+        // FCM ONLY: sadece push gönder, Firestore/app-içi/native bildirim üretme
+        if (type === 'fcm') {
+            try {
+                if (targetType === 'all') {
+                    await sendPushToAll(title, message, { type: 'info' });
+                    showToast('✅ FCM push tüm kullanıcılara gönderildi!');
+                } else {
+                    const userDocs = await db.collection('users').where('email', '==', userEmail).get();
+                    if (userDocs.empty) {
+                        showToast('❌ Kullanıcı bulunamadı');
+                        return;
+                    }
+
+                    const userData = userDocs.docs[0].data();
+                    if (!userData || !userData.fcmToken) {
+                        showToast('❌ Kullanıcının FCM token\'ı yok');
+                        return;
+                    }
+
+                    await sendPushNotification(userData.fcmToken, title, message, { type: 'info' });
+                    showToast('✅ FCM push kullanıcıya gönderildi!');
+                }
+
+                // Formu temizle
+                document.getElementById('notifTitle').value = '';
+                document.getElementById('notifMessage').value = '';
+                document.getElementById('notifUserEmail').value = '';
+                return;
+            } catch (e) {
+                console.error('❌ FCM push gönderme hatası:', e);
+                showToast('❌ Hata: ' + e.message);
+                return;
+            }
+        }
         
         try {
             // Target değerini belirle (email normalize edildi)
