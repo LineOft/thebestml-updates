@@ -1,10 +1,10 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.22/GameStore_v4.2.22_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.23/GameStore_v4.2.23_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "🔔 v4.2.22 – FCM bildirimler aktif!",
+    "announcement":  "📢 v4.2.23 – Toplu bildirim sistemi tam entegre!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.22",
+    "currentVersion":  "4.2.23",
     "forceUpdate":  false,
-    "updateMessage":  "FCM token sistemi ile push bildirimler çalışıyor."
+    "updateMessage":  "Admin panel tüm kullanıcılara FCM ile bildirim gönderiyor."
 }

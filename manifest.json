@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  272,
+    "buildNumber":  273,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.22",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.22/GameStore_v4.2.22_debug.apk",
+    "version":  "4.2.23",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.23/GameStore_v4.2.23_debug.apk",
     "changelog":  [
-                      "FCM token sistemi aktif",
-                      "Push bildirimler calisir durumda",
-                      "Arka plan izinleri kaldirildi"
+                      "Admin panel tum kullanicilara FCM ile bildirim gonderiyor",
+                      "Toplu bildirim sistemi iyilestirildi",
+                      "Push notification tam entegre"
                   ]
 }
