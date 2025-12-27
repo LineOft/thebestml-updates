@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  277,
+    "buildNumber":  278,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.27",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.27/GameStore_v4.2.27_debug.apk",
+    "version":  "4.2.28",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.28/GameStore_v4.2.28_debug.apk",
     "changelog":  [
-                      "Kritik JavaScript syntax hatasi duzeltildi",
-                      "UTF-8 encoding duzeltildi",
+                      "KRITIK: Fazla parantez syntax hatasi duzeltildi",
+                      "sendPushToAll fonksiyonu duzeltildi",
                       "Eski cache otomatik temizleniyor"
                   ]
 }
