@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.42",
+    "currentVersion": "4.2.43",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.42 – Admin hile güncelleme + bildirim!",
+    "announcement": "📢 v4.2.43 – Kurulum APK link senkron!",
     "maintenanceMode": false,
-    "updateMessage": "Admin panel: Oyun/Hile Yönetimi > Hile Güncelleme bölümü eklendi. Güncelleme sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gider. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Hile güncellemesi: apkUrl değişince kurulum adımlarındaki APK indirme linki de otomatik güncellenir. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

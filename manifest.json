@@ -1,6 +1,6 @@
 {
-    "version": "4.2.42",
-    "buildNumber": 292,
+    "version": "4.2.43",
+    "buildNumber": 293,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -9,6 +9,7 @@
     "changelog": [
         "Admin panel: Oyun/Hile Yönetimi sayfasına 'Hile Güncelleme' bölümü eklendi (sürüm / apkUrl)",
         "Bildirimler: hile güncellemesi sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gönderilir",
+        "Kurulum: Hile güncellemesinde kurulum adımlarındaki APK indirme linki otomatik güncellenir",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

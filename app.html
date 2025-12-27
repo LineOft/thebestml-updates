@@ -2836,7 +2836,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.42';
+    const APP_VERSION = '4.2.43';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -10355,10 +10355,24 @@
         try {
             const game = gamesData[gameId];
             const cheat = gamesData[gameId].cheats[cheatId];
+            const oldApkUrl = cheat.apkUrl || '';
 
             // Değişiklikleri uygula
             if (newVersion) cheat.version = newVersion;
-            if (newApkUrl) cheat.apkUrl = newApkUrl;
+            if (newApkUrl) {
+                cheat.apkUrl = newApkUrl;
+
+                // Kurulum adımlarındaki APK indirme linkini de senkronla
+                if (Array.isArray(cheat.setupSteps)) {
+                    cheat.setupSteps.forEach(step => {
+                        if ((step?.actionType || 'none') === 'download') {
+                            if (!step.downloadUrl || step.downloadUrl === oldApkUrl) {
+                                step.downloadUrl = newApkUrl;
+                            }
+                        }
+                    });
+                }
+            }
             cheat.lastUpdatedAt = new Date().toISOString();
             cheat.lastUpdatedBy = currentUser?.email || 'admin';
 
