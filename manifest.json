@@ -1,6 +1,6 @@
 {
-    "version": "4.2.58",
-    "buildNumber": 308,
+    "version": "4.2.59",
+    "buildNumber": 309,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -17,6 +17,8 @@
         "Düzeltme: Ban riski bilgilendirme butonları (Devam Et / Çıkış Yap) düzeltildi",
         "Yeni: Sadakat puanı eklendi (profilde puan görüntüleme, onaylanan siparişlerden puan kazanma)",
         "Yeni: Sadakat puanı ile indirim (havale siparişinde puan kullanma, reddedilince otomatik iade)",
+        "Yeni (Admin): Sipariş detayında sadakat puanı/indirim/ödenecek tutar bilgisi",
+        "Yeni (Admin): Sadakat puanı kazanım ayarı (oran veya sipariş başına sabit puan)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

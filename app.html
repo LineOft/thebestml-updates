@@ -1361,6 +1361,15 @@
                     </div>
                     <span>→</span>
                 </button>
+
+                <button onclick="openAppSettingsModal('loyalty')" style="background: linear-gradient(135deg, #4CAF50, #2E7D32); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
+                    <span style="font-size: 20px;">🎁</span>
+                    <div style="text-align: left; flex: 1;">
+                        <div style="font-weight: bold;">Sadakat Ayarları</div>
+                        <div style="font-size: 11px; opacity: 0.8;">Sipariş başına puan kazanımı</div>
+                    </div>
+                    <span>→</span>
+                </button>
             </div>
             
             <!-- Son güncelleme bilgisi -->
@@ -2895,7 +2904,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.58';
+    const APP_VERSION = '4.2.59';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -3897,6 +3906,112 @@
 
     // Sadakat puanı
     const LOYALTY_EARN_PERCENT = 5; // %5 (TL bazlı) — basit MVP
+
+    // Sadakat ayarları (admin panelden yönetilebilir)
+    let loyaltyConfigCache = null;
+    let loyaltyConfigLoadedAtMs = 0;
+    const LOYALTY_CONFIG_CACHE_MS = 5 * 60 * 1000;
+
+    function getDefaultLoyaltyConfig() {
+        return {
+            earnMode: 'percent',
+            earnPercent: LOYALTY_EARN_PERCENT,
+            fixedPointsPerOrder: 0
+        };
+    }
+
+    function clampNumber(value, { min, max, fallback } = { min: 0, max: Number.MAX_SAFE_INTEGER, fallback: 0 }) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return fallback;
+        const clamped = Math.min(max, Math.max(min, n));
+        return clamped;
+    }
+
+    function getLoyaltyConfigSync() {
+        if (loyaltyConfigCache && (Date.now() - loyaltyConfigLoadedAtMs) < LOYALTY_CONFIG_CACHE_MS) {
+            return loyaltyConfigCache;
+        }
+        return loyaltyConfigCache || getDefaultLoyaltyConfig();
+    }
+
+    async function refreshLoyaltyConfig(force = false) {
+        try {
+            if (!force && loyaltyConfigCache && (Date.now() - loyaltyConfigLoadedAtMs) < LOYALTY_CONFIG_CACHE_MS) {
+                return loyaltyConfigCache;
+            }
+
+            const doc = await db.collection('settings').doc('loyalty').get();
+            const defaults = getDefaultLoyaltyConfig();
+            const data = doc.exists ? (doc.data() || {}) : {};
+
+            const earnMode = (data.earnMode === 'fixed' || data.earnMode === 'percent') ? data.earnMode : defaults.earnMode;
+            const earnPercent = Math.floor(clampNumber(data.earnPercent, { min: 0, max: 100, fallback: defaults.earnPercent }));
+            const fixedPointsPerOrder = Math.floor(clampNumber(data.fixedPointsPerOrder, { min: 0, max: 1000000, fallback: defaults.fixedPointsPerOrder }));
+
+            loyaltyConfigCache = { earnMode, earnPercent, fixedPointsPerOrder };
+            loyaltyConfigLoadedAtMs = Date.now();
+            return loyaltyConfigCache;
+        } catch (e) {
+            console.log('Sadakat ayarları yüklenemedi:', e);
+            return getLoyaltyConfigSync();
+        }
+    }
+
+    function updateLoyaltyEarnModeUI() {
+        const modeEl = document.getElementById('settingLoyaltyEarnMode');
+        const percentBox = document.getElementById('settingLoyaltyPercentBox');
+        const fixedBox = document.getElementById('settingLoyaltyFixedBox');
+        if (!modeEl || !percentBox || !fixedBox) return;
+        const mode = modeEl.value;
+        percentBox.style.display = mode === 'percent' ? 'block' : 'none';
+        fixedBox.style.display = mode === 'fixed' ? 'block' : 'none';
+    }
+
+    async function loadLoyaltySettingsAdminIntoModal() {
+        try {
+            if (!hasPermission('app_settings')) return;
+            const cfg = await refreshLoyaltyConfig(true);
+
+            const modeEl = document.getElementById('settingLoyaltyEarnMode');
+            const percentEl = document.getElementById('settingLoyaltyEarnPercent');
+            const fixedEl = document.getElementById('settingLoyaltyFixedPoints');
+
+            if (modeEl) modeEl.value = cfg.earnMode || 'percent';
+            if (percentEl) percentEl.value = String(Math.floor(clampNumber(cfg.earnPercent, { min: 0, max: 100, fallback: LOYALTY_EARN_PERCENT })));
+            if (fixedEl) fixedEl.value = String(Math.floor(clampNumber(cfg.fixedPointsPerOrder, { min: 0, max: 1000000, fallback: 0 })));
+
+            updateLoyaltyEarnModeUI();
+        } catch (e) {
+            console.log('Sadakat ayar modal yükleme hatası:', e);
+        }
+    }
+
+    async function saveLoyaltySettingsAdmin() {
+        if (!requirePermission('app_settings', 'sadakat ayarlarını düzenlemek')) return;
+        try {
+            const mode = (document.getElementById('settingLoyaltyEarnMode')?.value || 'percent');
+            const earnMode = (mode === 'fixed' || mode === 'percent') ? mode : 'percent';
+            const earnPercentRaw = document.getElementById('settingLoyaltyEarnPercent')?.value;
+            const fixedRaw = document.getElementById('settingLoyaltyFixedPoints')?.value;
+
+            const earnPercent = Math.floor(clampNumber(earnPercentRaw, { min: 0, max: 100, fallback: LOYALTY_EARN_PERCENT }));
+            const fixedPointsPerOrder = Math.floor(clampNumber(fixedRaw, { min: 0, max: 1000000, fallback: 0 }));
+
+            await db.collection('settings').doc('loyalty').set({
+                earnMode,
+                earnPercent,
+                fixedPointsPerOrder,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedBy: currentUser ? (currentUser.email || null) : null
+            }, { merge: true });
+
+            await refreshLoyaltyConfig(true);
+            showToast('✅ Sadakat ayarları kaydedildi');
+        } catch (e) {
+            console.error('Sadakat ayar kaydetme hatası:', e);
+            showToast('❌ Kaydetme hatası: ' + e.message);
+        }
+    }
 
     function stopPresenceHeartbeat() {
         if (presenceHeartbeatInterval) {
@@ -6136,6 +6251,50 @@
                         </div>
                     </div>
                 `;
+                break;
+
+            case 'loyalty':
+                headerColor = '#4CAF50';
+                headerTitle = '🎁 Sadakat Ayarları';
+                bodyHtml = `
+                    <div style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
+                        <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">🧮 Puan Kazanımı</div>
+                        <div style="font-size: 11px; color: #888; line-height: 1.5; margin-bottom: 12px;">
+                            Bu ayar, admin siparişi onayladığında kullanıcıya eklenecek sadakat puanını belirler.
+                        </div>
+
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Kazanım Modu</label>
+                            <select id="settingLoyaltyEarnMode" class="auth-input" style="margin-bottom: 0;" onchange="updateLoyaltyEarnModeUI()">
+                                <option value="percent">% Oran (tutar bazlı)</option>
+                                <option value="fixed">Sabit Puan (sipariş başına)</option>
+                            </select>
+                        </div>
+
+                        <div id="settingLoyaltyPercentBox" style="margin-bottom: 10px;">
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Oran (%)</label>
+                            <input id="settingLoyaltyEarnPercent" type="number" min="0" max="100" step="1" class="auth-input" placeholder="Örn: 5" style="margin-bottom: 0;" />
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Örn: %5 → 500₺ siparişte 25 puan.</div>
+                        </div>
+
+                        <div id="settingLoyaltyFixedBox" style="margin-bottom: 10px; display: none;">
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Sabit Puan</label>
+                            <input id="settingLoyaltyFixedPoints" type="number" min="0" step="1" class="auth-input" placeholder="Örn: 10" style="margin-bottom: 0;" />
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Her onaylanan siparişe aynı puan eklenir.</div>
+                        </div>
+                    </div>
+
+                    <button onclick="saveLoyaltySettingsAdmin()" class="btn btn-primary" style="width: 100%;">💾 Kaydet</button>
+
+                    <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; font-size: 11px; color: #888; line-height: 1.5;">
+                        Not: Puan kullanımı şu an 1 puan = 1₺ indirim (havale).
+                    </div>
+                `;
+
+                // Modal açıldıktan sonra Firestore'dan güncel ayarı yükle
+                setTimeout(() => {
+                    try { loadLoyaltySettingsAdminIntoModal(); } catch (e) {}
+                }, 0);
                 break;
         }
         
@@ -13528,11 +13687,23 @@
             let html = '';
             orderList.forEach(o => {
                 const date = o.createdAt.toDate().toLocaleString('tr-TR');
+                const usedPoints = Number.isFinite(Number(o.loyaltyUsedPoints)) ? Number(o.loyaltyUsedPoints) : 0;
+                const discountAmount = Number.isFinite(Number(o.loyaltyDiscountAmount)) ? Number(o.loyaltyDiscountAmount) : 0;
+                const payableAmount = Number.isFinite(Number(o.payableAmount)) ? Number(o.payableAmount) : null;
+                const baseAmount = Number.isFinite(Number(o.baseAmount)) ? Number(o.baseAmount) : null;
+                const showLoyalty = (usedPoints > 0) || (discountAmount > 0) || (payableAmount !== null) || (baseAmount !== null);
+                const discountDisplay = discountAmount > 0 ? discountAmount : usedPoints;
+                const loyaltyLine = showLoyalty ? `
+                            <div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">
+                                🎁 ${usedPoints > 0 ? `Puan: ${usedPoints}` : 'Puan'}${discountDisplay > 0 ? ` • İndirim: -${discountDisplay}₺` : ''}${payableAmount !== null ? ` • Ödenecek: ${payableAmount}₺` : ''}
+                            </div>
+                ` : '';
                 html += `<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; cursor: pointer;" onclick="showOrderDetail('${o.id}')">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-weight: bold; color: #4CAF50;">${o.email}</div>
                             <div style="font-size: 13px; margin-top: 5px;">📦 ${o.packageName} - <span style="color: #FFD700;">${o.price}</span></div>
+                            ${loyaltyLine}
                             <div style="font-size: 11px; color: #666; margin-top: 5px;">📅 ${date}</div>
                         </div>
                         <div style="font-size: 24px;">📋</div>
@@ -13562,6 +13733,13 @@
         currentOrderData.resolvedEmail = userEmail; // Sonra kullanmak için sakla
         
         const date = currentOrderData.createdAt.toDate().toLocaleString('tr-TR');
+
+        const usedPoints = Number.isFinite(Number(currentOrderData.loyaltyUsedPoints)) ? Number(currentOrderData.loyaltyUsedPoints) : 0;
+        const discountAmount = Number.isFinite(Number(currentOrderData.loyaltyDiscountAmount)) ? Number(currentOrderData.loyaltyDiscountAmount) : 0;
+        const baseAmount = Number.isFinite(Number(currentOrderData.baseAmount)) ? Number(currentOrderData.baseAmount) : null;
+        const payableAmount = Number.isFinite(Number(currentOrderData.payableAmount)) ? Number(currentOrderData.payableAmount) : null;
+        const showLoyaltyBox = (usedPoints > 0) || (discountAmount > 0) || (payableAmount !== null) || (baseAmount !== null);
+        const discountDisplay = discountAmount > 0 ? discountAmount : usedPoints;
         
         // Süre uzatma siparişi mi kontrol et
         const isExtension = currentOrderData.type === 'extension';
@@ -13642,6 +13820,38 @@
         }
         
         html += `<div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">📅 ${date}</div>`;
+
+        if (showLoyaltyBox) {
+            html += `
+                <div style="background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); border-radius: 12px; padding: 14px; margin-bottom: 15px;">
+                    <div style="font-size: 13px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">🎁 Sadakat</div>
+                    ${baseAmount !== null ? `
+                        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
+                            <span style="color: #aaa;">Tutar (baz)</span>
+                            <span style="color: #fff; font-weight: 600;">${baseAmount}₺</span>
+                        </div>
+                    ` : ''}
+                    ${usedPoints > 0 ? `
+                        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
+                            <span style="color: #aaa;">Kullanılan puan</span>
+                            <span style="color: #FFD700; font-weight: 600;">${usedPoints}</span>
+                        </div>
+                    ` : ''}
+                    ${discountDisplay > 0 ? `
+                        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
+                            <span style="color: #aaa;">İndirim</span>
+                            <span style="color: #4CAF50; font-weight: 600;">-${discountDisplay}₺</span>
+                        </div>
+                    ` : ''}
+                    ${payableAmount !== null ? `
+                        <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px;">
+                            <span style="color: #aaa;">Ödenecek</span>
+                            <span style="color: #4CAF50; font-weight: 700;">${payableAmount}₺</span>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
         
         if (currentOrderData.dekont) {
             html += `
@@ -13698,9 +13908,17 @@
     }
 
     function computeLoyaltyEarnedPoints(orderData) {
+        const cfg = getLoyaltyConfigSync();
         const amount = parsePriceToAmount(orderData && orderData.price);
+
+        if (cfg && cfg.earnMode === 'fixed') {
+            const fixedPts = Math.floor(clampNumber(cfg.fixedPointsPerOrder, { min: 0, max: 1000000, fallback: 0 }));
+            return Math.max(0, fixedPts);
+        }
+
         if (!amount) return 0;
-        const pts = Math.floor(amount * (LOYALTY_EARN_PERCENT / 100));
+        const percent = clampNumber(cfg && cfg.earnPercent, { min: 0, max: 100, fallback: LOYALTY_EARN_PERCENT });
+        const pts = Math.floor(amount * (percent / 100));
         return Math.max(0, pts);
     }
     
@@ -15030,6 +15248,11 @@
         // Uygulama ayarları bilgisini yükle
         if (hasPermission('app_settings')) {
             loadAppSettings();
+        }
+
+        // Sadakat ayarlarını arkaplanda yükle (sipariş onayında kullanılıyor)
+        if (hasPermission('orders') || hasPermission('app_settings')) {
+            try { refreshLoyaltyConfig(false); } catch (e) {}
         }
         
         // Kurucu değilse panel başlığını değiştir ve yetkileri göster
