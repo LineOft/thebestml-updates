@@ -1,10 +1,10 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.21/GameStore_v4.2.21_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.22/GameStore_v4.2.22_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "🔋 v4.2.21 – Arka plan izinleri iyileştirildi!",
+    "announcement":  "🔔 v4.2.22 – FCM bildirimler aktif!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.21",
+    "currentVersion":  "4.2.22",
     "forceUpdate":  false,
-    "updateMessage":  "Batarya ve Xiaomi özel izinleri açıklamalı dialog ile isteniyor."
+    "updateMessage":  "FCM token sistemi ile push bildirimler çalışıyor."
 }

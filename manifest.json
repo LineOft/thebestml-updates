@@ -1,14 +1,14 @@
 ﻿{
     "fileSize":  6.4,
-    "buildNumber":  271,
+    "buildNumber":  272,
     "minBuildNumber":  150,
     "required":  true,
     "releaseDate":  "2025-12-27",
-    "version":  "4.2.21",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.21/GameStore_v4.2.21_debug.apk",
+    "version":  "4.2.22",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.22/GameStore_v4.2.22_debug.apk",
     "changelog":  [
-                      "Batarya izni dialog ile aciklamali isteniyor",
-                      "Xiaomi ozel izinler eklendi (autostart)",
-                      "Arka plan izinleri iyilestirildi"
+                      "FCM token sistemi aktif",
+                      "Push bildirimler calisir durumda",
+                      "Arka plan izinleri kaldirildi"
                   ]
 }
