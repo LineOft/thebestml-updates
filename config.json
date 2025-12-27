@@ -1,11 +1,11 @@
 ﻿{
     "key":  "THEBEST2024",
-    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.26/GameStore_v4.2.26_debug.apk",
+    "apkUrl":  "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.27/GameStore_v4.2.27_debug.apk",
     "playStoreUrl":  "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement":  "📢 v4.2.26 – UTF-8 fix, butonlar ve oyunlar calisıyor!",
+    "announcement":  "📢 v4.2.27 – Kritik hata duzeltildi!",
     "maintenanceMode":  false,
-    "currentVersion":  "4.2.26",
+    "currentVersion":  "4.2.27",
     "forceUpdate":  true,
-    "updateMessage":  "Kritik hata duzeltildi. Lutfen guncelleyin."
+    "updateMessage":  "Kritik syntax hatasi duzeltildi. Lutfen guncelleyin."
 }
 }
