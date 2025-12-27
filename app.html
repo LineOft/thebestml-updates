@@ -2930,7 +2930,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.69';
+    const APP_VERSION = '4.2.70';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14248,7 +14248,7 @@
                     };
                 }
                 const amount = computeOrderApprovedAmount(o);
-                const adminShare = Math.round((amount * 0.10) * 100) / 100;
+                const adminShare = Math.round((amount * 0.15) * 100) / 100;
                 groups[key].count += 1;
                 groups[key].totalAmount += amount;
                 groups[key].adminShareTotal += adminShare;
@@ -14301,7 +14301,7 @@
                             }).join('')}
 
                             <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(76,175,80,0.25); border-radius: 10px; padding: 10px; margin-top: 10px;">
-                                <div style="font-weight: 800; color: #4CAF50;">👤 Admin Payı (%10): ${adminShareLabel}</div>
+                                <div style="font-weight: 800; color: #4CAF50;">👤 Admin Payı (%15): ${adminShareLabel}</div>
                             </div>
                         </div>
                     </details>
