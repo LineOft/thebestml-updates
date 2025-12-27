@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.40",
+    "currentVersion": "4.2.41",
     "forceUpdate": false,
     "key": "THEBEST2024",
-    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.40/GameStore_v4.2.40_debug.apk",
+    "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.40 – Kurucu bildirimleri!",
+    "announcement": "📢 v4.2.41 – Bildirim temizleme düzeltmesi!",
     "maintenanceMode": false,
-    "updateMessage": "Yeni sipariş ve yeni destek mesajı geldiğinde admin + kurucu hesaplarına FCM + uygulama içi bildirim gönderilir."
+    "updateMessage": "Bildirimler: 'Tüm bildirimleri temizle' yaptıktan sonra çıkış-girişte bildirimlerin geri gelmesi sorunu düzeltildi (admin + kurucu + kullanıcı)."
 }
