@@ -1,6 +1,6 @@
 {
-    "version": "4.2.44",
-    "buildNumber": 294,
+    "version": "4.2.45",
+    "buildNumber": 295,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -10,6 +10,7 @@
         "Admin panel: Oyun/Hile Yönetimi sayfasına 'Hile Güncelleme' bölümü eklendi (sürüm / apkUrl)",
         "Bildirimler: hile güncellemesi sonrası tüm kullanıcılara hem uygulama içi (Firestore) hem de FCM topic bildirimi gönderilir",
         "Kurulum: Hile güncellemesinde kurulum adımlarındaki APK indirme linki (downloadUrl) yeni apkUrl ile her zaman güncellenir",
+        "Kurulum (IMGUI modal): 'IMGUI APK İNDİR' butonu, açık olan hilenin apkUrl'ini kullanır",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }

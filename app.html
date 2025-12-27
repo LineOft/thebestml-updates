@@ -2836,7 +2836,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.44';
+    const APP_VERSION = '4.2.45';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -6682,6 +6682,12 @@
             renderDynamicSetupModal(setupModals[modalId]);
         } else if (modalId === 'imguiModal') {
             // Geriye uyumluluk - eski IMGUI modal
+            try {
+                const latestCheat = gamesData?.[currentDynamicGame?.id]?.cheats?.[currentDynamicCheat?.id] || null;
+                window.imguiApkUrlOverride = latestCheat?.apkUrl || currentDynamicCheat?.apkUrl || null;
+            } catch (e) {
+                window.imguiApkUrlOverride = null;
+            }
             openModal('imguiModal');
         } else {
             showToast('❌ Kurulum rehberi bulunamadı');
@@ -14523,7 +14529,10 @@
     // APK İndir
     function downloadAPK() {
         showToast('📥 İndirme başlatılıyor...');
-        window.open(appConfig.apkUrl, '_blank');
+
+        const overrideUrl = window.imguiApkUrlOverride;
+        const url = overrideUrl || appConfig.apkUrl;
+        window.open(url, '_blank');
     }
     
     // Play Store
