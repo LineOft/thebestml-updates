@@ -7240,6 +7240,85 @@
     let currentAdminChatId = null;
     let adminChatListener = null;
 
+    // Destek: durum (açık/kapalı) + görüldü
+    let supportPresenceInterval = null;
+    let lastUserSupportSeenUpdateAt = 0;
+    let lastAdminSupportSeenUpdateAt = 0;
+    let userChatLastAdminSeenAtMs = 0;
+    let userChatLastUserSeenAtMs = 0;
+    let currentAdminChatLastUserSeenAtMs = 0;
+    let currentAdminChatLastAdminSeenAtMs = 0;
+
+    function getFirestoreTimeMs(value) {
+        try {
+            if (!value) return 0;
+            if (value.toDate && typeof value.toDate === 'function') return value.toDate().getTime();
+            if (typeof value === 'string' || typeof value === 'number') {
+                const t = new Date(value).getTime();
+                return isNaN(t) ? 0 : t;
+            }
+            if (typeof value === 'object' && value.seconds) {
+                return (value.seconds * 1000) + Math.round((value.nanoseconds || 0) / 1e6);
+            }
+        } catch (e) {}
+        return 0;
+    }
+
+    async function setUserSupportPresence(isOpen) {
+        try {
+            if (!currentUser || !db) return;
+            const payload = {
+                userSupportOpen: !!isOpen,
+                userSupportLastActiveAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            if (isOpen) payload.userSupportOpenAt = firebase.firestore.FieldValue.serverTimestamp();
+            else payload.userSupportClosedAt = firebase.firestore.FieldValue.serverTimestamp();
+            await db.collection('chats').doc(currentUser.uid).set(payload, { merge: true });
+        } catch (e) {}
+    }
+
+    function stopSupportPresenceInterval() {
+        if (supportPresenceInterval) {
+            clearInterval(supportPresenceInterval);
+            supportPresenceInterval = null;
+        }
+    }
+
+    function startSupportPresenceInterval() {
+        stopSupportPresenceInterval();
+        supportPresenceInterval = setInterval(() => {
+            setUserSupportPresence(true);
+        }, 20000);
+    }
+
+    async function markUserSupportSeen(force = false) {
+        try {
+            if (!currentUser || !db) return;
+            const now = Date.now();
+            if (!force && (now - lastUserSupportSeenUpdateAt) < 4000) return;
+            lastUserSupportSeenUpdateAt = now;
+
+            await db.collection('chats').doc(currentUser.uid).set({
+                unreadUser: 0,
+                lastUserSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (e) {}
+    }
+
+    async function markAdminSupportSeen(chatId, force = false) {
+        try {
+            if (!chatId || !db) return;
+            const now = Date.now();
+            if (!force && (now - lastAdminSupportSeenUpdateAt) < 4000) return;
+            lastAdminSupportSeenUpdateAt = now;
+
+            await db.collection('chats').doc(chatId).set({
+                unreadAdmin: 0,
+                lastAdminSeenAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (e) {}
+    }
+
     function canCurrentAdminSeeChat(chat) {
         if (isOwner()) return true;
         if (!currentUser) return false;
@@ -7310,6 +7389,10 @@
                     const newMessages = JSON.stringify(userChatMessages);
                     
                     updateChatBadge(data.unreadUser || 0);
+
+                    // Görüldü timestamps
+                    userChatLastAdminSeenAtMs = getFirestoreTimeMs(data.lastAdminSeenAt);
+                    userChatLastUserSeenAtMs = getFirestoreTimeMs(data.lastUserSeenAt);
                     
                     console.log('💬 Mesaj sayısı:', oldCount, '->', userChatMessages.length);
                     console.log('💬 Değişiklik var mı:', oldMessages !== newMessages);
@@ -7324,6 +7407,13 @@
                         console.log('💬 Modal açık, mesajlar yenileniyor...');
                         renderUserChatMessages();
                         scrollChatToBottom();
+
+                        // Modal açıkken: gelen admin mesajlarını görüldü olarak işaretle
+                        const lastMsg = userChatMessages[userChatMessages.length - 1];
+                        if ((data.unreadUser || 0) > 0 || (lastMsg && lastMsg.sender === 'admin')) {
+                            markUserSupportSeen();
+                            setUserSupportPresence(true);
+                        }
                     }
                     
                     // Sidebar badge'ı de güncelle
@@ -7398,15 +7488,17 @@
         
         // Modalı aç
         openModal('userChatModal');
+
+        // Destek açık: presence + heartbeat
+        setUserSupportPresence(true);
+        startSupportPresenceInterval();
         
         // Mesajları Firestore'dan taze olarak çek
         await refreshUserChatMessages();
         
-        // Okunmamış mesajları sıfırla
+        // Okunmamış mesajları sıfırla + görüldü
         try {
-            await db.collection('chats').doc(currentUser.uid).update({
-                unreadUser: 0
-            });
+            await markUserSupportSeen(true);
             updateChatBadge(0);
             updateSidebarBadges();
         } catch(e) {}
@@ -7436,9 +7528,13 @@
         try {
             const chatDoc = await db.collection('chats').doc(currentUser.uid).get();
             if (chatDoc.exists) {
-                const newMessages = chatDoc.data().messages || [];
+                const chatData = chatDoc.data() || {};
+                const newMessages = chatData.messages || [];
                 const hasNewMessages = newMessages.length !== userChatMessages.length;
                 userChatMessages = newMessages;
+
+                userChatLastAdminSeenAtMs = getFirestoreTimeMs(chatData.lastAdminSeenAt);
+                userChatLastUserSeenAtMs = getFirestoreTimeMs(chatData.lastUserSeenAt);
                 
                 if (!silent) {
                     console.log('💬 Modal açıldı, mesajlar yüklendi:', userChatMessages.length);
@@ -7622,8 +7718,14 @@
         }
         
         const currentUserPhoto = getCurrentUserSupportAvatarUrl();
+        const lastUserMsgIndex = (() => {
+            for (let i = userChatMessages.length - 1; i >= 0; i--) {
+                if (userChatMessages[i] && userChatMessages[i].sender === 'user') return i;
+            }
+            return -1;
+        })();
         let html = '';
-        userChatMessages.forEach(msg => {
+        userChatMessages.forEach((msg, idx) => {
             const isUser = msg.sender === 'user';
             const { date, time } = formatChatDate(msg.createdAt);
 
@@ -7652,6 +7754,10 @@
                 ? ''
                 : `<div style="display:flex; align-items:center; gap:6px; font-size: 11px; color: ${roleColor}; margin-bottom: 6px; font-weight: bold;">${roleIcon} ${role}</div>`;
 
+            const createdMs = getFirestoreTimeMs(msg.createdAt);
+            const isSeen = isUser && idx === lastUserMsgIndex && userChatLastAdminSeenAtMs > 0 && createdMs > 0 && userChatLastAdminSeenAtMs >= createdMs;
+            const seenSuffix = isSeen ? ' • Görüldü' : '';
+
             html += `
                 <div style="display: flex; justify-content: ${isUser ? 'flex-end' : 'flex-start'}; margin-bottom: 12px;">
                     <div style="display:flex; flex-direction: ${isUser ? 'row-reverse' : 'row'}; align-items: flex-end; gap: 10px; width: 100%;">
@@ -7662,7 +7768,7 @@
                                 ${msg.image ? `<img src="${msg.image}" style="max-width: 100%; border-radius: 10px; margin-bottom: 8px; cursor: pointer;" onclick="openImageFullscreen('${msg.image}')">` : ''}
                                 ${msg.message ? `<div style="color: #fff; font-size: 14px; line-height: 1.55; word-break: break-word;">${escapeHtml(msg.message)}</div>` : ''}
                             </div>
-                            <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 6px; text-align: ${isUser ? 'right' : 'left'};">${date} ${time}</div>
+                            <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 6px; text-align: ${isUser ? 'right' : 'left'};">${date} ${time}${isUser ? seenSuffix : ''}</div>
                         </div>
                     </div>
                 </div>
@@ -7925,14 +8031,15 @@
             // Header güncelle
             document.getElementById('adminChatTitle').textContent = '💬 ' + chat.userEmail;
             document.getElementById('adminChatUserInfo').textContent = 'Kullanıcı ID: ' + chatId;
+
+            currentAdminChatLastUserSeenAtMs = getFirestoreTimeMs(chat.lastUserSeenAt);
+            currentAdminChatLastAdminSeenAtMs = getFirestoreTimeMs(chat.lastAdminSeenAt);
             
             // Mesajları render et
             renderAdminChatMessages(chat.messages || []);
             
-            // Okunmamış mesajları sıfırla
-            await db.collection('chats').doc(chatId).update({
-                unreadAdmin: 0
-            });
+            // Okunmamış mesajları sıfırla + görüldü
+            await markAdminSupportSeen(chatId, true);
             
             // Real-time listener başlat
             if (adminChatListener) adminChatListener();
@@ -7949,7 +8056,17 @@
                             loadAdminChats();
                             return;
                         }
+
+                        currentAdminChatLastUserSeenAtMs = getFirestoreTimeMs(data.lastUserSeenAt);
+                        currentAdminChatLastAdminSeenAtMs = getFirestoreTimeMs(data.lastAdminSeenAt);
                         renderAdminChatMessages(data.messages || []);
+
+                        // Admin sohbet ekranı açıkken: yeni kullanıcı mesajlarını görüldü olarak işaretle
+                        const msgs = data.messages || [];
+                        const lastMsg = msgs[msgs.length - 1];
+                        if (lastMsg && lastMsg.sender === 'user') {
+                            markAdminSupportSeen(chatId);
+                        }
                     }
                 });
             
@@ -7981,7 +8098,14 @@
         }
         
         let html = '';
-        messages.forEach(msg => {
+        const lastAdminMsgIndex = (() => {
+            for (let i = messages.length - 1; i >= 0; i--) {
+                if (messages[i] && messages[i].sender === 'admin') return i;
+            }
+            return -1;
+        })();
+
+        messages.forEach((msg, idx) => {
             const isAdmin = msg.sender === 'admin';
             const { date, time } = formatChatDate(msg.createdAt);
 
@@ -8010,6 +8134,10 @@
                 ? `<div style="display:flex; align-items:center; gap:6px; font-size: 11px; color: ${roleColor}; margin-bottom: 6px; font-weight: bold;">${roleIcon} ${role}</div>`
                 : `<div style="font-size: 11px; color: #00BCD4; margin-bottom: 6px; font-weight: bold;">👤 Kullanıcı</div>`;
 
+            const createdMs = getFirestoreTimeMs(msg.createdAt);
+            const isSeen = isAdmin && idx === lastAdminMsgIndex && currentAdminChatLastUserSeenAtMs > 0 && createdMs > 0 && currentAdminChatLastUserSeenAtMs >= createdMs;
+            const seenSuffix = isSeen ? ' • Görüldü' : '';
+
             html += `
                 <div style="display: flex; justify-content: ${isAdmin ? 'flex-end' : 'flex-start'}; margin-bottom: 12px;">
                     <div style="display:flex; flex-direction: ${isAdmin ? 'row-reverse' : 'row'}; align-items: flex-end; gap: 10px; width: 100%;">
@@ -8020,7 +8148,7 @@
                                 ${msg.image ? `<img src="${msg.image}" style="max-width: 100%; border-radius: 10px; margin-bottom: 8px; cursor: pointer;" onclick="openImageFullscreen('${msg.image}')">` : ''}
                                 ${msg.message ? `<div style="color: #fff; font-size: 14px; line-height: 1.55; word-break: break-word;">${escapeHtml(msg.message)}</div>` : ''}
                             </div>
-                            <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 6px; text-align: ${isAdmin ? 'right' : 'left'};">${date} ${time}</div>
+                            <div style="font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 6px; text-align: ${isAdmin ? 'right' : 'left'};">${date} ${time}${isAdmin ? seenSuffix : ''}</div>
                         </div>
                     </div>
                 </div>
@@ -13723,6 +13851,22 @@
             const normalizedEmail = (userEmail || '').toLowerCase().trim();
             if (!normalizedEmail) return;
 
+            // Kullanıcı destek ekranındaysa bildirimleri durdur
+            try {
+                if (userId) {
+                    const chatSnap = await db.collection('chats').doc(userId).get();
+                    if (chatSnap.exists) {
+                        const cd = chatSnap.data() || {};
+                        const isOpen = !!cd.userSupportOpen;
+                        const lastActiveMs = getFirestoreTimeMs(cd.userSupportLastActiveAt || cd.userSupportOpenAt);
+                        if (isOpen && lastActiveMs > 0 && (Date.now() - lastActiveMs) < 45000) {
+                            console.log('🔕 Kullanıcı destek ekranında: bildirim atlandı');
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {}
+
             const role = adminInfo?.role || 'Destek';
             const name = adminInfo?.name || 'Destek Ekibi';
 
@@ -14878,6 +15022,8 @@
         // Chat modal kapatılıyorsa interval'ı durdur
         if (modalId === 'userChatModal') {
             stopChatRefreshInterval();
+            stopSupportPresenceInterval();
+            setUserSupportPresence(false);
         }
     }
     
