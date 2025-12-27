@@ -2837,7 +2837,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.52';
+    const APP_VERSION = '4.2.53';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4413,6 +4413,13 @@
                 // Xiaomi MIUI uyumlu - Local Notification ile göster
                 PushNotifications.addListener('pushNotificationReceived', async (notification) => {
                     try {
+                        // Destek yanıtı: uygulama açıksa Firestore bildirimi zaten showFullNotification tetikler.
+                        // Bu yüzden aynı anda gelen FCM'i burada tekrar LocalNotification'a çevirmeyip tek seferlik gösterim sağlarız.
+                        const nType = (notification?.data?.type || notification?.data?.category || '').toString();
+                        if (nType === 'support_reply' && currentUser && listenerStartTime) {
+                            console.log('🔔 support_reply: foreground duplicate önlendi (FCM local atlandı)');
+                            return;
+                        }
                         console.log('Push bildirim alındı:', notification.title);
                         // Local notification ile göster
                         const { LocalNotifications } = Capacitor.Plugins;

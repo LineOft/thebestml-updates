@@ -1,6 +1,6 @@
 {
-    "version": "4.2.52",
-    "buildNumber": 302,
+    "version": "4.2.53",
+    "buildNumber": 303,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
@@ -10,7 +10,7 @@
         "Destek: Mesaj görünümü geliştirildi (daha modern sohbet baloncukları)",
         "Destek: Admin mesajlarında animasyonlu uygulama logosu (avatar) gösterilir",
         "Destek: Kullanıcı mesajlarında profil fotoğrafı avatar olarak gösterilir",
-        "Destek: Admin yanıtlarında kullanıcıya uygulama içi + FCM bildirim (tek sefer)",
+        "Destek: Admin yanıtlarında kullanıcıya uygulama içi + FCM bildirim (tek sefer, çift bildirim engelli)",
         "Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir"
     ]
 }
