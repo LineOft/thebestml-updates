@@ -2922,7 +2922,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.66';
+    const APP_VERSION = '4.2.67';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4108,8 +4108,10 @@
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             try { markCurrentUserOffline(); } catch (e) {}
+            try { stopAdminUsageTracking(); } catch (e) {}
         } else {
             try { touchPresence({ isLogin: false }); } catch (e) {}
+            try { startAdminUsageTracking(); } catch (e) {}
         }
     });
     
@@ -4141,6 +4143,13 @@
                     console.log('Local notifications hatası (admin, atlanıyor):', e.message);
                 }
             }
+
+            // Admin/Kurucu: kullanım süresi takibi
+            if (isAdmin() || isOwner()) {
+                startAdminUsageTracking();
+            } else {
+                stopAdminUsageTracking();
+            }
             
             // Arka plan bildirimleri için email'i native'e kaydet
             saveUserEmailForBackgroundNotifications(user.email);
@@ -4156,6 +4165,8 @@
         } else {
             updateAuthUI();
             stopOrderListener();
+
+            stopAdminUsageTracking();
 
             currentUserDocData = null;
             banRiskAcceptedCached = false;
@@ -7867,6 +7878,9 @@
             });
 
             showToast(didClaim ? '✅ Sohbet devralındı' : '⚠️ Sohbet zaten devralınmış');
+            if (didClaim) {
+                try { await incrementAdminStatField('claimedChatsCount', 1); } catch (e) {}
+            }
             loadAdminChats();
         } catch (e) {
             showToast('❌ Devralma hatası: ' + (e?.message || e));
@@ -10280,6 +10294,130 @@
         const e = normalizeEmail(email);
         if (!e) return false;
         return OWNER_EMAILS.map(x => normalizeEmail(x)).includes(e);
+    }
+
+    // ==================== ADMIN İSTATİSTİKLERİ ====================
+    let adminUsageInterval = null;
+    let adminUsageLastBeatMs = 0;
+
+    function formatDurationMs(ms) {
+        const n = Number(ms);
+        if (!Number.isFinite(n) || n <= 0) return '0 dk';
+        const totalMinutes = Math.floor(n / 60000);
+        const days = Math.floor(totalMinutes / (24 * 60));
+        const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+        const minutes = totalMinutes % 60;
+
+        const parts = [];
+        if (days > 0) parts.push(days + ' gün');
+        if (hours > 0) parts.push(hours + ' saat');
+        parts.push(minutes + ' dk');
+        return parts.join(' ');
+    }
+
+    async function incrementAdminStatField(field, amount) {
+        try {
+            if (!db || !currentUser || !currentUser.email) return;
+            if (!(isAdmin() || isOwner())) return;
+            const email = normalizeEmail(currentUser.email);
+            if (!email) return;
+            const ref = db.collection('adminStats').doc(email);
+            const payload = {
+                email: email,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            payload[field] = firebase.firestore.FieldValue.increment(Number(amount) || 0);
+            await ref.set(payload, { merge: true });
+        } catch (e) {
+            console.log('Admin stat increment hatası:', e?.message || e);
+        }
+    }
+
+    async function adminUsageHeartbeat({ initial = false } = {}) {
+        try {
+            if (!db || !currentUser || !currentUser.email) return;
+            if (!(isAdmin() || isOwner())) return;
+            if (document.visibilityState === 'hidden') return;
+
+            const now = Date.now();
+            if (!adminUsageLastBeatMs) adminUsageLastBeatMs = now;
+
+            let deltaMs = initial ? 0 : (now - adminUsageLastBeatMs);
+            deltaMs = Math.max(0, Math.min(deltaMs, 5 * 60 * 1000));
+            adminUsageLastBeatMs = now;
+
+            const email = normalizeEmail(currentUser.email);
+            if (!email) return;
+
+            if (deltaMs <= 0) {
+                await db.collection('adminStats').doc(email).set({
+                    email,
+                    lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                return;
+            }
+
+            await db.collection('adminStats').doc(email).set({
+                email,
+                totalAppMs: firebase.firestore.FieldValue.increment(deltaMs),
+                lastSeenAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        } catch (e) {
+            // sessiz
+        }
+    }
+
+    function startAdminUsageTracking() {
+        try {
+            if (!currentUser) return;
+            if (!(isAdmin() || isOwner())) return;
+            if (adminUsageInterval) return;
+
+            adminUsageLastBeatMs = Date.now();
+            adminUsageHeartbeat({ initial: true });
+            adminUsageInterval = setInterval(() => {
+                adminUsageHeartbeat({ initial: false });
+            }, 30000);
+        } catch (e) {}
+    }
+
+    function stopAdminUsageTracking() {
+        try {
+            if (adminUsageInterval) {
+                clearInterval(adminUsageInterval);
+                adminUsageInterval = null;
+            }
+            adminUsageLastBeatMs = 0;
+        } catch (e) {}
+    }
+
+    async function fetchAdminMetricsForEmail(email) {
+        const safeEmail = normalizeEmail(email);
+        const metrics = { totalAppMs: 0, approvedOrders: 0, claimedChats: 0 };
+        if (!db || !safeEmail) return metrics;
+
+        try {
+            const statsDoc = await db.collection('adminStats').doc(safeEmail).get();
+            if (statsDoc.exists) {
+                const d = statsDoc.data() || {};
+                const ms = Number(d.totalAppMs);
+                if (Number.isFinite(ms) && ms > 0) metrics.totalAppMs = ms;
+            }
+        } catch (e) {}
+
+        try {
+            const snap = await db.collection('orders').where('approvedBy', '==', safeEmail).get();
+            metrics.approvedOrders = snap.size || 0;
+        } catch (e) {}
+
+        try {
+            const snap = await db.collection('chats').where('claimedByEmail', '==', safeEmail).get();
+            metrics.claimedChats = snap.size || 0;
+        } catch (e) {}
+
+        return metrics;
     }
     
     // Yetki tanımları
@@ -14379,7 +14517,7 @@
                 const orderUpdate = {
                     status: 'approved',
                     approvedAt: new Date(),
-                    approvedBy: currentUser.email
+                    approvedBy: normalizeEmail(currentUser.email)
                 };
                 if (!alreadyGranted) {
                     orderUpdate.loyaltyPointsGranted = earnedPoints;
@@ -14387,6 +14525,8 @@
                 }
                 tx.update(orderRef, orderUpdate);
             });
+
+            try { await incrementAdminStatField('approvedOrdersCount', 1); } catch (e) {}
             
             // Kullanıcıya bildirim gönder (Firestore)
             const normalizedEmail = userEmail.toLowerCase().trim();
@@ -15603,7 +15743,7 @@
     }
     
     // Admin listesi UI'ını yükle
-    function loadAdminListUI() {
+    async function loadAdminListUI() {
         const container = document.getElementById('adminListContainer');
         if (!container) return;
         
@@ -15628,6 +15768,16 @@
             `;
             return;
         }
+
+        // Admin metriklerini topla (paralel)
+        const metricsByEmail = {};
+        try {
+            await Promise.all(adminList.map(async (a) => {
+                const e = normalizeEmail(a?.email);
+                if (!e) return;
+                metricsByEmail[e] = await fetchAdminMetricsForEmail(e);
+            }));
+        } catch (e) {}
         
         let html = '';
         adminList.forEach((admin, index) => {
@@ -15635,6 +15785,12 @@
             const permCount = permissions.length;
             const permIcons = permissions.slice(0, 4).map(p => PERMISSIONS[p]?.icon || '❓').join('');
             const moreCount = permCount > 4 ? ` +${permCount - 4}` : '';
+
+            const emailKey = normalizeEmail(admin.email);
+            const m = metricsByEmail[emailKey] || { totalAppMs: 0, approvedOrders: 0, claimedChats: 0 };
+            const durationLabel = formatDurationMs(m.totalAppMs || 0);
+            const approvedLabel = Number.isFinite(Number(m.approvedOrders)) ? Number(m.approvedOrders) : 0;
+            const claimedLabel = Number.isFinite(Number(m.claimedChats)) ? Number(m.claimedChats) : 0;
             
             html += `
                 <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; margin-bottom: 10px; overflow: hidden;">
@@ -15645,6 +15801,9 @@
                                 <div style="font-size: 14px; font-weight: bold;">${admin.email}</div>
                                 <div style="font-size: 11px; color: #FF9800; margin-top: 2px;">
                                     ${permCount} Yetki: ${permIcons}${moreCount}
+                                </div>
+                                <div style="font-size: 11px; color: #aaa; margin-top: 6px; line-height: 1.4;">
+                                    ⏱️ Süre: <b style="color:#fff;">${durationLabel}</b> • ✅ Onay: <b style="color:#fff;">${approvedLabel}</b> • 💬 Devralma: <b style="color:#fff;">${claimedLabel}</b>
                                 </div>
                             </div>
                         </div>

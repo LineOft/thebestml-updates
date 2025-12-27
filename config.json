@@ -1,10 +1,10 @@
 {
-    "currentVersion": "4.2.66",
+    "currentVersion": "4.2.67",
     "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.66 – Sürüm gösterimi düzeltme",
+    "announcement": "📢 v4.2.67 – Admin istatistikleri",
     "maintenanceMode": false,
-    "updateMessage": "Düzeltme: Uygulama içinde görünen sürüm bilgisi güncellendi. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Yeni: Admin Yönetimi ekranında admin istatistikleri eklendi (toplam kullanım süresi, onaylanan sipariş sayısı, devralınan destek sohbeti sayısı). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }

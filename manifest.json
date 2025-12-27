@@ -1,12 +1,13 @@
 {
-    "version": "4.2.66",
-    "buildNumber": 316,
+    "version": "4.2.67",
+    "buildNumber": 317,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-27",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Yeni (Admin): Admin Yönetimi ekranında admin istatistikleri (toplam süre, onaylanan sipariş, devralınan destek)",
         "Destek: Mesaj görünümü geliştirildi (daha modern sohbet baloncukları)",
         "Destek: Admin mesajlarında animasyonlu uygulama logosu (avatar) gösterilir",
         "Destek: Kullanıcı mesajlarında profil fotoğrafı avatar olarak gösterilir",
