@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.88';
+    const APP_VERSION = '4.2.89';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8630,6 +8630,10 @@
     let supportUserPollInterval = null;
     let supportAdminPollInterval = null;
 
+    // Worker mode: long-poll cancellation tokens
+    let supportUserPollToken = 0;
+    let supportAdminPollToken = 0;
+
     // Destek: durum (açık/kapalı) + görüldü
     let supportPresenceInterval = null;
     let lastUserSupportSeenUpdateAt = 0;
@@ -8664,6 +8668,7 @@
 
     function normalizeSupportMessages(messages) {
         return (Array.isArray(messages) ? messages : []).map((m) => ({
+            id: (m && typeof m.id === 'string') ? m.id : '',
             sender: (m && m.sender === 'admin') ? 'admin' : 'user',
             message: (m && typeof m.message === 'string') ? m.message : '',
             image: (m && typeof m.image === 'string') ? m.image : '',
@@ -8671,6 +8676,31 @@
             adminName: (m && typeof m.adminName === 'string') ? m.adminName : '',
             createdAt: (m && (m.createdAtMs || m.createdAt)) ? (m.createdAtMs || m.createdAt) : 0
         }));
+    }
+
+    function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.floor(ms || 0))));
+    }
+
+    function mergeSupportMessages(existing, incoming) {
+        const a = Array.isArray(existing) ? existing : [];
+        const b = Array.isArray(incoming) ? incoming : [];
+        if (b.length === 0) return a;
+
+        const map = new Map();
+        const push = (m) => {
+            if (!m) return;
+            const id = (m.id || '').toString();
+            const key = id ? ('id:' + id) : ('k:' + [m.sender, getFirestoreTimeMs(m.createdAt), m.message || '', m.image || ''].join('|'));
+            map.set(key, m);
+        };
+
+        a.forEach(push);
+        b.forEach(push);
+
+        const merged = Array.from(map.values());
+        merged.sort((x, y) => getFirestoreTimeMs(x.createdAt) - getFirestoreTimeMs(y.createdAt));
+        return merged;
     }
 
     async function setUserSupportPresence(isOpen) {
@@ -8817,47 +8847,81 @@
         console.log('💬 Chat dinleyici başlatılıyor... UID:', currentUser.uid);
 
         if (isSupportWorkerEnabled()) {
-            const poll = async () => {
+            supportUserPollToken++;
+            const token = supportUserPollToken;
+
+            const init = async () => {
                 try {
                     const res = await workerApiFetch(getSupportApiBase(), '/v1/support/me');
                     const ticket = res && res.ticket ? res.ticket : null;
-
-                    const oldCount = userChatMessages.length;
                     userChatMessages = normalizeSupportMessages(res && res.messages ? res.messages : []);
 
                     updateChatBadge(ticket ? (ticket.unreadUser || 0) : 0);
                     userChatLastAdminSeenAtMs = ticket && ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
                     userChatLastUserSeenAtMs = ticket && ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
-
-                    const modal = document.getElementById('userChatModal');
-                    const isModalOpen = modal && modal.classList.contains('show');
-
-                    if (isModalOpen) {
-                        renderUserChatMessages();
-                        scrollChatToBottom();
-
-                        const lastMsg = userChatMessages[userChatMessages.length - 1];
-                        if ((ticket && (ticket.unreadUser || 0) > 0) || (lastMsg && lastMsg.sender === 'admin')) {
-                            markUserSupportSeen();
-                        }
-                    }
-
                     updateSidebarBadges();
-
-                    if (userChatMessages.length > oldCount && ticket && (ticket.unreadUser || 0) > 0) {
-                        const lastMsg = userChatMessages[userChatMessages.length - 1];
-                        if (lastMsg && lastMsg.sender === 'admin' && !isModalOpen) {
-                            showToast('💬 Yeni destek mesajı!');
-                            sendNativeNotification('💬 Yeni Destek Mesajı', lastMsg.message || 'Destek ekibinden yeni mesaj');
-                        }
-                    }
                 } catch (e) {
-                    console.error('Chat polling hatası:', e);
+                    console.error('Chat init hatası:', e);
                 }
             };
 
-            poll();
-            supportUserPollInterval = setInterval(poll, 8000);
+            const loop = async () => {
+                let sinceMs = 0;
+                try {
+                    const last = userChatMessages[userChatMessages.length - 1];
+                    sinceMs = last ? getFirestoreTimeMs(last.createdAt) : 0;
+                } catch (e) {}
+
+                while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
+                    try {
+                        const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
+                        const res = await workerApiFetch(getSupportApiBase(), '/v1/support/poll?since=' + encodeURIComponent(String(sinceParam)));
+                        const ticket = res && res.ticket ? res.ticket : null;
+                        const delta = normalizeSupportMessages(res && res.messages ? res.messages : []);
+
+                        if (ticket) {
+                            updateChatBadge(ticket.unreadUser || 0);
+                            userChatLastAdminSeenAtMs = ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
+                            userChatLastUserSeenAtMs = ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
+                        }
+
+                        if (delta.length > 0) {
+                            userChatMessages = mergeSupportMessages(userChatMessages, delta);
+                            const lastDelta = delta[delta.length - 1];
+                            const lastMs = getFirestoreTimeMs(lastDelta && lastDelta.createdAt);
+                            if (lastMs > sinceMs) sinceMs = lastMs;
+                        }
+
+                        const modal = document.getElementById('userChatModal');
+                        const isModalOpen = modal && modal.classList.contains('show');
+
+                        if (isModalOpen) {
+                            renderUserChatMessages();
+                            scrollChatToBottom();
+
+                            const lastMsg = userChatMessages[userChatMessages.length - 1];
+                            if ((ticket && (ticket.unreadUser || 0) > 0) || (lastMsg && lastMsg.sender === 'admin')) {
+                                markUserSupportSeen();
+                            }
+                        } else {
+                            const adminMsg = delta.find((m) => m && m.sender === 'admin');
+                            if (adminMsg) {
+                                showToast('💬 Yeni destek mesajı!');
+                                sendNativeNotification('💬 Yeni Destek Mesajı', adminMsg.message || 'Destek ekibinden yeni mesaj');
+                            }
+                        }
+
+                        updateSidebarBadges();
+                    } catch (e) {
+                        console.error('Chat long-poll hatası:', e);
+                        await delay(1200);
+                    }
+                }
+            };
+
+            init().finally(() => {
+                if (supportUserPollToken === token) loop();
+            });
             return;
         }
         
@@ -8953,6 +9017,10 @@
             clearInterval(supportAdminPollInterval);
             supportAdminPollInterval = null;
         }
+
+        // Cancel any in-flight long-poll loops
+        supportUserPollToken++;
+        supportAdminPollToken++;
     }
     
     // Chat badge güncelle
@@ -9859,39 +9927,76 @@
                     return ticket;
                 };
 
+                supportAdminPollToken++;
+                const token = supportAdminPollToken;
+
                 const ticket = await loadAndRender();
                 if (!ticket) return;
 
                 await markAdminSupportSeen(chatId, true);
 
-                if (supportAdminPollInterval) {
-                    clearInterval(supportAdminPollInterval);
-                    supportAdminPollInterval = null;
-                }
-
-                supportAdminPollInterval = setInterval(async () => {
+                const loop = async () => {
+                    let sinceMs = 0;
                     try {
-                        const t = await loadAndRender();
-                        if (!t) {
-                            clearInterval(supportAdminPollInterval);
-                            supportAdminPollInterval = null;
-                            return;
-                        }
-
                         const msgs = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
                         const lastMsg = msgs[msgs.length - 1];
-                        if (lastMsg && lastMsg.sender === 'user') {
-                            markAdminSupportSeen(chatId);
+                        sinceMs = lastMsg ? getFirestoreTimeMs(lastMsg.createdAt) : 0;
+                    } catch (e) {}
+
+                    while (supportAdminPollToken === token && isSupportWorkerEnabled() && currentAdminChatId === chatId) {
+                        try {
+                            const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
+                            const res = await workerApiFetch(
+                                getSupportApiBase(),
+                                '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?since=' + encodeURIComponent(String(sinceParam))
+                            );
+
+                            const t = res && res.ticket ? res.ticket : null;
+                            if (!t) {
+                                showToast('❌ Sohbet bulunamadı');
+                                break;
+                            }
+
+                            if (!canCurrentAdminSeeChat(t)) {
+                                try { closeModal('adminChatModal'); } catch(e) {}
+                                showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
+                                currentAdminChatId = null;
+                                loadAdminChats();
+                                break;
+                            }
+
+                            currentAdminChatLastUserSeenAtMs = t.lastUserSeenAtMs ? Number(t.lastUserSeenAtMs) : 0;
+                            currentAdminChatLastAdminSeenAtMs = t.lastAdminSeenAtMs ? Number(t.lastAdminSeenAtMs) : 0;
+
+                            const delta = normalizeSupportMessages(res && res.messages ? res.messages : []);
+                            if (delta.length > 0) {
+                                const existing = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
+                                const merged = mergeSupportMessages(existing, delta);
+                                renderAdminChatMessages(merged);
+
+                                const lastDelta = delta[delta.length - 1];
+                                const lastMs = getFirestoreTimeMs(lastDelta && lastDelta.createdAt);
+                                if (lastMs > sinceMs) sinceMs = lastMs;
+                            }
+
+                            const msgs = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
+                            const lastMsg = msgs[msgs.length - 1];
+                            if (lastMsg && lastMsg.sender === 'user') {
+                                markAdminSupportSeen(chatId);
+                            }
+                        } catch (e) {
+                            console.log('Admin chat long-poll hatası:', e?.message || e);
+                            await delay(1200);
                         }
-                    } catch (e) {
-                        console.log('Admin chat polling hatası:', e?.message || e);
                     }
-                }, 8000);
+                };
 
                 openModal('adminChatModal');
                 setTimeout(() => {
                     document.getElementById('adminChatInput').focus();
                 }, 300);
+
+                loop();
                 loadAdminChats();
                 return;
             }
