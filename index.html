@@ -270,6 +270,28 @@
             
             var cachedVersion = localStorage.getItem(VERSION_KEY) || '0';
             var cachedHtml = localStorage.getItem(CACHE_KEY);
+
+            // Eski loader bug'ı nedeniyle VERSION_KEY ile HTML içindeki APP_VERSION
+            // uyuşmayabiliyordu. Bu durumda version'ı HTML'den türetip düzelt.
+            try {
+                var derivedVersion = null;
+                if (cachedHtml && cachedHtml.length > 5000) {
+                    derivedVersion = extractAppVersion(cachedHtml);
+                }
+
+                // HTML bozuksa cache'i temizle (sonraki adımda yeniden indirilecek)
+                if (cachedHtml && cachedHtml.length > 5000 && !derivedVersion) {
+                    console.log('[OTA] Cache bozuk (APP_VERSION okunamadı), temizleniyor');
+                    localStorage.removeItem(CACHE_KEY);
+                    cachedHtml = null;
+                }
+
+                if (derivedVersion && derivedVersion !== cachedVersion) {
+                    console.log('[OTA] Cache sürüm uyuşmuyor (key=' + cachedVersion + ', html=' + derivedVersion + '), düzeltildi');
+                    cachedVersion = derivedVersion;
+                    localStorage.setItem(VERSION_KEY, derivedVersion);
+                }
+            } catch (e) {}
             
             console.log('[OTA] Cache versiyonu:', cachedVersion);
             
