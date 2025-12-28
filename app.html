@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.92';
+    const APP_VERSION = '4.2.93';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -17108,11 +17108,11 @@
         // İlk sessiz kontrol 5 saniye sonra
         setTimeout(checkUpdateSilently, 5000);
         
-        // Güncelleme popup kontrolü 15 saniye sonra
-        setTimeout(checkForUpdates, 15000);
+        // Güncelleme popup kontrolü 5 saniye sonra
+        setTimeout(checkForUpdates, 5000);
         
-        // Sonra her 2 dakikada bir kontrol
-        autoUpdateInterval = setInterval(checkForUpdates, 120000);
+        // Sonra her 30 saniyede bir kontrol (hızlı OTA)
+        autoUpdateInterval = setInterval(checkForUpdates, 30000);
         
         // UI REFRESH - HER 1 SANİYEDE BİR
         startUIRefresh();
@@ -17124,9 +17124,16 @@
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 checkUpdateSilently();
+                checkForUpdates();
                 refreshUIBadges();
                 checkNewNotificationsNow();
             }
+        });
+
+        // İnternet gelince de kontrol et
+        window.addEventListener('online', () => {
+            checkUpdateSilently();
+            checkForUpdates();
         });
     }
     
@@ -17273,34 +17280,51 @@
         return 0;
     }
     
+    async function fetchRemoteManifestNoCache() {
+        const ts = Date.now();
+        const r = Math.random().toString(36).slice(2);
+
+        const urls = [
+            `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?t=${ts}&r=${r}`,
+            // Fallback: GitHub API (rate-limit olabilir)
+            `https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?_t=${ts}&r=${r}`
+        ];
+
+        for (const url of urls) {
+            try {
+                const isApi = url.includes('api.github.com');
+                const res = await fetch(url, {
+                    cache: 'no-store',
+                    headers: isApi
+                        ? {
+                            'Cache-Control': 'no-cache',
+                            'Accept': 'application/vnd.github.v3.raw'
+                        }
+                        : {
+                            'Cache-Control': 'no-store, no-cache, max-age=0',
+                            'Pragma': 'no-cache'
+                        }
+                });
+
+                if (!res.ok) continue;
+
+                // API'de raw accept kullanıyoruz; body JSON text olur
+                const text = await res.text();
+                const manifest = JSON.parse(text);
+                if (manifest && manifest.version) return manifest;
+            } catch (e) {
+                // sıradakine geç
+            }
+        }
+        return null;
+    }
+
     async function checkForUpdates() {
         try {
-            const timestamp = Date.now();
-            const random = Math.random().toString(36).substring(7);
-            
-            // SADECE GitHub'dan kontrol et - Firestore kullanılmıyor
-            let manifest = null;
-            
-            try {
-                // GitHub API kullan - cache sorunu yok, anında güncellenir
-                const manifestUrl = `https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?_t=${timestamp}`;
-                const response = await fetch(manifestUrl, { 
-                    cache: 'no-store',
-                    headers: { 
-                        'Cache-Control': 'no-cache',
-                        'Accept': 'application/vnd.github.v3.raw'
-                    }
-                });
-                
-                if (response.ok) {
-                    manifest = await response.json();
-                    console.log('🐙 GitHub manifest:', manifest.version);
-                }
-            } catch(e) {
-                console.log('GitHub manifest kontrolü başarısız:', e.message);
-            }
-            
+            // Öncelik raw.githubusercontent.com (rate-limit yok) + fallback API
+            const manifest = await fetchRemoteManifestNoCache();
             if (!manifest) return;
+            console.log('🐙 Remote manifest:', manifest.version);
             
             // Yeni versiyon kontrolü - sadece APP_VERSION ile karşılaştır
             const versionCompare = compareVersions(manifest.version, APP_VERSION);
@@ -17387,14 +17411,34 @@
         if (banner) banner.remove();
         
         try {
-            // GitHub API kullan - cache sorunu yok
-            const timestamp = Date.now();
-            const appUrl = `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${timestamp}`;
-            const response = await fetch(appUrl, { 
-                cache: 'no-store',
-                headers: { 'Accept': 'application/vnd.github.v3.raw' }
-            });
-            const appHtml = await response.text();
+            const ts = Date.now();
+            const r = Math.random().toString(36).slice(2);
+
+            // Öncelik raw (rate-limit yok), fallback API
+            const appUrls = [
+                `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=${ts}&r=${r}`,
+                `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${ts}&r=${r}`
+            ];
+
+            let appHtml = null;
+            for (const url of appUrls) {
+                try {
+                    const isApi = url.includes('api.github.com');
+                    const res = await fetch(url, {
+                        cache: 'no-store',
+                        headers: isApi
+                            ? { 'Accept': 'application/vnd.github.v3.raw', 'Cache-Control': 'no-cache' }
+                            : { 'Cache-Control': 'no-store, no-cache, max-age=0', 'Pragma': 'no-cache' }
+                    });
+                    if (!res.ok) continue;
+                    appHtml = await res.text();
+                    break;
+                } catch (e) {
+                    // sıradakine geç
+                }
+            }
+
+            if (!appHtml) throw new Error('Güncelleme indirilemedi');
             
             // İçerik kontrolü
             if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {
@@ -17433,9 +17477,8 @@
 
         try {
             // Önce manifest'i kontrol et
-            const manifestUrl = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?t=' + Date.now();
-            const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
-            const manifest = await manifestRes.json();
+            const manifest = await fetchRemoteManifestNoCache();
+            if (!manifest) throw new Error('Manifest alınamadı');
             
             console.log('[OTA] Manifest sürümü:', manifest.version);
             console.log('[OTA] Mevcut APP_VERSION:', APP_VERSION);
@@ -17445,13 +17488,32 @@
                 // Yeni sürüm var - OTA güncelleme
                 showToast('🆕 Yeni sürüm: v' + manifest.version + ' - İndiriliyor...');
                 
-                // app.html'i indir (GitHub API - anında güncelleme)
-                const appUrl = 'https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=' + Date.now();
-                const appRes = await fetch(appUrl, { 
-                    cache: 'no-store',
-                    headers: { 'Accept': 'application/vnd.github.v3.raw' }
-                });
-                const appHtml = await appRes.text();
+                const ts = Date.now();
+                const r = Math.random().toString(36).slice(2);
+                const appUrls = [
+                    `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=${ts}&r=${r}`,
+                    `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${ts}&r=${r}`
+                ];
+
+                let appHtml = null;
+                for (const url of appUrls) {
+                    try {
+                        const isApi = url.includes('api.github.com');
+                        const res = await fetch(url, {
+                            cache: 'no-store',
+                            headers: isApi
+                                ? { 'Accept': 'application/vnd.github.v3.raw', 'Cache-Control': 'no-cache' }
+                                : { 'Cache-Control': 'no-store, no-cache, max-age=0', 'Pragma': 'no-cache' }
+                        });
+                        if (!res.ok) continue;
+                        appHtml = await res.text();
+                        break;
+                    } catch (e) {
+                        // sıradakine geç
+                    }
+                }
+
+                if (!appHtml) throw new Error('Güncelleme indirilemedi');
                 
                 // İçerik kontrolü
                 if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {

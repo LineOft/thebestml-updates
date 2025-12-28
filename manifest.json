@@ -1,12 +1,14 @@
 {
-    "version": "4.2.92",
-    "buildNumber": 348,
+    "version": "4.2.93",
+    "buildNumber": 349,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Hotfix: OTA güncellemeleri hızlandırıldı (30sn kontrol) + online/visible tetikleme",
+        "Hotfix: OTA güncellemeleri daha güvenilir (GitHub API rate-limit yerine raw.githubusercontent.com öncelik)",
         "Hotfix: Destek long-poll clock-skew toleransı (admin→kullanıcı mesajları anlık düşer)",
         "Hotfix: Kullanıcı destek ekranında anlık admin mesajı (optimistic timestamp/poll since düzeltildi)",
         "Hotfix: Destek long-poll timeout düzeltildi (anlık güncelleme için 30sn client timeout)",
