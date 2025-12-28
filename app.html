@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.97';
+    const APP_VERSION = '4.2.98';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8678,6 +8678,15 @@
         }));
     }
 
+    function compareSupportMessages(a, b) {
+        const ta = getFirestoreTimeMs(a && a.createdAt);
+        const tb = getFirestoreTimeMs(b && b.createdAt);
+        if (ta !== tb) return ta - tb;
+        const ia = (a && typeof a.id === 'string') ? a.id : '';
+        const ib = (b && typeof b.id === 'string') ? b.id : '';
+        return ia.localeCompare(ib);
+    }
+
     function getSupportAfterCursorFromMessages(messages) {
         try {
             const arr = Array.isArray(messages) ? messages : [];
@@ -8713,7 +8722,7 @@
         b.forEach(push);
 
         const merged = Array.from(map.values());
-        merged.sort((x, y) => getFirestoreTimeMs(x.createdAt) - getFirestoreTimeMs(y.createdAt));
+        merged.sort(compareSupportMessages);
         return merged;
     }
 
@@ -8881,6 +8890,7 @@
 
             const loop = async () => {
                 let afterCursor = getSupportAfterCursorFromMessages(userChatMessages);
+                let lastSelfHealAt = 0;
 
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
                     try {
@@ -8903,6 +8913,28 @@
                             const serverCursor = (res && typeof res.cursor === 'string') ? res.cursor : '';
                             afterCursor = serverCursor || getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
                         }
+
+                        // Self-heal: if server says there are unread admin messages but we got no delta,
+                        // our cursor can be out of sync in rare edge cases. Force-refresh once in a while.
+                        try {
+                            const unread = ticket ? Number(ticket.unreadUser || 0) : 0;
+                            const nowMs = Date.now();
+                            if (unread > 0 && delta.length === 0 && (nowMs - lastSelfHealAt) > 8000) {
+                                lastSelfHealAt = nowMs;
+                                const full = await workerApiFetch(getSupportApiBase(), '/v1/support/me');
+                                const fullTicket = full && full.ticket ? full.ticket : null;
+                                const fullMessages = normalizeSupportMessages(full && full.messages ? full.messages : []);
+                                if (fullTicket) {
+                                    updateChatBadge(fullTicket.unreadUser || 0);
+                                    userChatLastAdminSeenAtMs = fullTicket.lastAdminSeenAtMs ? Number(fullTicket.lastAdminSeenAtMs) : 0;
+                                    userChatLastUserSeenAtMs = fullTicket.lastUserSeenAtMs ? Number(fullTicket.lastUserSeenAtMs) : 0;
+                                }
+                                if (fullMessages.length > 0) {
+                                    userChatMessages = mergeSupportMessages(userChatMessages, fullMessages);
+                                    afterCursor = getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
+                                }
+                            }
+                        } catch (e) {}
 
                         const modal = document.getElementById('userChatModal');
                         const isModalOpen = modal && modal.classList.contains('show');

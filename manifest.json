@@ -1,12 +1,14 @@
 {
-    "version": "4.2.97",
-    "buildNumber": 353,
+    "version": "4.2.98",
+    "buildNumber": 354,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Hotfix: Destek long-poll self-heal eklendi (unread var ama delta boşsa otomatik /me ile senkron) — admin→kullanıcı mesajı kaçmaz",
+        "Hotfix: Destek mesaj birleştirme sıralaması deterministik (createdAtMs + id) — cursor uyumsuzluğu önlenir",
         "Hotfix: Destek mesaj sıralaması deterministik yapıldı (createdAtMs + id) — admin→kullanıcı mesajları kaçmaz",
         "Hotfix: Destek long-poll artık cursor tabanlı (afterCursor) — admin→kullanıcı mesajları kaçmaz",
         "Hotfix: OTA güncellemeleri hızlandırıldı (30sn kontrol) + online/visible tetikleme",
