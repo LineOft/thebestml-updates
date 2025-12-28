@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.89';
+    const APP_VERSION = '4.2.90';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8875,7 +8875,11 @@
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
                     try {
                         const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
-                        const res = await workerApiFetch(getSupportApiBase(), '/v1/support/poll?since=' + encodeURIComponent(String(sinceParam)));
+                            const res = await workerApiFetch(
+                                getSupportApiBase(),
+                                '/v1/support/poll?since=' + encodeURIComponent(String(sinceParam)),
+                                { timeoutMs: 30000 }
+                            );
                         const ticket = res && res.ticket ? res.ticket : null;
                         const delta = normalizeSupportMessages(res && res.messages ? res.messages : []);
 
@@ -9948,7 +9952,8 @@
                             const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
                             const res = await workerApiFetch(
                                 getSupportApiBase(),
-                                '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?since=' + encodeURIComponent(String(sinceParam))
+                                '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?since=' + encodeURIComponent(String(sinceParam)),
+                                { timeoutMs: 30000 }
                             );
 
                             const t = res && res.ticket ? res.ticket : null;

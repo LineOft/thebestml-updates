@@ -1,12 +1,13 @@
 {
-    "version": "4.2.89",
-    "buildNumber": 345,
+    "version": "4.2.90",
+    "buildNumber": 346,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Hotfix: Destek long-poll timeout düzeltildi (anlık güncelleme için 30sn client timeout)",
         "Destek: Kullanıcı ve admin chat ekranında long-poll ile anlık mesaj güncelleme",
         "Admin: Admin Yönetimi ile eklenen adminler Worker/D1 yetkisine otomatik senkronlanır",
         "Hotfix: Uygulama içi sürüm gösterimi düzeltildi (APP_VERSION senkron)",
