@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.14';
+    const APP_VERSION = '4.3.15';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18395,7 +18395,7 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç - v4.3.14 (Capacitor Browser -> AndroidBridge fallback)
+    // Harici tarayıcıda URL aç - v4.3.15 (Capacitor ExternalBrowser plugin -> AndroidBridge)
     (function initExtUrlDebugPanel() {
         try {
             if (document.getElementById('extUrlDebugPanel')) return;
@@ -18428,20 +18428,20 @@
         }
 
         const hasCapacitor = !!(window.Capacitor && window.Capacitor.Plugins);
-        const hasBrowserPlugin = !!(hasCapacitor && window.Capacitor.Plugins.Browser && typeof window.Capacitor.Plugins.Browser.open === 'function');
+        const hasExternalBrowserPlugin = !!(hasCapacitor && window.Capacitor.Plugins.ExternalBrowser && typeof window.Capacitor.Plugins.ExternalBrowser.open === 'function');
         const hasAndroidBridge = !!(typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.openUrl === 'function');
 
         if (window.__extUrlDbg) window.__extUrlDbg('openExternalUrl: ' + url);
-        if (window.__extUrlDbg) window.__extUrlDbg('Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' Browser=' + (hasBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
+        if (window.__extUrlDbg) window.__extUrlDbg('Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' ExternalBrowser=' + (hasExternalBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
 
-        // Yöntem 1: Capacitor Browser plugin (en güvenilir)
-        if (hasBrowserPlugin) {
+        // Yöntem 1: Custom Capacitor plugin (harici tarayıcı garantisi)
+        if (hasExternalBrowserPlugin) {
             try {
-                if (window.__extUrlDbg) window.__extUrlDbg('Browser.open deneniyor');
-                await window.Capacitor.Plugins.Browser.open({ url: url });
+                if (window.__extUrlDbg) window.__extUrlDbg('ExternalBrowser.open deneniyor');
+                await window.Capacitor.Plugins.ExternalBrowser.open({ url: url });
                 return;
             } catch (e) {
-                if (window.__extUrlDbg) window.__extUrlDbg('Browser.open hata: ' + (e && e.message ? e.message : String(e)));
+                if (window.__extUrlDbg) window.__extUrlDbg('ExternalBrowser hata: ' + (e && e.message ? e.message : String(e)));
             }
         }
 
@@ -18456,13 +18456,9 @@
             }
         }
 
-        // Yöntem 3: location (bazı cihazlarda indirme açılır)
-        try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Fallback location.href');
-            window.location.href = url;
-        } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('location.href hata: ' + (e && e.message ? e.message : String(e)));
-        }
+        // İstenilen davranış: Uygulama içi tarayıcı/açılış olmasın. Burada in-app fallback yapmıyoruz.
+        try { showToast('❌ Harici tarayıcı açılamadı (plugin/bridge yok)'); } catch (e) {}
+        if (window.__extUrlDbg) window.__extUrlDbg('Harici tarayıcı açılamadı (plugin/bridge yok)');
     }
 
     function downloadAPK() {
