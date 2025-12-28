@@ -1,12 +1,13 @@
 {
-    "version": "4.2.81",
-    "buildNumber": 337,
+    "version": "4.2.82",
+    "buildNumber": 338,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Hotfix: Açılışta görülen JavaScript hatası düzeltildi (uygulama tekrar açılır)",
         "Düzeltme: Admin panel (bekleyen siparişler) Worker yetki hatasını net gösterir (401/403)",
         "Düzeltme: Dekont Storage yüklemesi 25sn timeout; takılırsa otomatik base64 fallback (bekleme dakikalar sürmez)",
         "Düzeltme: Remote config yükleme hatası artık kalıcı cache'lenmez; otomatik retry/backoff",
