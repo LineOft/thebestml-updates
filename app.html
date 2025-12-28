@@ -2940,7 +2940,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.76';
+    const APP_VERSION = '4.2.77';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4357,15 +4357,20 @@
         return allow.map(normalizeEmailQuick).includes(e);
     }
 
-    function showRemoteMaintenanceScreen() {
+    function showRemoteMaintenanceScreen(opts) {
         if (!isRemoteMaintenanceEnabled()) return;
+        const options = opts || {};
         const existing = document.getElementById('remoteMaintenanceScreen');
-        if (existing) return;
+        // Overlay zaten varsa, içeriği güncellemek için yeniden oluştur.
+        if (existing) {
+            try { existing.remove(); } catch (e) {}
+        }
 
         const title = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceTitle) || '🔧 Bakım Modu';
         const message = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceMessage) || 'Sistem şu anda bakımda. Lütfen daha sonra tekrar deneyin.';
         const estimated = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceEstimatedTime) || '';
 
+        const allowContinue = !!options.allowContinue;
         const html = `
             <div id="remoteMaintenanceScreen" style="position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999999;">
                 <div style="max-width: 420px; width: 100%; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 22px; text-align: center;">
@@ -4373,7 +4378,12 @@
                     <h1 style="color: #fff; margin-bottom: 12px; font-size: 22px;">${title}</h1>
                     <p style="color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 14px;">${message}</p>
                     ${estimated ? `<div style="color: #ffcc80; font-size: 12px; margin-bottom: 16px;">⏳ Tahmini: ${estimated}</div>` : ''}
-                    <button onclick="tryOpenMaintenanceTeamLogin()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">🔐 Ekip Girişi</button>
+                    ${allowContinue ? `
+                        <button onclick="hideRemoteMaintenanceScreen()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">✅ Devam Et</button>
+                        <div style="color:#bbb; font-size: 12px; margin-top: 10px;">Ekip erişimi var. Devam edebilirsiniz.</div>
+                    ` : `
+                        <button onclick="tryOpenMaintenanceTeamLogin()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">🔐 Ekip Girişi</button>
+                    `}
                     <div style="color:#777; font-size: 11px; margin-top: 12px;">Not: Bu ekran acil bakım kilididir (Firestore bağımsız).</div>
                 </div>
             </div>
@@ -4407,7 +4417,7 @@
         try {
             await loadRemoteRuntimeConfig();
             if (isRemoteMaintenanceEnabled()) {
-                showRemoteMaintenanceScreen();
+                showRemoteMaintenanceScreen({ allowContinue: false });
             }
         } catch (e) {}
     })();
@@ -4428,11 +4438,12 @@
                 try { stopPresenceHeartbeat(); } catch (e) {}
                 try { stopAdminUsageTracking(); } catch (e) {}
                 try { updateAuthUI(); } catch (e) {}
-                showRemoteMaintenanceScreen();
+                showRemoteMaintenanceScreen({ allowContinue: false });
                 return;
             } else {
-                // Ekip/owner izinli ise ekranı kaldırıp devam et
-                try { hideRemoteMaintenanceScreen(); } catch (e) {}
+                // Ekip/owner izinli ise ekranı otomatik kapatma.
+                // Bakım modunun görünür kalması için "Devam Et" ile kullanıcı kapatsın.
+                try { showRemoteMaintenanceScreen({ allowContinue: true }); } catch (e) {}
             }
         }
 
