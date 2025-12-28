@@ -1,2963 +1,4 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Game Store</title>
-    <!-- Firebase SDK - async yükleme -->
-    <script>
-        window.onerror = function(msg, url, line, col, error) {
-            console.error('Global Hata:', msg, 'Satır:', line);
-            var errDiv = document.getElementById('globalError');
-            if (errDiv) errDiv.innerHTML = 'JS Hatası: ' + msg + ' (Satır: ' + line + ')';
-            return false;
-        };
-    </script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
-    <script>
-        // Global error handler - TÜM hataları yakala
-        window.onerror = function(msg, url, lineNo, columnNo, error) {
-            try {
-                const msgText = String(msg || '');
-                const msgLower = msgText.toLowerCase();
-                const isSyntaxLike = msgLower.includes('syntaxerror') || msgLower.includes('unexpected token');
 
-                // OTA self-heal: If cached OTA HTML is corrupted/old, clear it once and reload.
-                if (isSyntaxLike) {
-                    const alreadyAttempted = (function() {
-                        try { return sessionStorage.getItem('__ota_recover_attempted__') === '1'; } catch (e) { return false; }
-                    })();
-
-                    if (!alreadyAttempted) {
-                        try { sessionStorage.setItem('__ota_recover_attempted__', '1'); } catch (e) {}
-                        try { localStorage.removeItem('ota_app_html'); } catch (e) {}
-                        try { localStorage.removeItem('ota_app_version'); } catch (e) {}
-
-                        // Give UI a moment to render the error box, then restart loader.
-                        setTimeout(() => {
-                            try { window.location.href = 'index.html?ota_recover=' + Date.now(); } catch (e) {}
-                        }, 800);
-                    }
-                }
-            } catch (e) {}
-
-            const errorDiv = document.getElementById('homeGamesGrid');
-            if (errorDiv) {
-                errorDiv.innerHTML = `
-                    <div style="background: #f44336; color: white; padding: 15px; margin: 10px; border-radius: 8px; text-align: left; font-size: 11px;">
-                        <div style="font-size: 16px; font-weight: bold; margin-bottom: 10px;">❌ JavaScript Hatası</div>
-                        <div><strong>Mesaj:</strong> ${msg}</div>
-                        <div><strong>Satır:</strong> ${lineNo}:${columnNo}</div>
-                        <div style="margin-top: 10px; background: #222; padding: 8px; border-radius: 4px; overflow: auto;">${error ? error.stack : 'Stack yok'}</div>
-                    </div>
-                `;
-            }
-            return false;
-        };
-        
-        var firebaseReady = false;
-        var auth = null;
-        var db = null;
-        var storage = null;
-        
-        try {
-            const firebaseConfig = {
-                apiKey: "AIzaSyAexeqO1niP2noYEL2VMSoXL4llPLHaiYg",
-                authDomain: "cheatstore-515c1.firebaseapp.com",
-                projectId: "cheatstore-515c1",
-                storageBucket: "cheatstore-515c1.firebasestorage.app",
-                messagingSenderId: "424756346612",
-                appId: "1:424756346612:web:683b874f98daf48352e8a1"
-            };
-            
-            if (typeof firebase !== 'undefined') {
-                firebase.initializeApp(firebaseConfig);
-                auth = firebase.auth();
-                db = firebase.firestore();
-                try {
-                    if (typeof firebase.storage === 'function') {
-                        storage = firebase.storage();
-                    }
-                } catch (e) {
-                    storage = null;
-                }
-                firebaseReady = true;
-                console.log('✅ Firebase başlatıldı');
-                console.log('✅ db:', db ? 'OK' : 'NULL');
-                console.log('✅ auth:', auth ? 'OK' : 'NULL');
-                console.log('✅ storage:', storage ? 'OK' : 'NULL');
-            } else {
-                console.error('❌ Firebase SDK yüklenemedi');
-                const grid = document.getElementById('homeGamesGrid');
-                if (grid) {
-                    grid.innerHTML = '<div style="padding: 20px; color: #f44336;">❌ Firebase SDK yüklenemedi!</div>';
-                }
-            }
-        } catch(e) {
-            console.error('❌ Firebase başlatma hatası:', e);
-            const grid = document.getElementById('homeGamesGrid');
-            if (grid) {
-                grid.innerHTML = `<div style="padding: 20px; color: #f44336;">❌ Firebase başlatma hatası: ${e.message}</div>`;
-            }
-        }
-    </script>
-</head>
-<style>
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    body { 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-        background: #0a0a12;
-        min-height: 100vh; 
-        color: #fff; 
-        overflow-x: hidden;
-        /* Safe area için padding */
-        padding-top: env(safe-area-inset-top, 0px);
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-        padding-left: env(safe-area-inset-left, 0px);
-        padding-right: env(safe-area-inset-right, 0px);
-    }
-    
-    /* 🏪 Game Store - Hile Mağazası Teması */
-    .animated-bg {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: -1;
-        overflow: hidden;
-        background: linear-gradient(135deg, #0a0a0f 0%, #12121a 50%, #0a0a0f 100%);
-    }
-    
-    /* Kayan GAME STORE Yazıları - Daha Belirgin */
-    .text-banner {
-        position: absolute;
-        width: 200%;
-        white-space: nowrap;
-        font-family: 'Arial Black', sans-serif;
-        font-weight: 900;
-        text-transform: uppercase;
-        letter-spacing: 15px;
-        pointer-events: none;
-    }
-    
-    .text-banner-1 {
-        top: 5%;
-        font-size: 90px;
-        color: #4CAF50;
-        opacity: 0.08;
-        text-shadow: 0 0 30px rgba(76, 175, 80, 0.5);
-        animation: scrollText 20s linear infinite;
-    }
-    
-    .text-banner-2 {
-        top: 30%;
-        font-size: 70px;
-        color: #2196F3;
-        opacity: 0.06;
-        text-shadow: 0 0 25px rgba(33, 150, 243, 0.4);
-        animation: scrollText 25s linear infinite reverse;
-    }
-    
-    .text-banner-3 {
-        top: 55%;
-        font-size: 80px;
-        color: #4CAF50;
-        opacity: 0.07;
-        text-shadow: 0 0 30px rgba(76, 175, 80, 0.5);
-        animation: scrollText 18s linear infinite;
-    }
-    
-    .text-banner-4 {
-        top: 80%;
-        font-size: 60px;
-        color: #2196F3;
-        opacity: 0.05;
-        text-shadow: 0 0 20px rgba(33, 150, 243, 0.3);
-        animation: scrollText 28s linear infinite reverse;
-    }
-    
-    @keyframes scrollText {
-        0% { transform: translateX(0); }
-        100% { transform: translateX(-50%); }
-    }
-    
-    /* Dikey Kayan Yazı - Daha Belirgin */
-    .text-vertical {
-        position: absolute;
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        font-family: 'Arial Black', sans-serif;
-        font-weight: 900;
-        font-size: 120px;
-        text-transform: uppercase;
-        letter-spacing: 10px;
-        pointer-events: none;
-    }
-    
-    .text-vertical-1 {
-        left: 3%;
-        color: #4CAF50;
-        opacity: 0.04;
-        text-shadow: 0 0 40px rgba(76, 175, 80, 0.4);
-        animation: scrollVertical 35s linear infinite;
-    }
-    
-    .text-vertical-2 {
-        right: 5%;
-        color: #2196F3;
-        opacity: 0.035;
-        text-shadow: 0 0 35px rgba(33, 150, 243, 0.35);
-        animation: scrollVertical 30s linear infinite reverse;
-    }
-    
-    @keyframes scrollVertical {
-        0% { transform: translateY(-100%); }
-        100% { transform: translateY(100vh); }
-    }
-    
-    /* Parlayan Köşeler */
-    .corner-glow {
-        position: absolute;
-        width: 400px;
-        height: 400px;
-        border-radius: 50%;
-        filter: blur(80px);
-        opacity: 0.5;
-    }
-    
-    .corner-glow-1 {
-        top: -150px;
-        right: -150px;
-        background: radial-gradient(circle, rgba(76, 175, 80, 0.4) 0%, transparent 70%);
-        animation: glowPulse 4s ease-in-out infinite;
-    }
-    
-    .corner-glow-2 {
-        bottom: -150px;
-        left: -150px;
-        background: radial-gradient(circle, rgba(33, 150, 243, 0.35) 0%, transparent 70%);
-        animation: glowPulse 5s ease-in-out infinite 1s;
-    }
-    
-    .corner-glow-3 {
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 300px;
-        height: 300px;
-        background: radial-gradient(circle, rgba(76, 175, 80, 0.15) 0%, transparent 70%);
-        animation: glowPulse 6s ease-in-out infinite 2s;
-    }
-    
-    @keyframes glowPulse {
-        0%, 100% { opacity: 0.3; transform: scale(1); }
-        50% { opacity: 0.6; transform: scale(1.1); }
-    }
-    
-    /* Yatay Çizgiler - Mağaza Stili */
-    .store-line {
-        position: absolute;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(76, 175, 80, 0.5), transparent);
-        pointer-events: none;
-    }
-    
-    .store-line-1 {
-        top: 20%;
-        left: 0;
-        right: 0;
-        animation: lineGlow 3s ease-in-out infinite;
-    }
-    
-    .store-line-2 {
-        top: 50%;
-        left: 0;
-        right: 0;
-        background: linear-gradient(90deg, transparent, rgba(33, 150, 243, 0.4), transparent);
-        animation: lineGlow 4s ease-in-out infinite 1s;
-    }
-    
-    .store-line-3 {
-        top: 80%;
-        left: 0;
-        right: 0;
-        background: linear-gradient(90deg, transparent, rgba(76, 175, 80, 0.35), transparent);
-        animation: lineGlow 3.5s ease-in-out infinite 0.5s;
-    }
-    
-    @keyframes lineGlow {
-        0%, 100% { opacity: 0.3; }
-        50% { opacity: 0.8; }
-    }
-    
-    /* Kayan Işık Çubukları */
-    .light-bar {
-        position: absolute;
-        width: 150px;
-        height: 2px;
-        border-radius: 2px;
-        will-change: transform;
-    }
-    
-    .light-bar-1 {
-        background: linear-gradient(90deg, transparent, #4CAF50, #4CAF50, transparent);
-        top: 15%;
-        left: -150px;
-        box-shadow: 0 0 15px #4CAF50, 0 0 30px #4CAF50;
-        animation: lightSlide 4s ease-in-out infinite;
-    }
-    
-    .light-bar-2 {
-        background: linear-gradient(90deg, transparent, #2196F3, #2196F3, transparent);
-        top: 45%;
-        right: -150px;
-        box-shadow: 0 0 15px #2196F3, 0 0 30px #2196F3;
-        animation: lightSlideReverse 5s ease-in-out infinite 1.5s;
-    }
-    
-    .light-bar-3 {
-        background: linear-gradient(90deg, transparent, #4CAF50, #4CAF50, transparent);
-        top: 75%;
-        left: -150px;
-        box-shadow: 0 0 15px #4CAF50, 0 0 30px #4CAF50;
-        animation: lightSlide 4.5s ease-in-out infinite 3s;
-    }
-    
-    @keyframes lightSlide {
-        0% { transform: translateX(0); opacity: 0; }
-        10% { opacity: 1; }
-        90% { opacity: 1; }
-        100% { transform: translateX(calc(100vw + 200px)); opacity: 0; }
-    }
-    
-    @keyframes lightSlideReverse {
-        0% { transform: translateX(0); opacity: 0; }
-        10% { opacity: 1; }
-        90% { opacity: 1; }
-        100% { transform: translateX(calc(-100vw - 200px)); opacity: 0; }
-    }
-    
-    /* Parıltılar */
-    .sparkle {
-        position: absolute;
-        width: 3px;
-        height: 3px;
-        background: #fff;
-        border-radius: 50%;
-    }
-    
-    .sparkle-1 { top: 10%; left: 30%; animation: sparkle 2s ease-in-out infinite; }
-    .sparkle-2 { top: 25%; left: 70%; animation: sparkle 2.5s ease-in-out infinite 0.3s; }
-    .sparkle-3 { top: 45%; left: 20%; animation: sparkle 1.8s ease-in-out infinite 0.6s; }
-    .sparkle-4 { top: 60%; left: 85%; animation: sparkle 2.2s ease-in-out infinite 0.9s; }
-    .sparkle-5 { top: 80%; left: 45%; animation: sparkle 2s ease-in-out infinite 1.2s; }
-    .sparkle-6 { top: 35%; left: 55%; animation: sparkle 2.4s ease-in-out infinite 0.4s; }
-    
-    @keyframes sparkle {
-        0%, 100% { transform: scale(0); opacity: 0; box-shadow: none; }
-        50% { transform: scale(1); opacity: 1; box-shadow: 0 0 10px #4CAF50, 0 0 20px #4CAF50; }
-    }
-    
-    /* Grid Overlay - Çok Hafif */
-    .grid-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-image: 
-            linear-gradient(rgba(76, 175, 80, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(76, 175, 80, 0.03) 1px, transparent 1px);
-        background-size: 50px 50px;
-        pointer-events: none;
-    }
-    
-    /* Vignette Efekti */
-    .vignette {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.4) 100%);
-        pointer-events: none;
-    }
-    
-    /* Game Store Logo - Lazer Animasyonu */
-    .app-logo-container {
-        width: 90px;
-        height: 90px;
-        margin: 0 auto 15px;
-        position: relative;
-    }
-    
-    .app-logo-svg {
-        width: 90px;
-        height: 90px;
-        border-radius: 22px;
-        background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1a 100%);
-        border: 2px solid rgba(76, 175, 80, 0.3);
-        box-shadow: 0 8px 30px rgba(0,0,0,0.4), 0 0 20px rgba(76, 175, 80, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: hidden;
-        position: relative;
-    }
-    
-    /* Lazer Çizgiler */
-    .laser-g {
-        position: absolute;
-        height: 2px;
-        top: 50%;
-        left: 0;
-        width: 0;
-        background: linear-gradient(90deg, transparent, #4CAF50, #4CAF50);
-        box-shadow: 0 0 8px #4CAF50, 0 0 15px #4CAF50;
-        animation: laserG 0.8s ease-out forwards;
-    }
-    .laser-s {
-        position: absolute;
-        height: 2px;
-        top: 50%;
-        right: 0;
-        width: 0;
-        background: linear-gradient(-90deg, transparent, #2196F3, #2196F3);
-        box-shadow: 0 0 8px #2196F3, 0 0 15px #2196F3;
-        animation: laserS 0.8s ease-out forwards;
-    }
-    @keyframes laserG {
-        0% { width: 0; left: 0; }
-        50% { width: 45px; left: 0; }
-        100% { width: 0; left: 45px; }
-    }
-    @keyframes laserS {
-        0% { width: 0; right: 0; }
-        50% { width: 45px; right: 0; }
-        100% { width: 0; right: 45px; }
-    }
-    
-    /* GS Harfleri */
-    .logo-letter-g, .logo-letter-s {
-        position: absolute;
-        font-family: 'Arial Black', sans-serif;
-        font-size: 32px;
-        font-weight: 900;
-        opacity: 0;
-    }
-    .logo-letter-g {
-        left: 14px;
-        color: #4CAF50;
-        text-shadow: 0 0 15px #4CAF50;
-        animation: revealLetter 0.5s ease-out 0.6s forwards;
-    }
-    .logo-letter-s {
-        right: 14px;
-        color: #2196F3;
-        text-shadow: 0 0 15px #2196F3;
-        animation: revealLetter 0.5s ease-out 0.6s forwards;
-    }
-    @keyframes revealLetter {
-        0% { opacity: 0; transform: scale(0.5); }
-        100% { opacity: 1; transform: scale(1); }
-    }
-    
-    /* Çarpışma Efekti */
-    .logo-impact {
-        position: absolute;
-        width: 15px;
-        height: 15px;
-        background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
-        border-radius: 50%;
-        left: 50%;
-        top: 50%;
-        transform: translate(-50%, -50%);
-        opacity: 0;
-        animation: impact 0.3s ease-out 0.7s forwards;
-    }
-    @keyframes impact {
-        0% { opacity: 1; transform: translate(-50%, -50%) scale(0); }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); }
-    }
-
-    .container { max-width: 500px; margin: 0 auto; padding: 20px; padding-top: 30px; padding-bottom: 100px; position: relative; z-index: 1; }
-    
-    /* HEADER */
-    .header { text-align: center; margin-bottom: 25px; }
-    .app-logo { width: 80px; height: 80px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
-    .title { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
-    .subtitle { color: #aaa; font-size: 13px; }
-    .version { color: #666; font-size: 11px; margin-top: 5px; }
-    
-    /* BUTTONS */
-    .btn { display: block; width: 100%; padding: 16px 20px; border: none; border-radius: 15px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 12px; transition: all 0.3s ease; text-align: center; text-decoration: none; }
-    .btn:active { transform: scale(0.98); opacity: 0.9; }
-    .btn-primary { background: linear-gradient(135deg, #4CAF50, #45a049); color: #fff; }
-    .btn-secondary { background: linear-gradient(135deg, #2196F3, #1976D2); color: #fff; }
-    .btn-warning { background: linear-gradient(135deg, #FF9800, #F57C00); color: #fff; }
-    .btn-purple { background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; }
-    .btn-purple { background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; }
-    .btn-subtext { display: block; font-size: 11px; font-weight: normal; opacity: 0.8; margin-top: 4px; }
-    .btn-small { padding: 12px 20px; font-size: 14px; }
-    
-    /* TELEGRAM CARD */
-    .telegram-card { background: linear-gradient(135deg, #0088cc, #0077b5); border-radius: 20px; padding: 20px; margin-bottom: 25px; position: relative; overflow: hidden; }
-    .telegram-card::before { content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); }
-    .telegram-card-content { position: relative; z-index: 1; display: flex; align-items: center; gap: 15px; }
-    .telegram-icon { font-size: 40px; }
-    .telegram-info { flex: 1; }
-    .telegram-title { font-size: 16px; font-weight: bold; }
-    .telegram-subtitle { color: rgba(255,255,255,0.8); font-size: 12px; margin-top: 3px; }
-    .telegram-btn { background: #fff; color: #0088cc; border: none; padding: 10px 20px; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer; white-space: nowrap; }
-    
-    /* SECTION */
-    .section { margin-bottom: 25px; }
-    .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
-    
-    /* GAME CARDS */
-    .game-grid { display: flex; flex-direction: column; gap: 15px; }
-    .game-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 15px; display: flex; align-items: center; gap: 15px; cursor: pointer; transition: all 0.3s ease; }
-    .game-card:active { transform: scale(0.98); border-color: #4CAF50; }
-    .game-icon { width: 70px; height: 70px; border-radius: 15px; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-    .game-info { flex: 1; }
-    .game-name { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-    .game-desc { color: #aaa; font-size: 12px; line-height: 1.4; }
-    .game-badge { background: linear-gradient(135deg, #4CAF50, #45a049); padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: bold; display: inline-block; margin-top: 8px; }
-    .game-arrow { color: #666; font-size: 20px; }
-    
-    /* PAGE SYSTEM */
-    .page { display: none; }
-    .page.active { display: block; }
-    
-    /* BACK BUTTON */
-    .back-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 10px 15px; border-radius: 10px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; }
-    .back-btn:active { opacity: 0.7; }
-    
-    /* SETUP STEPS */
-    .setup-step { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px; margin-bottom: 15px; }
-    .setup-step-header { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
-    .setup-step-number { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #4CAF50, #45a049); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0; }
-    .setup-step-title { font-size: 16px; font-weight: bold; }
-    .setup-step-desc { color: #aaa; font-size: 13px; line-height: 1.5; margin-bottom: 15px; }
-    .setup-step-action { display: flex; gap: 10px; flex-wrap: wrap; }
-    .setup-step-action .btn { margin-bottom: 0; flex: 1; min-width: 140px; }
-    
-    /* DETAIL BUTTON */
-    .detail-btn { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; flex: 1; }
-    
-    /* MODAL */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); }
-    .modal-overlay.show { display: flex; }
-    .modal { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 20px; max-width: 450px; width: 100%; max-height: 85vh; overflow-y: auto; border: 2px solid rgba(255,255,255,0.1); }
-    .modal-header { background: linear-gradient(135deg, #4CAF50, #45a049); padding: 20px; border-radius: 18px 18px 0 0; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-    .modal-header.orange { background: linear-gradient(135deg, #FF9800, #F57C00); }
-    .modal-title { font-size: 18px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
-    .modal-close { background: rgba(255,255,255,0.2); border: none; color: #fff; width: 35px; height: 35px; border-radius: 50%; font-size: 20px; cursor: pointer; }
-    .modal-body { padding: 20px; }
-    
-    /* SUCCESS MODAL */
-    .success-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(8px); animation: fadeIn 0.3s ease; }
-    .success-overlay.show { display: flex; }
-    .success-content { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 25px; padding: 40px 30px; text-align: center; border: 2px solid rgba(76, 175, 80, 0.5); box-shadow: 0 0 50px rgba(76, 175, 80, 0.3); animation: scaleIn 0.4s ease; max-width: 350px; width: 100%; }
-    .success-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 0.6s ease; }
-    .success-title { font-size: 24px; font-weight: bold; color: #4CAF50; margin-bottom: 10px; }
-    .success-message { color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 25px; }
-    .success-btn { background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px 40px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; }
-    @keyframes scaleIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
-    
-    /* VIDEO */
-    .video-container { background: #000; border-radius: 12px; overflow: hidden; margin-bottom: 15px; }
-    .video-container video { width: 100%; display: block; }
-    
-    /* STEPS */
-    .step-item { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 10px; display: flex; gap: 12px; }
-    .step-num { width: 28px; height: 28px; border-radius: 50%; background: #4CAF50; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
-    .step-content { flex: 1; }
-    .step-content strong { display: block; margin-bottom: 5px; font-size: 14px; }
-    .step-content p { color: #aaa; font-size: 12px; line-height: 1.4; margin: 0; }
-    
-    /* BOXES */
-    .warning-box { background: rgba(255, 152, 0, 0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin: 15px 0; }
-    .warning-box .boxtitle { color: #FF9800; font-weight: bold; margin-bottom: 8px; font-size: 14px; }
-    .warning-box .content { color: #ddd; font-size: 13px; line-height: 1.5; }
-    
-    .success-box { background: rgba(76, 175, 80, 0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin: 15px 0; }
-    .success-box .boxtitle { color: #4CAF50; font-weight: bold; margin-bottom: 8px; font-size: 14px; }
-    .success-box .content { color: #ddd; font-size: 13px; line-height: 1.5; }
-    
-    /* FEATURES */
-    .features { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 15px; margin-top: 15px; }
-    .features-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-    .feature-item { color: #aaa; font-size: 13px; margin-bottom: 6px; padding-left: 5px; }
-    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .feature-item-new { background: rgba(255,255,255,0.05); padding: 10px 12px; border-radius: 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
-    
-    /* PRICE CARD - Dinamik Hileler İçin */
-    .pricing-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .price-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 18px 15px; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 85px; }
-    .price-card:hover { border-color: rgba(76, 175, 80, 0.5); background: rgba(76, 175, 80, 0.08); }
-    .price-card:active, .price-card.selected { border-color: #4CAF50; background: rgba(76, 175, 80, 0.2); transform: scale(0.98); box-shadow: 0 0 15px rgba(76, 175, 80, 0.3); }
-    .price-card.premium { grid-column: span 2; background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(255, 193, 7, 0.06)); border-color: rgba(255, 215, 0, 0.4); }
-    .price-card.premium:hover { border-color: rgba(255, 215, 0, 0.6); }
-    .price-card.premium.selected { border-color: #FFD700; background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 193, 7, 0.2)); box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
-    .price-card .price-label { font-size: 16px; font-weight: bold; color: #fff; }
-    .price-card.premium .price-label { color: #FFD700; font-size: 18px; }
-    .price-card .price-value { font-size: 18px; font-weight: bold; color: #4CAF50; }
-    .price-card.premium .price-value { color: #FFD700; font-size: 20px; }
-    .price-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; }
-    .price-item.highlight { background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 193, 7, 0.1)); }
-    .price-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0 15px; }
-    
-    /* PRICE BUTTONS */
-    .price-buttons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 15px; padding: 10px; }
-    .price-btn { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 20px 15px; cursor: pointer; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 90px; }
-    .price-btn:hover { border-color: rgba(76, 175, 80, 0.5); background: rgba(76, 175, 80, 0.08); }
-    .price-btn:active, .price-btn.selected { border-color: #4CAF50; background: rgba(76, 175, 80, 0.2); transform: scale(0.98); box-shadow: 0 0 15px rgba(76, 175, 80, 0.3); }
-    .price-btn.premium { grid-column: span 2; background: linear-gradient(135deg, rgba(255, 215, 0, 0.12), rgba(255, 193, 7, 0.06)); border-color: rgba(255, 215, 0, 0.4); }
-    .price-btn.premium:hover { border-color: rgba(255, 215, 0, 0.6); background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 193, 7, 0.1)); }
-    .price-btn.premium.selected { border-color: #FFD700; background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 193, 7, 0.2)); box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
-    .price-btn-label { font-size: 18px; font-weight: bold; color: #fff; }
-    .price-btn.premium .price-btn-label { color: #FFD700; font-size: 20px; }
-    .price-btn-sub { font-size: 12px; color: #999; }
-    .price-btn-price { font-size: 16px; font-weight: bold; color: #4CAF50; margin-top: 4px; }
-    .price-btn.premium .price-btn-price { color: #FFD700; font-size: 18px; }
-    
-    /* SELECTED PRICE CARD */
-    .selected-price-card { background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(69, 160, 73, 0.1)); border: 2px solid #4CAF50; border-radius: 15px; padding: 15px; display: flex; align-items: center; justify-content: space-between; gap: 15px; animation: fadeIn 0.3s ease; }
-    .selected-price-card.premium { background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 193, 7, 0.1)); border-color: #FFD700; }
-    .selected-price-info { flex: 1; }
-    .selected-price-label { font-size: 14px; color: #aaa; margin-bottom: 5px; }
-    .selected-price-value { font-size: 28px; font-weight: bold; color: #4CAF50; }
-    .selected-price-card.premium .selected-price-value { color: #FFD700; }
-    .buy-telegram-btn { background: linear-gradient(135deg, #0088cc, #0077b5); border: none; color: #fff; padding: 15px 25px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; white-space: nowrap; }
-    .buy-telegram-btn:active { transform: scale(0.98); opacity: 0.9; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes slideInRight { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
-    @keyframes slideOutRight { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(100px); } }
-
-    .divider { height: 1px; background: rgba(255,255,255,0.1); margin: 25px 0; }
-    
-    .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: #fff; padding: 12px 25px; border-radius: 10px; z-index: 1100; transition: transform 0.3s ease; font-size: 13px; }
-    .toast.show { transform: translateX(-50%) translateY(0); }
-    
-    /* AUTH STYLES */
-    .auth-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 25px; margin-bottom: 20px; }
-    .auth-input { width: 100%; padding: 15px; border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(255,255,255,0.05); color: #fff; font-size: 16px; margin-bottom: 12px; outline: none; }
-    .auth-input:focus { border-color: #4CAF50; }
-    .auth-input::placeholder { color: #666; }
-    .auth-link { color: #4CAF50; cursor: pointer; text-decoration: underline; }
-    .user-badge { background: linear-gradient(135deg, #4CAF50, #45a049); padding: 8px 15px; border-radius: 20px; font-size: 12px; display: inline-flex; align-items: center; gap: 8px; }
-    .user-card { background: rgba(76, 175, 80, 0.1); border: 2px solid #4CAF50; border-radius: 20px; padding: 20px; margin-bottom: 20px; }
-    .key-status { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-top: 15px; }
-    .key-active { border: 2px solid #4CAF50; background: rgba(76, 175, 80, 0.1); }
-    .key-expired { border: 2px solid #f44336; background: rgba(244, 67, 54, 0.1); }
-    
-    /* COLLAPSIBLE ADMIN SECTIONS */
-    .admin-section { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 16px; margin-bottom: 12px; overflow: hidden; }
-    .admin-section-header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; cursor: pointer; transition: all 0.2s ease; }
-    .admin-section-header:hover { background: rgba(255,255,255,0.03); }
-    .admin-section-header:active { background: rgba(255,255,255,0.05); }
-    .admin-section-title { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 14px; }
-    .admin-section-title .icon { font-size: 18px; }
-    .admin-section-toggle { font-size: 12px; color: #888; transition: transform 0.3s ease; }
-    .admin-section.open .admin-section-toggle { transform: rotate(180deg); }
-    .admin-section-content { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out, padding 0.3s ease; padding: 0 18px; }
-    .admin-section.open .admin-section-content { max-height: 2000px; padding: 0 18px 18px 18px; }
-    
-    /* NOTIFICATION TOAST */
-    .notification-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: linear-gradient(135deg, #4CAF50, #45a049); color: #fff; padding: 15px 25px; border-radius: 15px; z-index: 2000; transition: transform 0.4s ease; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); max-width: 90%; text-align: center; }
-    .notification-toast.show { transform: translateX(-50%) translateY(0); }
-    .notification-toast.error { background: linear-gradient(135deg, #f44336, #d32f2f); }
-    .notification-toast.warning { background: linear-gradient(135deg, #FF9800, #F57C00); }
-    
-    /* ORDER CARD */
-    .order-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 15px; padding: 15px; margin-bottom: 12px; }
-    .order-card.pending { border-color: #FF9800; background: rgba(255, 152, 0, 0.1); }
-    .order-card.approved { border-color: #4CAF50; background: rgba(76, 175, 80, 0.1); }
-    .order-card.rejected { border-color: #f44336; background: rgba(244, 67, 54, 0.1); }
-    .order-status { display: inline-block; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: bold; }
-    .order-status.pending { background: #FF9800; color: #000; }
-    .order-status.approved { background: #4CAF50; color: #fff; }
-    .order-status.rejected { background: #f44336; color: #fff; }
-    
-    /* PAYMENT METHOD BUTTONS */
-    .payment-method-btn { width: 100%; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 15px; padding: 18px 20px; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: space-between; color: #fff; }
-    .payment-method-btn:hover, .payment-method-btn:active { border-color: #4CAF50; background: rgba(76, 175, 80, 0.1); transform: scale(0.98); }
-    
-    /* ===================== PROFİL PANELİ SIDEBAR ===================== */
-    .profile-toggle-btn { position: fixed !important; top: calc(15px + env(safe-area-inset-top, 0px)) !important; right: 15px !important; left: auto !important; z-index: 999; width: 50px; height: 50px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); background: linear-gradient(135deg, #1a1a2e, #16213e); cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: all 0.3s ease; overflow: hidden; }
-    .profile-toggle-btn:active { transform: scale(0.95); }
-    .profile-toggle-btn img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-    .profile-toggle-btn .default-avatar { font-size: 24px; }
-    .profile-toggle-btn.logged-in { border-color: #4CAF50; }
-    .profile-toggle-btn .notification-dot { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: #f44336; border-radius: 50%; border: 2px solid #1a1a2e; }
-    
-    .profile-sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s ease; backdrop-filter: blur(5px); }
-    .profile-sidebar-overlay.active { opacity: 1; visibility: visible; }
-    
-    .profile-sidebar { position: fixed; top: 0; right: 0; width: 85%; max-width: 320px; height: 100%; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); z-index: 1001; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: -5px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
-    .profile-sidebar.active { transform: translateX(0); }
-    
-    .profile-sidebar-header { background: linear-gradient(135deg, #4CAF50, #45a049); padding: 30px 20px; padding-top: calc(30px + env(safe-area-inset-top, 0px)); text-align: center; position: relative; }
-    .profile-sidebar-header.logged-out { background: linear-gradient(135deg, #2196F3, #1976D2); }
-    .profile-close-btn { position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); border: none; color: #fff; width: 35px; height: 35px; border-radius: 50%; font-size: 18px; cursor: pointer; }
-    
-    .profile-avatar-container { position: relative; width: 100px; height: 100px; margin: 0 auto 15px; }
-    .profile-avatar { width: 100px; height: 100px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.3); object-fit: cover; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 50px; overflow: hidden; }
-    .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
-    .profile-avatar-edit { position: absolute; bottom: 0; right: 0; width: 32px; height: 32px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.3); font-size: 14px; }
-    .profile-avatar-edit input { display: none; }
-    
-    .profile-username { font-size: 18px; font-weight: bold; color: #fff; margin-bottom: 5px; word-break: break-all; }
-    .profile-email { font-size: 12px; color: rgba(255,255,255,0.8); word-break: break-all; }
-    
-    .profile-sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
-    
-    .profile-menu-item { display: flex; align-items: center; gap: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s ease; border: 2px solid transparent; }
-    .profile-menu-item:active { transform: scale(0.98); background: rgba(255,255,255,0.1); }
-    .profile-menu-item.active { border-color: #4CAF50; background: rgba(76, 175, 80, 0.15); }
-    .profile-menu-item .menu-icon { font-size: 22px; width: 35px; text-align: center; }
-    .profile-menu-item .menu-text { flex: 1; }
-    .profile-menu-item .menu-title { font-size: 14px; font-weight: bold; }
-    .profile-menu-item .menu-subtitle { font-size: 11px; color: #aaa; }
-    .profile-menu-item .menu-badge { background: #f44336; padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
-    .profile-menu-item .menu-arrow { color: #666; font-size: 16px; }
-    
-    .profile-key-status { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-    .profile-key-status.active { background: rgba(76, 175, 80, 0.15); border: 1px solid rgba(76, 175, 80, 0.3); }
-    .profile-key-status.expired { background: rgba(244, 67, 54, 0.15); border: 1px solid rgba(244, 67, 54, 0.3); }
-    .profile-key-title { font-size: 12px; color: #aaa; margin-bottom: 5px; }
-    .profile-key-value { font-size: 14px; font-weight: bold; }
-    .profile-key-value.active { color: #4CAF50; }
-    .profile-key-value.expired { color: #f44336; }
-    
-    .profile-logout-btn { width: 100%; background: rgba(244, 67, 54, 0.15); border: 2px solid rgba(244, 67, 54, 0.3); color: #f44336; padding: 15px; border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-    .profile-logout-btn:active { background: rgba(244, 67, 54, 0.25); transform: scale(0.98); }
-    
-    .profile-login-section { text-align: center; padding: 30px 20px; }
-    .profile-login-section .login-icon { font-size: 60px; margin-bottom: 15px; }
-    .profile-login-section h3 { margin-bottom: 10px; }
-    .profile-login-section p { color: #aaa; font-size: 13px; margin-bottom: 20px; }
-    .profile-login-btn { width: 100%; background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px; border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; margin-bottom: 10px; }
-    .profile-register-btn { width: 100%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); color: #fff; padding: 15px; border-radius: 12px; font-size: 14px; font-weight: bold; cursor: pointer; }
-    
-    @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }
-    @keyframes slideOutRight { from { transform: translateX(0); } to { transform: translateX(100%); } }
-</style>
-
-<body>
-
-<!-- 🏪 GAME STORE - HİLE MAĞAZASI ARKA PLAN -->
-<div class="animated-bg">
-    <!-- Kayan GAME STORE Yazıları -->
-    <div class="text-banner text-banner-1">GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • </div>
-    <div class="text-banner text-banner-2">GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • </div>
-    <div class="text-banner text-banner-3">GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • </div>
-    <div class="text-banner text-banner-4">GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • GAME STORE • </div>
-    
-    <!-- Dikey Kayan Yazılar -->
-    <div class="text-vertical text-vertical-1">GAME STORE GAME STORE GAME STORE</div>
-    <div class="text-vertical text-vertical-2">GAME STORE GAME STORE GAME STORE</div>
-    
-    <!-- Parlayan Köşeler -->
-    <div class="corner-glow corner-glow-1"></div>
-    <div class="corner-glow corner-glow-2"></div>
-    <div class="corner-glow corner-glow-3"></div>
-    
-    <!-- Yatay Çizgiler -->
-    <div class="store-line store-line-1"></div>
-    <div class="store-line store-line-2"></div>
-    <div class="store-line store-line-3"></div>
-    
-    <!-- Kayan Işık Çubukları -->
-    <div class="light-bar light-bar-1"></div>
-    <div class="light-bar light-bar-2"></div>
-    <div class="light-bar light-bar-3"></div>
-    
-    <!-- Parıltılar -->
-    <div class="sparkle sparkle-1"></div>
-    <div class="sparkle sparkle-2"></div>
-    <div class="sparkle sparkle-3"></div>
-    <div class="sparkle sparkle-4"></div>
-    <div class="sparkle sparkle-5"></div>
-    <div class="sparkle sparkle-6"></div>
-    
-    <!-- Efekt Katmanları -->
-    <div class="grid-overlay"></div>
-    <div class="vignette"></div>
-</div>
-
-<!-- ===================== SİPARİŞ ONAY POPUP (EKRAN ORTASI) ===================== -->
-<div id="orderApprovalPopup" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 99999; align-items: center; justify-content: center;">
-    <div style="background: linear-gradient(135deg, #1a1a2e, #16213e); border-radius: 20px; padding: 30px; margin: 20px; max-width: 350px; text-align: center; animation: popupBounce 0.5s ease; border: 2px solid #4CAF50; box-shadow: 0 0 50px rgba(76, 175, 80, 0.5);">
-        <div style="font-size: 80px; margin-bottom: 15px;">🎉</div>
-        <div style="font-size: 24px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">Siparişiniz Onaylandı!</div>
-        <div id="approvalPopupMessage" style="color: #fff; font-size: 16px; margin-bottom: 20px; line-height: 1.6;"></div>
-        <div id="approvalPopupKey" style="background: rgba(76, 175, 80, 0.2); border: 1px solid #4CAF50; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
-            <div style="color: #aaa; font-size: 12px; margin-bottom: 5px;">KEY KODUNUZ</div>
-            <div style="color: #4CAF50; font-size: 20px; font-weight: bold; font-family: monospace; word-break: break-all;"></div>
-        </div>
-        <button onclick="closeOrderApprovalPopup()" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: #fff; border: none; padding: 15px 40px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);">
-            ✓ Tamam
-        </button>
-    </div>
-</div>
-
-<style>
-@keyframes popupBounce {
-    0% { transform: scale(0.5); opacity: 0; }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); opacity: 1; }
-}
-.notif-badge {
-    position: absolute;
-    top: -5px;
-    right: -5px;
-    background: #f44336;
-    color: #fff;
-    font-size: 10px;
-    font-weight: bold;
-    min-width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 0 4px;
-    box-shadow: 0 2px 5px rgba(244, 67, 54, 0.5);
-    animation: badgePulse 2s infinite;
-}
-@keyframes badgePulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-}
-</style>
-
-<!-- ===================== PROFİL TOGGLE BUTONU (SAĞ ÜST) ===================== -->
-<button class="profile-toggle-btn" id="profileToggleBtn" onclick="toggleProfilePanel()">
-    <span class="default-avatar">👤</span>
-    <img id="toggleBtnAvatar" src="" style="display: none;">
-    <span class="notification-dot" id="profileNotifDot" style="display: none;"></span>
-    <span class="notif-badge" id="profileNotifBadge">0</span>
-</button>
-
-<!-- ===================== PROFİL SIDEBAR PANELİ ===================== -->
-<div class="profile-sidebar-overlay" id="profileOverlay" onclick="toggleProfilePanel()"></div>
-<div class="profile-sidebar" id="profileSidebar">
-    <!-- Giriş Yapmış Kullanıcı Header -->
-    <div class="profile-sidebar-header" id="sidebarHeaderLoggedIn" style="display: none;">
-        <button class="profile-close-btn" onclick="toggleProfilePanel()">✕</button>
-        <div class="profile-avatar-container">
-            <div class="profile-avatar" id="profileAvatarDisplay">
-                <span>👤</span>
-                <img id="profileAvatarImg" src="" style="display: none;">
-            </div>
-            <label class="profile-avatar-edit">
-                📷
-                <input type="file" id="profilePhotoInput" accept="image/*" onchange="handleProfilePhotoSelect(event)">
-            </label>
-        </div>
-        <div class="profile-username" id="sidebarUsername">Kullanıcı</div>
-        <div class="profile-email" id="sidebarEmail">kullanici@email.com</div>
-    </div>
-    
-    <!-- Giriş Yapmamış Kullanıcı Header -->
-    <div class="profile-sidebar-header logged-out" id="sidebarHeaderLoggedOut">
-        <button class="profile-close-btn" onclick="toggleProfilePanel()">✕</button>
-        <div class="profile-avatar-container">
-            <div class="profile-avatar">
-                <span>👤</span>
-            </div>
-        </div>
-        <div class="profile-username">Hoş Geldiniz</div>
-        <div class="profile-email">Giriş yapın veya kayıt olun</div>
-    </div>
-    
-    <!-- Sidebar İçerik -->
-    <div class="profile-sidebar-content">
-        <!-- Giriş Yapmış Kullanıcı İçeriği -->
-        <div id="sidebarContentLoggedIn" style="display: none;">
-            <!-- Key Durumu -->
-            <div class="profile-key-status" id="sidebarKeyStatus" onclick="openKeyDetailModal(); toggleProfilePanel();">
-                <div class="profile-key-title">🔑 Key Durumu</div>
-                <div class="profile-key-value" id="sidebarKeyText">Aktif Key Yok</div>
-            </div>
-
-            <!-- Sadakat Puanı -->
-            <div class="profile-key-status" id="sidebarLoyaltyStatus" onclick="openLoyaltyModal(); toggleProfilePanel();">
-                <div class="profile-key-title">🎁 Sadakat Puanı</div>
-                <div class="profile-key-value" id="sidebarLoyaltyPoints">0</div>
-            </div>
-            
-            <!-- Menü Öğeleri -->
-            <div class="profile-menu-item" onclick="openModal('redeemKeyModal'); toggleProfilePanel();">
-                <span class="menu-icon">🎟️</span>
-                <div class="menu-text">
-                    <div class="menu-title">Key Kodu Gir</div>
-                    <div class="menu-subtitle">Satın aldığınız key'i aktifleştirin</div>
-                </div>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <div class="profile-menu-item" onclick="navigateTo('myOrdersPage'); loadMyOrders(); toggleProfilePanel();">
-                <span class="menu-icon">📦</span>
-                <div class="menu-text">
-                    <div class="menu-title">Siparişlerim</div>
-                    <div class="menu-subtitle">Tüm siparişlerinizi görüntüleyin</div>
-                </div>
-                <span class="menu-badge" id="sidebarOrderBadge" style="display: none;">0</span>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <div class="profile-menu-item" onclick="openNotificationsModal(); toggleProfilePanel();">
-                <span class="menu-icon">🔔</span>
-                <div class="menu-text">
-                    <div class="menu-title">Bildirimler</div>
-                    <div class="menu-subtitle">Bildirimlerinizi kontrol edin</div>
-                </div>
-                <span class="menu-badge" id="sidebarNotifBadge" style="display: none;">0</span>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <div class="profile-menu-item" onclick="openUserChatModal(); toggleProfilePanel();">
-                <span class="menu-icon">💬</span>
-                <div class="menu-text">
-                    <div class="menu-title">Destek</div>
-                    <div class="menu-subtitle">Yardım alın veya soru sorun</div>
-                </div>
-                <span class="menu-badge" id="sidebarChatBadge" style="display: none;">0</span>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <!-- Admin Butonu -->
-            <div class="profile-menu-item" id="sidebarAdminBtn" style="display: none;" onclick="navigateTo('adminPage'); loadPendingOrders(); toggleProfilePanel();">
-                <span class="menu-icon">👑</span>
-                <div class="menu-text">
-                    <div class="menu-title">Admin Panel</div>
-                    <div class="menu-subtitle">Yönetim paneline erişin</div>
-                </div>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <!-- Şifre Değiştir Butonu -->
-            <div class="profile-menu-item" onclick="openChangePasswordModal(); toggleProfilePanel();">
-                <span class="menu-icon">🔒</span>
-                <div class="menu-text">
-                    <div class="menu-title">Şifre Değiştir</div>
-                    <div class="menu-subtitle">Hesap şifrenizi güncelleyin</div>
-                </div>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <!-- FCM Test Butonu (gizli) -->
-            <div class="profile-menu-item" id="sidebarNotifTestBtn" style="display: none;" onclick="testFcmNotification(); toggleProfilePanel();">
-                <span class="menu-icon">🔔</span>
-                <div class="menu-text">
-                    <div class="menu-title">Bildirim Test</div>
-                    <div class="menu-subtitle">Push bildirim durumunu test et</div>
-                </div>
-                <span class="menu-arrow">›</span>
-            </div>
-            
-            <!-- Çıkış Butonu -->
-            <button class="profile-logout-btn" onclick="logout(); toggleProfilePanel();">🚪 Çıkış Yap</button>
-        </div>
-        
-        <!-- Giriş Yapmamış Kullanıcı İçeriği -->
-        <div id="sidebarContentLoggedOut">
-            <div class="profile-login-section">
-                <div class="login-icon">🔐</div>
-                <h3>Hesabınıza Giriş Yapın</h3>
-                <p>Satın alma, key yönetimi ve özel içeriklere erişmek için giriş yapın</p>
-                <button class="profile-login-btn" onclick="navigateTo('loginPage'); toggleProfilePanel();">🔐 Giriş Yap</button>
-                <button class="profile-register-btn" onclick="navigateTo('registerPage'); toggleProfilePanel();">📝 Kayıt Ol</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================== GİRİŞ SAYFA ==================== -->
-<div class="page" id="loginPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">← Geri</button>
-    <div class="header" style="margin-bottom: 20px;">
-        <div style="font-size: 60px; margin-bottom: 10px;">🔐</div>
-        <h1 class="title" style="font-size: 24px;">Giriş Yap</h1>
-        <p class="subtitle">Hesabınıza giriş yapın</p>
-    </div>
-    <div class="auth-card">
-        <input type="email" id="loginEmail" class="auth-input" placeholder="E-posta adresiniz">
-        <input type="password" id="loginPassword" class="auth-input" placeholder="Şifreniz">
-        <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="rememberMe" style="width: 20px; height: 20px; accent-color: #4CAF50; cursor: pointer;">
-            <span style="color: #aaa; font-size: 14px;">Beni Hatırla</span>
-        </label>
-        <button class="btn btn-primary" onclick="loginUser()">Giriş Yap</button>
-        <p style="text-align: center; color: #aaa; font-size: 13px; margin-top: 15px;">
-            <span class="auth-link" onclick="navigateTo('forgotPasswordPage')" style="color: #FF9800;">🔑 Şifremi Unuttum</span>
-        </p>
-        <p style="text-align: center; color: #aaa; font-size: 13px; margin-top: 10px;">
-            Hesabınız yok mu? <span class="auth-link" onclick="navigateTo('registerPage')">Kayıt Ol</span>
-        </p>
-    </div>
-</div>
-</div>
-
-<!-- ==================== ŞİFREMİ UNUTTUM SAYFA ==================== -->
-<div class="page" id="forgotPasswordPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateTo('loginPage')">← Geri</button>
-    <div class="header" style="margin-bottom: 20px;">
-        <div style="font-size: 60px; margin-bottom: 10px;">🔐</div>
-        <h1 class="title" style="font-size: 24px;">Şifremi Unuttum</h1>
-        <p class="subtitle">Şifre sıfırlama bağlantısı alın</p>
-    </div>
-    <div class="auth-card">
-        <div style="background: rgba(33,150,243,0.15); border: 1px solid #2196F3; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="font-size: 24px;">📧</div>
-                <div style="font-size: 13px; color: #aaa; line-height: 1.5;">E-posta adresinize şifre sıfırlama bağlantısı göndereceğiz. Bağlantıya tıklayarak yeni şifrenizi belirleyebilirsiniz.</div>
-            </div>
-        </div>
-        <input type="email" id="forgotEmail" class="auth-input" placeholder="Kayıtlı e-posta adresiniz">
-        <button class="btn btn-warning" onclick="sendPasswordReset()" id="resetBtn">📤 Sıfırlama Bağlantısı Gönder</button>
-        <div id="resetSuccessMsg" style="display: none; background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin-top: 15px; text-align: center;">
-            <div style="font-size: 30px; margin-bottom: 10px;">✅</div>
-            <div style="font-weight: bold; color: #4CAF50; margin-bottom: 5px;">E-posta Gönderildi!</div>
-            <div style="font-size: 13px; color: #aaa;">Lütfen e-posta kutunuzu kontrol edin. Spam klasörünü de kontrol etmeyi unutmayın.</div>
-        </div>
-        <p style="text-align: center; color: #aaa; font-size: 13px; margin-top: 20px;">
-            Şifrenizi hatırladınız mı? <span class="auth-link" onclick="navigateTo('loginPage')">Giriş Yap</span>
-        </p>
-    </div>
-</div>
-</div>
-
-<!-- ==================== KAYIT SAYFA ==================== -->
-<div class="page" id="registerPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">← Geri</button>
-    <div class="header" style="margin-bottom: 20px;">
-        <div style="font-size: 60px; margin-bottom: 10px;">📝</div>
-        <h1 class="title" style="font-size: 24px;">Kayıt Ol</h1>
-        <p class="subtitle">Yeni hesap oluşturun</p>
-    </div>
-    <div class="auth-card">
-        <input type="email" id="registerEmail" class="auth-input" placeholder="E-posta adresiniz">
-        <input type="password" id="registerPassword" class="auth-input" placeholder="Şifre (min 6 karakter)">
-        <input type="password" id="registerPassword2" class="auth-input" placeholder="Şifre tekrar">
-        <button class="btn btn-primary" onclick="registerUser()">Kayıt Ol</button>
-        <p style="text-align: center; color: #aaa; font-size: 13px; margin-top: 15px;">
-            Zaten hesabınız var mı? <span class="auth-link" onclick="navigateTo('loginPage')">Giriş Yap</span>
-        </p>
-    </div>
-</div>
-</div>
-
-<!-- ==================== SİPARİŞLERİM SAYFA ==================== -->
-<div class="page" id="myOrdersPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">← Geri</button>
-    <div class="header" style="margin-bottom: 20px;">
-        <div style="font-size: 60px; margin-bottom: 10px;">📦</div>
-        <h1 class="title" style="font-size: 24px;">Siparişlerim</h1>
-        <p class="subtitle">Tüm siparişlerinizi görüntüleyin</p>
-    </div>
-    
-    <div id="myOrdersList">
-        <div style="text-align: center; padding: 30px; color: #aaa;">Yükleniyor...</div>
-    </div>
-</div>
-</div>
-
-<!-- ==================== ADMİN PANELİ ==================== -->
-<div class="page" id="adminPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">← Geri</button>
-    <div class="header" style="margin-bottom: 20px;">
-        <div style="font-size: 60px; margin-bottom: 10px;">👑</div>
-        <h1 class="title" style="font-size: 24px;">Admin Panel</h1>
-        <p class="subtitle">Yönetim Paneli</p>
-        <div id="myPermissionsBadge" style="margin-top: 10px; font-size: 12px; color: #aaa;"></div>
-    </div>
-    
-    <!-- Admin Yönetimi (admin_management yetkisi) -->
-    <div class="admin-section permission-section" id="adminManagementSection" data-permission="admin_management">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">👮</span>
-                <span>Admin Yönetimi</span>
-                <span class="permission-badge" style="background: #9C27B0; padding: 2px 6px; border-radius: 5px; font-size: 10px;">admin_management</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <!-- Admin Ekle -->
-            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                <input type="email" id="newAdminEmail" class="auth-input" placeholder="Admin yapılacak e-posta" style="flex: 1; margin: 0;">
-                <button onclick="openAddAdminModal()" style="background: #4CAF50; border: none; color: #fff; padding: 10px 15px; border-radius: 10px; font-size: 14px; cursor: pointer; white-space: nowrap;">➕ Ekle</button>
-            </div>
-            <!-- Admin Listesi -->
-            <div id="adminListContainer" style="max-height: 400px; overflow-y: auto;">
-                <div style="font-size: 13px; color: #aaa; text-align: center; padding: 15px;">Yüklemek için bölümü açın</div>
-            </div>
-            <button onclick="loadAdminListUI()" style="background: #FF9800; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Yenile</button>
-        </div>
-    </div>
-    
-    <!-- Üye Yönetimi (members_view yetkisi) -->
-    <div class="admin-section permission-section" id="membersSection" data-permission="members_view">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">👥</span>
-                <span>Üye Yönetimi</span>
-                <span id="totalUsersCount" style="background: #2196F3; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
-                <span id="totalOnlineCount" style="background: #4CAF50; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
-                <span class="permission-badge" style="background: #2196F3; padding: 2px 6px; border-radius: 5px; font-size: 10px;">members_view</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <div id="usersListContainer" style="max-height: 300px; overflow-y: auto;">
-                <div style="font-size: 13px; color: #aaa; text-align: center; padding: 20px;">Yüklemek için bölümü açın</div>
-            </div>
-            <button onclick="loadAllUsers()" style="background: #2196F3; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Yenile</button>
-        </div>
-    </div>
-    
-    <!-- Key Aktifle (keys_add yetkisi) -->
-    <div class="admin-section permission-section" id="keysAddSection" data-permission="keys_add">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">🔑</span>
-                <span>Key Aktifle</span>
-                <span class="permission-badge" style="background: #4CAF50; padding: 2px 6px; border-radius: 5px; font-size: 10px;">keys_add</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <input type="email" id="adminUserEmail" class="auth-input" placeholder="Kullanıcı e-posta">
-            <select id="adminGame" class="auth-input" style="color: #fff;" onchange="updateCheatOptions()">
-                <option value="">🎮 Oyun Seçin...</option>
-            </select>
-            <select id="adminCheat" class="auth-input" style="color: #fff;" disabled>
-                <option value="">🛡️ Önce oyun seçin...</option>
-            </select>
-            <select id="adminPackage" class="auth-input" style="color: #fff;">
-                <option value="1">⏱️ 1 Günlük</option>
-                <option value="7">⏱️ 7 Günlük</option>
-                <option value="30">⏱️ 30 Günlük</option>
-                <option value="60">⏱️ 60 Günlük</option>
-                <option value="90">⏱️ 90 Günlük</option>
-                <option value="365">⏱️ Sınırsız (1 Yıl)</option>
-            </select>
-            <input type="text" id="adminKeyCode" class="auth-input" placeholder="🔑 Key Kodu (TheBestML panelden aldığınız key)" style="font-family: monospace;">
-            <div style="font-size: 11px; color: #888; margin-top: -8px; margin-bottom: 10px;">💡 Boş bırakılırsa otomatik üretilir</div>
-            <button class="btn btn-primary" onclick="activateKey()">✅ Key Aktifle</button>
-        </div>
-    </div>
-    
-    <!-- Oyun/Hile Yönetimi (games yetkisi) -->
-    <div class="admin-section permission-section" id="gameCheatManagementSection" data-permission="games">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">🎮</span>
-                <span>Oyun & Hile Yönetimi</span>
-                <span class="permission-badge" style="background: #E91E63; padding: 2px 6px; border-radius: 5px; font-size: 10px;">games</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <div id="gameCheatList" style="font-size: 12px; color: #aaa; max-height: 250px; overflow-y: auto; margin-bottom: 15px;"></div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-small" onclick="openGameModal()" style="flex: 1;">➕ Yeni Oyun</button>
-                <button class="btn btn-secondary btn-small" onclick="openCheatModal()" style="flex: 1;">➕ Yeni Hile</button>
-                <button class="btn btn-purple btn-small" onclick="openSortModal()" style="flex: 1;">⬍ Sıralama</button>
-                <button class="btn btn-warning btn-small" onclick="loadGameCheatList()" style="flex: 1;">🔄 Yenile</button>
-            </div>
-
-            <!-- Hile Güncelleme (dosya/version) -->
-            <div style="background: rgba(233,30,99,0.08); border: 1px solid rgba(233,30,99,0.25); border-radius: 10px; padding: 12px; margin-top: 15px;">
-                <div style="font-size: 12px; font-weight: bold; color: #E91E63; margin-bottom: 10px;">🛠️ Hile Güncelleme</div>
-                <select id="cheatUpdateGame" class="auth-input" style="color: #fff;" onchange="updateCheatUpdateOptions()">
-                    <option value="">🎮 Oyun Seçin...</option>
-                </select>
-                <select id="cheatUpdateCheat" class="auth-input" style="color: #fff;" onchange="fillCheatUpdateFields()" disabled>
-                    <option value="">🛡️ Önce oyun seçin...</option>
-                </select>
-                <input type="text" id="cheatUpdateVersion" class="auth-input" placeholder="🔖 Yeni Versiyon (opsiyonel)">
-                <input type="text" id="cheatUpdateApkUrl" class="auth-input" placeholder="⬇️ Yeni APK/Dosya URL (apkUrl)">
-                <div style="font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 10px;">💡 Kaydedince tüm kullanıcılara uygulama içi + FCM topic bildirimi gider.</div>
-                <button class="btn btn-primary" onclick="adminUpdateCheatFilesAndNotify()" style="width: 100%;">📤 Güncelle ve Bildirim Gönder</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 💳 Ödeme Ayarları (payments yetkisi) -->
-    <div class="admin-section permission-section" id="paymentSettingsSection" data-permission="payments">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">💳</span>
-                <span>Ödeme Ayarları</span>
-                <span class="permission-badge" style="background: #FF9800; padding: 2px 6px; border-radius: 5px; font-size: 10px;">payments</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <!-- Banka/Havale Bilgileri -->
-            <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 10px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 12px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🏦 Havale Bilgileri</div>
-                <div style="margin-bottom: 10px;">
-                    <label style="font-size: 11px; color: #aaa;">Alıcı Adı</label>
-                    <input type="text" id="paymentBankName" class="auth-input" placeholder="Alıcı adı" style="font-size: 13px;">
-                </div>
-                <div style="margin-bottom: 10px;">
-                    <label style="font-size: 11px; color: #aaa;">Banka</label>
-                    <input type="text" id="paymentBankBank" class="auth-input" placeholder="Banka adı" style="font-size: 13px;">
-                </div>
-                <div>
-                    <label style="font-size: 11px; color: #aaa;">IBAN</label>
-                    <input type="text" id="paymentBankIban" class="auth-input" placeholder="TR00 0000 0000 0000 0000 0000 00" style="font-size: 13px;">
-                </div>
-            </div>
-            <!-- Shopier Ayarları -->
-            <div style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 10px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 12px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">🛒 Shopier Ayarları</div>
-                <div>
-                    <label style="font-size: 11px; color: #aaa;">Shopier Mağaza URL</label>
-                    <input type="text" id="paymentShopierUrl" class="auth-input" placeholder="https://www.shopier.com/CheatsStore" style="font-size: 13px;">
-                </div>
-            </div>
-            <!-- Push Server Ayarları -->
-            <div style="background: rgba(156,39,176,0.1); border: 1px solid rgba(156,39,176,0.3); border-radius: 10px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 12px; font-weight: bold; color: #9C27B0; margin-bottom: 10px;">🔔 Push Bildirim Sunucusu</div>
-                <div style="margin-bottom: 10px;">
-                    <label style="font-size: 11px; color: #aaa;">Vercel URL</label>
-                    <input type="text" id="pushServerUrl" class="auth-input" placeholder="https://your-project.vercel.app" style="font-size: 13px;">
-                </div>
-                <div>
-                    <label style="font-size: 11px; color: #aaa;">API Key</label>
-                    <input type="password" id="pushServerApiKey" class="auth-input" placeholder="Güvenlik anahtarı" style="font-size: 13px;">
-                </div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary" onclick="savePaymentSettings()" style="flex: 1;">💾 Kaydet</button>
-                <button class="btn btn-secondary btn-small" onclick="loadPaymentSettingsAdmin()" style="flex: 1;">🔄 Yükle</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 📢 Bildirim Gönderme (notifications yetkisi) -->
-    <div class="admin-section permission-section" id="notificationsSection" data-permission="notifications">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">📢</span>
-                <span>Bildirim Gönder</span>
-                <span class="permission-badge" style="background: #9C27B0; padding: 2px 6px; border-radius: 5px; font-size: 10px;">notifications</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <div style="margin-bottom: 12px;">
-                <select id="notifTargetType" class="auth-input" style="color: #fff;" onchange="updateNotifTarget()">
-                    <option value="all">🌍 Tüm Kullanıcılar</option>
-                    <option value="user">👤 Belirli Kullanıcı</option>
-                </select>
-            </div>
-            <div id="notifUserEmailDiv" style="margin-bottom: 12px; display: none;">
-                <input type="email" id="notifUserEmail" class="auth-input" placeholder="Kullanıcı e-posta adresi">
-            </div>
-            <div style="margin-bottom: 12px;">
-                <input type="text" id="notifTitle" class="auth-input" placeholder="📌 Bildirim Başlığı">
-            </div>
-            <div style="margin-bottom: 12px;">
-                <textarea id="notifMessage" class="auth-input" placeholder="💬 Mesaj içeriği..." style="height: 80px; resize: none;"></textarea>
-            </div>
-            <div style="margin-bottom: 12px;">
-                <select id="notifType" class="auth-input" style="color: #fff;">
-                    <option value="info">ℹ️ Bilgilendirme</option>
-                    <option value="success">✅ Başarılı</option>
-                    <option value="warning">⚠️ Uyarı</option>
-                    <option value="promo">🎁 Promosyon</option>
-                    <option value="fcm">📲 FCM (Sadece Push)</option>
-                </select>
-            </div>
-            <button class="btn btn-primary" onclick="sendNotification()">📤 Bildirim Gönder</button>
-        </div>
-    </div>
-    
-    <!-- 💬 Destek Mesajları (support yetkisi) -->
-    <div class="admin-section permission-section" id="supportSection" data-permission="support">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">💬</span>
-                <span>Destek Mesajları</span>
-                <span id="adminChatCount" style="background: #f44336; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
-                <span class="permission-badge" style="background: #00BCD4; padding: 2px 6px; border-radius: 5px; font-size: 10px;">support</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <div id="adminChatsList" style="font-size: 13px; color: #aaa; max-height: 300px; overflow-y: auto;">Yükleniyor...</div>
-            <button onclick="loadAdminChats()" style="background: #00BCD4; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Yenile</button>
-        </div>
-    </div>
-    
-    <!-- TheBestML Panel (keys_add yetkisi) -->
-    <div class="admin-section permission-section" id="keyGeneratorSection" data-permission="keys_add">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">🔗</span>
-                <span>Key Üretimi</span>
-                <span class="permission-badge" style="background: #4CAF50; padding: 2px 6px; border-radius: 5px; font-size: 10px;">keys_add</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <p style="color: #aaa; font-size: 13px; margin-bottom: 15px;">TheBestML panelinden key üretmek için aşağıdaki butona tıklayın.</p>
-            <button class="btn btn-warning" onclick="window.open('https://newthebestmod.xyz/app/user/cheat/order', '_blank')" style="width: 100%;">🔗 TheBestML Panel Aç</button>
-        </div>
-    </div>
-    
-    <!-- Bekleyen Siparişler (orders yetkisi) -->
-    <div class="admin-section permission-section" id="ordersSection" data-permission="orders">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">📋</span>
-                <span>Bekleyen Siparişler</span>
-                <span id="orderCount" style="background: #f44336; padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span>
-                <span class="permission-badge" style="background: #FF5722; padding: 2px 6px; border-radius: 5px; font-size: 10px;">orders</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <div id="pendingOrders" style="font-size: 13px; color: #aaa;">Yükleniyor...</div>
-            <button onclick="loadPendingOrders()" style="background: #FF5722; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Yenile</button>
-
-            <div style="height: 1px; background: rgba(255,255,255,0.08); margin: 15px 0;"></div>
-
-            <div style="font-size: 14px; font-weight: bold; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                <span>📊 Aylık Onaylanan Siparişler</span>
-            </div>
-            <div id="monthlyApprovedOrdersSummary" style="font-size: 13px; color: #aaa;">Yükleniyor...</div>
-            <button onclick="loadMonthlyApprovedOrdersSummary()" style="background: rgba(76,175,80,0.25); border: 1px solid rgba(76,175,80,0.5); color: #4CAF50; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; margin-top: 10px; width: 100%;">🔄 Aylık Özeti Yenile</button>
-        </div>
-    </div>
-    
-    <!-- 📖 Kurulum Modalları Yönetimi (modals yetkisi) -->
-    <div class="admin-section permission-section" id="setupModalsSection" data-permission="modals">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">📖</span>
-                <span>Kurulum Modalları</span>
-                <span class="permission-badge" style="background: #673AB7; padding: 2px 6px; border-radius: 5px; font-size: 10px;">modals</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <p style="color: #aaa; font-size: 12px; margin-bottom: 15px;">Hileler için özel kurulum rehberi modalları oluşturun ve yönetin.</p>
-            <div id="setupModalsList" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;">
-                <div style="text-align: center; padding: 15px; color: #888; font-size: 13px;">Yükleniyor...</div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary btn-small" onclick="openSetupModalEditor()" style="flex: 1;">➕ Yeni Modal</button>
-                <button class="btn btn-secondary btn-small" onclick="loadSetupModalsList()" style="flex: 1;">🔄 Yenile</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- ⚙️ Uygulama Yönetimi (app_settings yetkisi) -->
-    <div class="admin-section permission-section" id="appSettingsSection" data-permission="app_settings">
-        <div class="admin-section-header" onclick="toggleAdminSection(this)">
-            <div class="admin-section-title">
-                <span class="icon">⚙️</span>
-                <span>Uygulama Yönetimi</span>
-                <span class="permission-badge" style="background: #607D8B; padding: 2px 6px; border-radius: 5px; font-size: 10px;">app_settings</span>
-            </div>
-            <span class="admin-section-toggle">▼</span>
-        </div>
-        <div class="admin-section-content">
-            <p style="color: #aaa; font-size: 12px; margin-bottom: 15px;">Popup, duyuru, bakım modu ve yedekleme yönetimi.</p>
-            
-            <!-- Ayar Kategorileri -->
-            <div style="display: grid; gap: 8px; margin-bottom: 15px;">
-                <button onclick="openAppSettingsModal('popup')" style="background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                    <span style="font-size: 20px;">📢</span>
-                    <div style="text-align: left; flex: 1;">
-                        <div style="font-weight: bold;">Popup & Duyuru</div>
-                        <div style="font-size: 11px; opacity: 0.8;">Açılış popup, duyuru banner</div>
-                    </div>
-                    <span>→</span>
-                </button>
-                
-                <button onclick="openAppSettingsModal('maintenance')" style="background: linear-gradient(135deg, #f44336, #d32f2f); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                    <span style="font-size: 20px;">🔧</span>
-                    <div style="text-align: left; flex: 1;">
-                        <div style="font-weight: bold;">Bakım Modu</div>
-                        <div style="font-size: 11px; opacity: 0.8;">Uygulamayı bakım moduna al</div>
-                    </div>
-                    <span>→</span>
-                </button>
-
-                <button onclick="openAppSettingsModal('loyalty')" style="background: linear-gradient(135deg, #4CAF50, #2E7D32); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                    <span style="font-size: 20px;">🎁</span>
-                    <div style="text-align: left; flex: 1;">
-                        <div style="font-weight: bold;">Sadakat Ayarları</div>
-                        <div style="font-size: 11px; opacity: 0.8;">Sipariş başına puan kazanımı</div>
-                    </div>
-                    <span>→</span>
-                </button>
-            </div>
-            
-            <!-- Son güncelleme bilgisi -->
-            <div id="appSettingsLastUpdate" style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 10px; font-size: 11px; color: #888; text-align: center;">
-                Ayarlar yükleniyor...
-            </div>
-            
-            <div style="display: flex; gap: 8px; margin-top: 10px;">
-                <button onclick="loadAppSettings()" style="background: rgba(255,255,255,0.1); border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; flex: 1;">🔄 Yenile</button>
-                <button onclick="backupCurrentSettings()" style="background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; flex: 1;">💾 Yedekle</button>
-            </div>
-            
-            <!-- Fabrika Ayarları -->
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <div style="display: grid; gap: 8px;">
-                    <button onclick="uploadOriginalDefaults()" style="background: linear-gradient(135deg, #673AB7, #512DA8); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                        <span style="font-size: 20px;">📤</span>
-                        <div style="text-align: left; flex: 1;">
-                            <div style="font-weight: bold;">Orijinal Ayarları Firestore'a Yükle</div>
-                            <div style="font-size: 11px; opacity: 0.8;">VS Code varsayılanlarını kaydet</div>
-                        </div>
-                        <span>💾</span>
-                    </button>
-                    
-                    <button onclick="loadOriginalDefaults()" style="background: linear-gradient(135deg, #009688, #00796B); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                        <span style="font-size: 20px;">📥</span>
-                        <div style="text-align: left; flex: 1;">
-                            <div style="font-weight: bold;">Orijinal Ayarları Geri Yükle</div>
-                            <div style="font-size: 11px; opacity: 0.8;">Firestore'daki orijinale dön</div>
-                        </div>
-                        <span>🔄</span>
-                    </button>
-                    
-                    <button onclick="showFactoryResetConfirm()" style="background: linear-gradient(135deg, #f44336, #c62828); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-                        <span style="font-size: 20px;">🏭</span>
-                        <div style="text-align: left; flex: 1;">
-                            <div style="font-weight: bold;">Fabrika Ayarlarına Dön</div>
-                            <div style="font-size: 11px; opacity: 0.8;">Tüm ayarları varsayılana sıfırla</div>
-                        </div>
-                        <span>⚠️</span>
-                    </button>
-                </div>
-                
-                <!-- Orijinal ayarlar bilgisi -->
-                <div id="originalDefaultsInfo" style="background: rgba(103,58,183,0.2); border-radius: 8px; padding: 10px; font-size: 11px; color: #b39ddb; margin-top: 10px; display: none;">
-                    Orijinal ayarlar bilgisi yükleniyor...
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-</div>
-
-<!-- ŞİFRE DEĞİŞTİRME MODAL -->
-<div class="modal-overlay" id="changePasswordModal" onclick="closeModalOutside(event, 'changePasswordModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 400px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF6B6B, #EE5A5A);">
-            <div class="modal-title">🔒 Şifre Değiştir</div>
-            <button class="modal-close" onclick="closeModal('changePasswordModal')">✕</button>
-        </div>
-        <div class="modal-body" style="padding: 20px;">
-            <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,193,7,0.1); border-radius: 10px; border-left: 4px solid #FFC107;">
-                <div style="font-size: 14px; color: #FFC107;">⚠️ Güvenlik Uyarısı</div>
-                <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 5px;">Şifrenizi değiştirmek için mevcut şifrenizi doğrulamanız gerekmektedir.</div>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: rgba(255,255,255,0.8);">Mevcut Şifre</label>
-                <input type="password" id="currentPasswordInput" placeholder="Mevcut şifrenizi girin" style="width: 100%; padding: 12px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; box-sizing: border-box;">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: rgba(255,255,255,0.8);">Yeni Şifre</label>
-                <input type="password" id="newPasswordInput" placeholder="En az 6 karakter" style="width: 100%; padding: 12px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; box-sizing: border-box;">
-            </div>
-            
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; margin-bottom: 8px; font-size: 14px; color: rgba(255,255,255,0.8);">Yeni Şifre (Tekrar)</label>
-                <input type="password" id="confirmNewPasswordInput" placeholder="Yeni şifrenizi tekrar girin" style="width: 100%; padding: 12px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; box-sizing: border-box;">
-            </div>
-            
-            <div id="passwordChangeError" style="display: none; margin-bottom: 15px; padding: 10px; background: rgba(244,67,54,0.2); border-radius: 8px; color: #f44336; font-size: 13px;"></div>
-            
-            <button onclick="changePassword()" style="width: 100%; padding: 14px; background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; border-radius: 10px; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.3s;">
-                🔐 Şifreyi Değiştir
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- BİLDİRİMLER MODAL -->
-<div class="modal-overlay" id="notificationsModal" onclick="closeModalOutside(event, 'notificationsModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #9C27B0, #7B1FA2);">
-            <div class="modal-title">🔔 Bildirimler</div>
-            <button class="modal-close" onclick="closeModal('notificationsModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow: hidden; padding: 0; display: flex; flex-direction: column;">
-            <div id="notificationsList" style="padding: 15px; flex: 1; overflow-y: auto;"></div>
-            <div style="padding: 15px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;">
-                <button onclick="clearAllNotifications()" style="width: 100%; background: linear-gradient(135deg, #f44336, #d32f2f); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;">🗑️ Tüm Bildirimleri Temizle</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- KULLANICI CHAT MODAL -->
-<div class="modal-overlay" id="userChatModal" onclick="closeModalOutside(event, 'userChatModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px; height: 80vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #00BCD4, #0097A7);">
-            <div style="display: flex; flex-direction: column; flex: 1;">
-                <div class="modal-title">💬 Destek</div>
-                <div id="supportAgentInfo" style="font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 2px; display: none;"></div>
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button onclick="openSupportFaqModal()" style="background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22); color: #fff; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Sık Sorulan Sorular">❓</button>
-                <button onclick="clearUserChat()" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Sohbeti Temizle">🗑️</button>
-                <button class="modal-close" onclick="closeModal('userChatModal')">✕</button>
-            </div>
-        </div>
-        <div id="userChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; background: #1a1a2e;">
-            <!-- Mesajlar buraya yüklenecek -->
-        </div>
-        <!-- Dosya önizleme alanı -->
-        <div id="userFilePreview" style="display: none; padding: 10px 15px; background: #16213e; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <img id="userFilePreviewImg" style="max-width: 60px; max-height: 60px; border-radius: 8px; object-fit: cover;">
-                <div style="flex: 1;">
-                    <div id="userFileName" style="font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-                    <div id="userFileSize" style="font-size: 11px; color: #aaa;"></div>
-                </div>
-                <button onclick="clearUserFile()" style="background: #f44336; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">✕</button>
-            </div>
-        </div>
-        <div style="padding: 15px; background: #16213e; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; gap: 8px;">
-                <input type="file" id="userChatFile" accept="image/*" style="display: none;" onchange="previewUserFile(this)">
-                <button onclick="document.getElementById('userChatFile').click()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Dosya Ekle">📎</button>
-                <button onclick="insertSupportAutoInfo()" style="background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px 14px; border-radius: 10px; cursor: pointer; font-weight: bold;" title="Otomatik Bilgi">ℹ️</button>
-                <input type="text" id="userChatInput" class="auth-input" placeholder="Mesajınızı yazın..." style="flex: 1; margin: 0;" onkeypress="if(event.key==='Enter')sendUserMessage()">
-                <button onclick="sendUserMessage()" style="background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold;">📤</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- DESTEK FAQ (S.S.S) MODAL -->
-<div class="modal-overlay" id="supportFaqModal" onclick="closeModalOutside(event, 'supportFaqModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px; max-height: 80vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #00BCD4, #0097A7);">
-            <div class="modal-title">❓ Sık Sorulan Sorular</div>
-            <button class="modal-close" onclick="closeModal('supportFaqModal')">✕</button>
-        </div>
-        <div class="modal-body" style="overflow-y: auto; padding: 15px; background: #1a1a2e;">
-            <div style="font-size: 12px; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
-                Burada en sık gelen soruların kısa cevaplarını bulabilirsiniz.
-            </div>
-            <div id="supportFaqList"></div>
-        </div>
-    </div>
-</div>
-
-<!-- ADMİN CHAT MODAL -->
-<div class="modal-overlay" id="adminChatModal" onclick="closeModalOutside(event, 'adminChatModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px; height: 85vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #673AB7, #512DA8);">
-            <div class="modal-title" id="adminChatTitle">💬 Sohbet</div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <button onclick="clearAdminChat()" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 6px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;" title="Sohbeti Temizle">🗑️</button>
-                <button class="modal-close" onclick="closeModal('adminChatModal')">✕</button>
-            </div>
-        </div>
-        <div style="padding: 10px 15px; background: #1a1a2e; border-bottom: 1px solid rgba(255,255,255,0.1);">
-            <div id="adminChatUserInfo" style="font-size: 13px; color: #aaa;"></div>
-        </div>
-        <div id="adminChatMessages" style="flex: 1; overflow-y: auto; padding: 15px; background: #1a1a2e;">
-            <!-- Mesajlar buraya yüklenecek -->
-        </div>
-        <!-- Dosya önizleme alanı -->
-        <div id="adminFilePreview" style="display: none; padding: 10px 15px; background: #16213e; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <img id="adminFilePreviewImg" style="max-width: 60px; max-height: 60px; border-radius: 8px; object-fit: cover;">
-                <div style="flex: 1;">
-                    <div id="adminFileName" style="font-size: 13px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-                    <div id="adminFileSize" style="font-size: 11px; color: #aaa;"></div>
-                </div>
-                <button onclick="clearAdminFile()" style="background: #f44336; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;">✕</button>
-            </div>
-        </div>
-        <div style="padding: 15px; background: #16213e; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; gap: 8px;">
-                <input type="file" id="adminChatFile" accept="image/*" style="display: none;" onchange="previewAdminFile(this)">
-                <button onclick="document.getElementById('adminChatFile').click()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px 14px; border-radius: 10px; cursor: pointer;" title="Dosya Ekle">📎</button>
-                <input type="text" id="adminChatInput" class="auth-input" placeholder="Yanıt yazın..." style="flex: 1; margin: 0;" onkeypress="if(event.key==='Enter')sendAdminMessage()">
-                <button onclick="sendAdminMessage()" style="background: linear-gradient(135deg, #673AB7, #512DA8); border: none; color: #fff; padding: 12px 20px; border-radius: 10px; cursor: pointer; font-weight: bold;">📤</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SÜRE UZATMA MODAL -->
-<div class="modal-overlay" id="extendModal" onclick="closeModalOutside(event, 'extendModal')" style="z-index: 10001;">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">⏰ Süre Uzat</div>
-            <button class="modal-close" onclick="closeModal('extendModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Mevcut Key Bilgisi -->
-            <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-                    <span style="font-size: 28px;">🎮</span>
-                    <div>
-                        <div style="font-size: 14px; font-weight: bold; color: #fff;" id="extendGameName">-</div>
-                        <div style="font-size: 12px; color: #FFD700;" id="extendCheatName">-</div>
-                    </div>
-                </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                        <span style="font-size: 12px; color: #aaa;">🔑 Key</span>
-                        <code style="font-size: 12px; color: #FF9800;" id="extendKeyCode">-</code>
-                    </div>
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="font-size: 12px; color: #aaa;">📅 Mevcut Bitiş</span>
-                        <span style="font-size: 12px; color: #fff;" id="extendCurrentExpiry">-</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Süre Seçenekleri -->
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 14px; font-weight: bold; margin-bottom: 12px;">📦 Eklenecek Süre Seçin</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" id="extendOptions">
-                    <div class="extend-option" onclick="selectExtendOption(30, '30 Gün', '850₺')" style="background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 24px; margin-bottom: 5px;">📅</div>
-                        <div style="font-weight: bold; color: #fff;">+30 Gün</div>
-                        <div style="color: #4CAF50; font-weight: bold; margin-top: 5px;">850₺</div>
-                    </div>
-                    <div class="extend-option" onclick="selectExtendOption(60, '60 Gün', '1.300₺')" style="background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 24px; margin-bottom: 5px;">📅</div>
-                        <div style="font-weight: bold; color: #fff;">+60 Gün</div>
-                        <div style="color: #4CAF50; font-weight: bold; margin-top: 5px;">1.300₺</div>
-                    </div>
-                    <div class="extend-option" onclick="selectExtendOption(90, '90 Gün', '1.800₺')" style="background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 24px; margin-bottom: 5px;">📅</div>
-                        <div style="font-weight: bold; color: #fff;">+90 Gün</div>
-                        <div style="color: #4CAF50; font-weight: bold; margin-top: 5px;">1.800₺</div>
-                        <div style="font-size: 10px; color: #aaa; margin-top: 3px;">En Popüler</div>
-                    </div>
-                    <div class="extend-option" onclick="selectExtendOption(365, 'Sınırsız', '6.500₺')" style="background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.2s;">
-                        <div style="font-size: 24px; margin-bottom: 5px;">♾️</div>
-                        <div style="font-weight: bold; color: #fff;">Sınırsız</div>
-                        <div style="color: #FFD700; font-weight: bold; margin-top: 5px;">6.500₺</div>
-                        <div style="font-size: 10px; color: #FFD700; margin-top: 3px;">⭐ Premium</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Seçili Paket Özeti -->
-            <div id="extendSummary" style="display: none; background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="color: #aaa;">Eklenecek Süre</span>
-                    <span style="font-weight: bold; color: #4CAF50;" id="extendSelectedDays">-</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="color: #aaa;">Yeni Bitiş Tarihi</span>
-                    <span style="font-weight: bold; color: #fff;" id="extendNewExpiry">-</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <span style="font-weight: bold; color: #fff;">Toplam</span>
-                    <span style="font-size: 20px; font-weight: bold; color: #4CAF50;" id="extendTotalPrice">-</span>
-                </div>
-            </div>
-            
-            <!-- Ödeme Butonu -->
-            <button id="extendPayBtn" onclick="proceedExtendPayment()" style="width: 100%; background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; opacity: 0.5;" disabled>
-                Süre seçin
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- SÜRE UZATMA HAVALE MODAL -->
-<div class="modal-overlay" id="extendHavaleModal" onclick="closeModalOutside(event, 'extendHavaleModal')" style="z-index: 10002;">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">💳 Süre Uzatma Ödemesi</div>
-            <button class="modal-close" onclick="closeModal('extendHavaleModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Ödeme Bilgileri -->
-            <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="text-align: center; margin-bottom: 15px;">
-                    <div style="font-size: 12px; color: #aaa;">Ödenecek Tutar</div>
-                    <div style="font-size: 28px; font-weight: bold; color: #FF9800;" id="extendHavaleAmount">-</div>
-                    <div style="font-size: 13px; color: #aaa;" id="extendHavaleInfo">-</div>
-                </div>
-            </div>
-            
-            <!-- Banka Bilgileri -->
-            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="font-size: 13px; font-weight: bold; margin-bottom: 12px;">🏦 Havale Bilgileri</div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Alıcı</div>
-                    <div style="font-size: 13px; color: #fff; font-weight: bold;">ONUR TENK</div>
-                </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Banka</div>
-                    <div style="font-size: 13px; color: #fff; font-weight: bold;">Garanti Bankası</div>
-                </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">IBAN</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <code style="font-size: 11px; color: #fff;">TR26 0006 2000 7750 0006 8826 02</code>
-                        <button onclick="copyToClipboard('TR2600062000775000068826 02')" style="background: #4CAF50; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">📋</button>
-                    </div>
-                </div>
-                <div style="background: rgba(244,67,54,0.2); border-radius: 8px; padding: 10px; border: 1px solid #f44336;">
-                    <div style="font-size: 11px; color: #f44336; text-align: center;">⚠️ Açıklama kısmını BOŞ bırakın!</div>
-                </div>
-            </div>
-            
-            <!-- Dekont Yükleme -->
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 13px; font-weight: bold; margin-bottom: 10px;">📄 Dekont Yükle</div>
-                <input type="file" id="extendDekontFile" accept="image/*" style="display: none;" onchange="previewExtendDekont(this)">
-                <div onclick="document.getElementById('extendDekontFile').click()" style="background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 25px; text-align: center; cursor: pointer;">
-                    <div style="font-size: 30px; margin-bottom: 8px;">📷</div>
-                    <div style="color: #aaa; font-size: 13px;">Dekont fotoğrafı seçin</div>
-                </div>
-                <div id="extendDekontPreview" style="display: none; margin-top: 10px;">
-                    <img id="extendDekontImg" style="max-width: 100%; border-radius: 10px;">
-                </div>
-            </div>
-            
-            <button onclick="submitExtendOrder()" style="width: 100%; background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer;">
-                ✅ Siparişi Gönder
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- MERKEZİ ÖDEME YÖNTEMİ MODAL -->
-<div class="modal-overlay" id="unifiedPaymentModal" onclick="closeModalOutside(event, 'unifiedPaymentModal')" style="z-index: 10003;">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #45a049);">
-            <div class="modal-title">💳 Ödeme Yöntemi Seçin</div>
-            <button class="modal-close" onclick="closeModal('unifiedPaymentModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Seçilen Paket Bilgisi -->
-            <div style="background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
-                <div id="unifiedPaymentInfo">-</div>
-                <div style="font-size: 28px; font-weight: bold; color: #4CAF50; margin-top: 10px;" id="unifiedPaymentPrice">-</div>
-            </div>
-            
-            <!-- Ödeme Yöntemleri (Dinamik) -->
-            <div style="display: flex; flex-direction: column; gap: 12px;" id="unifiedPaymentMethods">
-                <!-- JavaScript ile doldurulacak -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- MERKEZİ HAVALE MODAL -->
-<div class="modal-overlay" id="unifiedHavaleModal" onclick="closeModalOutside(event, 'unifiedHavaleModal')" style="z-index: 10004;">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">🏦 Havale / EFT Ödeme</div>
-            <button class="modal-close" onclick="closeModal('unifiedHavaleModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Ödeme Tutarı -->
-            <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
-                <div style="font-size: 12px; color: #aaa;">Ödenecek Tutar</div>
-                <div style="font-size: 32px; font-weight: bold; color: #FF9800;" id="unifiedHavaleAmount">-</div>
-                <div id="unifiedHavaleDiscountLine" style="display: none; font-size: 12px; color: #aaa; margin-top: 6px;">Sadakat indirimi: -0₺</div>
-                <div style="font-size: 13px; color: #aaa; margin-top: 5px;" id="unifiedHavaleInfo">-</div>
-            </div>
-
-            <!-- Sadakat Puanı Kullan (İndirim) -->
-            <div id="unifiedLoyaltySpendBox" style="background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.35); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
-                    <div style="font-size: 13px; font-weight: bold;">🎁 Sadakat Puanı Kullan</div>
-                    <div style="font-size: 12px; color: #aaa;">Mevcut: <span id="unifiedLoyaltyAvailablePoints">0</span></div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr; gap: 8px;">
-                    <input id="unifiedLoyaltyUsePoints" type="number" min="0" step="1" placeholder="Kullanılacak puan (0)" class="auth-input" oninput="updateUnifiedLoyaltySpendUI()" style="margin-bottom: 0;" />
-                    <div id="unifiedLoyaltySpendHint" style="font-size: 11px; color: #aaa;">1 puan = 1₺ indirim. En fazla ödeme tutarı kadar kullanılabilir.</div>
-                </div>
-            </div>
-            
-            <!-- Banka Bilgileri -->
-            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="font-size: 13px; font-weight: bold; margin-bottom: 12px;">🏦 Havale Bilgileri</div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Alıcı</div>
-                    <div style="font-size: 13px; color: #fff; font-weight: bold;" id="unifiedBankName">-</div>
-                </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">Banka</div>
-                    <div style="font-size: 13px; color: #fff; font-weight: bold;" id="unifiedBankBank">-</div>
-                </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px; margin-bottom: 10px;">
-                    <div style="font-size: 11px; color: #aaa; margin-bottom: 4px;">IBAN</div>
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <code style="font-size: 11px; color: #fff;" id="unifiedBankIban">-</code>
-                        <button onclick="copyUnifiedIban()" style="background: #4CAF50; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">📋</button>
-                    </div>
-                </div>
-                <div style="background: rgba(244,67,54,0.2); border-radius: 8px; padding: 10px; border: 1px solid #f44336;">
-                    <div style="font-size: 11px; color: #f44336; text-align: center;">⚠️ Açıklama kısmını BOŞ bırakın!</div>
-                </div>
-            </div>
-            
-            <!-- Dekont Yükleme -->
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 13px; font-weight: bold; margin-bottom: 10px;">📄 Dekont Yükle</div>
-                <input type="file" id="unifiedDekontFile" accept="image/*" style="display: none;" onchange="previewUnifiedDekont(this)">
-                <div onclick="document.getElementById('unifiedDekontFile').click()" style="background: rgba(255,255,255,0.05); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 25px; text-align: center; cursor: pointer;">
-                    <div style="font-size: 30px; margin-bottom: 8px;">📷</div>
-                    <div style="color: #aaa; font-size: 13px;">Dekont fotoğrafı seçin</div>
-                </div>
-                <div id="unifiedDekontPreview" style="display: none; margin-top: 10px;">
-                    <img id="unifiedDekontImg" style="max-width: 100%; border-radius: 10px;">
-                </div>
-            </div>
-            
-            <button onclick="submitUnifiedOrder()" style="width: 100%; background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer;">
-                ✅ Siparişi Gönder
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- BAN RİSKİ BİLGİLENDİRME MODAL (TEK SEFERLİK) -->
-<div class="modal-overlay" id="banRiskModal" style="z-index: 10010;" onclick="event.stopPropagation()">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 520px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #f44336, #d32f2f);">
-            <div class="modal-title">⚠️ Ban Riski Bilgilendirme</div>
-        </div>
-        <div class="modal-body">
-            <div style="background: rgba(244,67,54,0.12); border: 1px solid rgba(244,67,54,0.45); padding: 14px; border-radius: 12px; font-size: 13px; color: #eee; line-height: 1.45;">
-                <div style="font-weight: bold; margin-bottom: 8px;">Önemli</div>
-                <div style="color: #ddd;">Bu uygulamadaki içerik/ürünlerin kullanımı oyun hesabınızda <b>ban</b> / kısıtlama gibi yaptırımlara yol açabilir. Bu risk tamamen kullanıcı sorumluluğundadır.</div>
-                <div style="color: #ddd; margin-top: 8px;">Satın alma ve destek dahil uygulamayı kullanmaya devam ederek bu riski anladığınızı kabul etmiş olursunuz.</div>
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-top: 16px;">
-                <button type="button" class="btn btn-primary" onclick="window.acceptBanRiskDisclosure && window.acceptBanRiskDisclosure()" style="flex: 1; background: linear-gradient(135deg, #4CAF50, #45a049);">✅ Anladım, Devam Et</button>
-                <button type="button" class="btn" onclick="window.declineBanRiskDisclosure && window.declineBanRiskDisclosure()" style="flex: 1; background: rgba(255,255,255,0.08); color: #fff;">🚪 Çıkış Yap</button>
-            </div>
-            <div style="text-align: center; margin-top: 10px; font-size: 11px; color: #aaa;">Bu uyarı tek seferlik gösterilir.</div>
-        </div>
-    </div>
-</div>
-
-<!-- SADAKAT PUANI MODAL -->
-<div class="modal-overlay" id="loyaltyModal" onclick="closeModalOutside(event, 'loyaltyModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">🎁 Sadakat Puanı</div>
-            <button class="modal-close" onclick="closeModal('loyaltyModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; text-align: center;">
-                <div style="font-size: 12px; color: #aaa;">Mevcut Puan</div>
-                <div id="loyaltyPointsValue" style="font-size: 34px; font-weight: bold; color: #FF9800; margin-top: 4px;">0</div>
-                <div style="font-size: 12px; color: #aaa; margin-top: 6px;">Siparişiniz onaylandığında puan otomatik eklenir.</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- DİNAMİK ÖDEME MODAL -->
-<div class="modal-overlay" id="dynamicPaymentModal" onclick="closeModalOutside(event, 'dynamicPaymentModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #45a049);">
-            <div class="modal-title">💳 Ödeme Yöntemi Seçin</div>
-            <button class="modal-close" onclick="closeModal('dynamicPaymentModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Seçilen Paket Bilgisi -->
-            <div style="background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
-                <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">Seçilen Paket</div>
-                <div style="font-size: 16px; font-weight: bold;" id="dynamicModalPackageName">-</div>
-                <div style="font-size: 24px; font-weight: bold; color: #4CAF50; margin-top: 5px;" id="dynamicModalPackagePrice">-</div>
-            </div>
-            
-            <!-- Ödeme Seçenekleri -->
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Kredi Kartı / Shopier -->
-                <button onclick="selectDynamicPaymentMethod('shopier')" class="payment-method-btn">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 30px;">💳</div>
-                        <div style="text-align: left;">
-                            <div style="font-weight: bold; font-size: 15px;">Kredi Kartı</div>
-                            <div style="font-size: 12px; color: #aaa;">Shopier ile güvenli ödeme</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 20px; color: #4CAF50;">›</div>
-                </button>
-                
-                <!-- Havale -->
-                <button onclick="selectDynamicPaymentMethod('havale')" class="payment-method-btn">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 30px;">🏦</div>
-                        <div style="text-align: left;">
-                            <div style="font-weight: bold; font-size: 15px;">Havale / EFT</div>
-                            <div style="font-size: 12px; color: #aaa;">Banka havalesi ile ödeme</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 20px; color: #4CAF50;">›</div>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SİPARİŞ BAŞARILI MODAL -->
-<div class="success-overlay" id="orderSuccessModal" onclick="closeOrderSuccessModal()">
-    <div class="success-content" onclick="event.stopPropagation()" id="orderSuccessContent">
-        <div class="success-icon">✅</div>
-        <div class="success-title">Siparişiniz Alındı!</div>
-        <div class="success-message">
-            Siparişiniz başarıyla oluşturuldu. Ödemeniz onaylandıktan sonra key'iniz otomatik olarak hesabınıza tanımlanacaktır.
-        </div>
-        <button class="success-btn" onclick="closeOrderSuccessModal()">Tamam</button>
-    </div>
-</div>
-
-<!-- ÜYE DETAY MODAL -->
-<div class="modal-overlay" id="userDetailModal" onclick="closeModalOutside(event, 'userDetailModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #2196F3, #1976D2);">
-            <div class="modal-title">👤 Üye Detayı</div>
-            <button class="modal-close" onclick="closeModal('userDetailModal')">✕</button>
-        </div>
-        <div class="modal-body" id="userDetailContent" style="max-height: 70vh; overflow-y: auto;"></div>
-    </div>
-</div>
-
-<!-- OYUN/HİLE SEÇİM MODAL -->
-<div class="modal-overlay" id="gameSelectModal" onclick="closeModalOutside(event, 'gameSelectModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 420px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #45a049);">
-            <div class="modal-title">🎮 Oyun Seçin</div>
-            <button class="modal-close" onclick="closeModal('gameSelectModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <div id="gameSelectList" style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Dinamik olarak yüklenecek -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- HİLE SEÇİM MODAL -->
-<div class="modal-overlay" id="cheatSelectModal" onclick="closeModalOutside(event, 'cheatSelectModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 420px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">🗡️ Hile Seçin</div>
-            <button class="modal-close" onclick="closeModal('cheatSelectModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <div id="cheatSelectList" style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Dinamik olarak yüklenecek -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SİPARİŞ DETAY MODAL -->
-<div class="modal-overlay" id="orderDetailModal" onclick="closeModalOutside(event, 'orderDetailModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">📋 Sipariş Detayı</div>
-            <button class="modal-close" onclick="closeModal('orderDetailModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <div id="orderDetailContent"></div>
-        </div>
-    </div>
-</div>
-
-<!-- OYUN EKLEME/DÜZENLEME MODAL -->
-<div class="modal-overlay" id="gameModal" onclick="closeModalOutside(event, 'gameModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C);">
-            <div class="modal-title" id="gameModalTitle">🎮 Yeni Oyun Ekle</div>
-            <button class="modal-close" onclick="closeModal('gameModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <input type="hidden" id="editGameId">
-            
-            <!-- Oyun Adı -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Oyun Adı *</label>
-                <input type="text" id="gameNameInput" class="auth-input" placeholder="örn: Mobile Legends">
-            </div>
-            
-            <!-- Oyun Görseli -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Oyun Görseli</label>
-                <input type="hidden" id="gameImageData">
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <label style="flex: 1; background: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer;">
-                        <input type="file" id="gameImageFile" accept="image/*" onchange="previewGameImageFile(this)" style="display: none;">
-                        <span id="gameImageLabel" style="color: #888; font-size: 13px;">📷 Görsel Seç (PNG, JPG)</span>
-                    </label>
-                </div>
-                <div id="gameImagePreview" style="margin-top: 10px; text-align: center;"></div>
-            </div>
-            
-            <!-- Oyun Açıklaması -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Açıklama</label>
-                <textarea id="gameDescInput" class="auth-input" placeholder="Oyun hakkında kısa açıklama" style="height: 60px; resize: none;"></textarea>
-            </div>
-            
-            <!-- Play Store Linki -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Play Store Linki</label>
-                <input type="text" id="gamePlayStoreInput" class="auth-input" placeholder="https://play.google.com/store/apps/details?id=...">
-            </div>
-            
-            <!-- Oyun Durumu -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Durum</label>
-                <select id="gameStatusInput" class="auth-input" style="color: #fff;">
-                    <option value="active">✅ Aktif</option>
-                    <option value="inactive">⏸️ Pasif</option>
-                    <option value="coming">🔜 Yakında</option>
-                </select>
-            </div>
-            
-            <button class="btn btn-primary" onclick="saveGame()">💾 Kaydet</button>
-        </div>
-    </div>
-</div>
-
-<!-- HİLE EKLEME/DÜZENLEME MODAL -->
-<div class="modal-overlay" id="cheatModal" onclick="closeModalOutside(event, 'cheatModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #2196F3, #1976D2);">
-            <div class="modal-title" id="cheatModalTitle">🛡️ Yeni Hile Ekle</div>
-            <button class="modal-close" onclick="closeModal('cheatModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <input type="hidden" id="editCheatId">
-            <input type="hidden" id="editCheatGameId">
-            
-            <!-- Oyun Seçimi -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Oyun Seçin *</label>
-                <select id="cheatGameSelect" class="auth-input" style="color: #fff;">
-                    <option value="">Oyun seçin...</option>
-                </select>
-            </div>
-            
-            <!-- Hile Adı -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Hile Adı *</label>
-                <input type="text" id="cheatNameInput" class="auth-input" placeholder="örn: TheBestML IMGUI">
-            </div>
-            
-            <!-- Hile Görseli -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Hile Görseli</label>
-                <input type="hidden" id="cheatImageData">
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <label style="flex: 1; background: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.2); border-radius: 12px; padding: 15px; text-align: center; cursor: pointer;">
-                        <input type="file" id="cheatImageFile" accept="image/*" onchange="previewCheatImageFile(this)" style="display: none;">
-                        <span id="cheatImageLabel" style="color: #888; font-size: 13px;">📷 Görsel Seç (PNG, JPG)</span>
-                    </label>
-                </div>
-                <div id="cheatImagePreview" style="margin-top: 10px; text-align: center;"></div>
-            </div>
-            
-            <!-- Versiyon -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Versiyon</label>
-                <input type="text" id="cheatVersionInput" class="auth-input" placeholder="örn: V2.8">
-            </div>
-            
-            <!-- Hile Açıklaması -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Açıklama</label>
-                <textarea id="cheatDescInput" class="auth-input" placeholder="Hile özellikleri hakkında" style="height: 60px; resize: none;"></textarea>
-            </div>
-            
-            <!-- APK İndirme Linki -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">APK İndirme Linki</label>
-                <input type="text" id="cheatApkInput" class="auth-input" placeholder="https://... (APK linki)">
-            </div>
-            
-            <!-- Video URL -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">🎬 Tanıtım Videosu (YouTube)</label>
-                <input type="text" id="cheatVideoInput" class="auth-input" placeholder="https://www.youtube.com/watch?v=...">
-                <div style="font-size: 10px; color: #666; margin-top: 5px;">💡 YouTube video URL'si eklerseniz detay sayfasında "Video İzle" butonu görünür</div>
-            </div>
-            
-            <!-- Özellikler -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Özellikler (her satıra bir özellik)</label>
-                <textarea id="cheatFeaturesInput" class="auth-input" placeholder="👁 Oyuncu Görünümü&#10;❤️ Düşman HP&#10;🗺 Harita Hilesi&#10;🚪 Oyun & Web Lobi&#10;📦 Kutulama & Çizgi&#10;🏷 İsim & Uzaklık" style="height: 120px; resize: none;"></textarea>
-                <div style="font-size: 10px; color: #666; margin-top: 5px;">💡 Emoji ile başlatmanız önerilir</div>
-            </div>
-            
-            <!-- Fiyatlar -->
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">💰 Fiyatlar</label>
-                <div id="cheatPricesContainer" style="margin-bottom: 10px;"></div>
-                <button type="button" onclick="addPriceOption()" style="width: 100%; background: rgba(76,175,80,0.2); border: 1px dashed #4CAF50; color: #4CAF50; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">➕ Fiyat Seçeneği Ekle</button>
-            </div>
-            
-            <!-- Hile Durumu -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Durum</label>
-                <select id="cheatStatusInput" class="auth-input" style="color: #fff;">
-                    <option value="active">✅ Aktif</option>
-                    <option value="inactive">⏸️ Pasif</option>
-                    <option value="maintenance">🔧 Bakımda</option>
-                </select>
-            </div>
-            
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-primary" onclick="saveCheat()" style="flex: 1;">💾 Kaydet</button>
-                <button class="btn btn-warning" onclick="openSetupModalFromCheat()" style="flex: 1;">📋 Kurulum Adımları</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- KURULUM TALİMATLARI MODAL -->
-<div class="modal-overlay" id="setupModal" onclick="closeModalOutside(event, 'setupModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 550px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">📋 Kurulum Talimatları Düzenle</div>
-            <button class="modal-close" onclick="closeModal('setupModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <input type="hidden" id="setupCheatId">
-            <input type="hidden" id="setupGameId">
-            
-            <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 10px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 12px; color: #FF9800;">💡 Her adım için başlık ve açıklama girin. Buton türü seçerek Play Store, APK indirme veya modal açma butonu ekleyebilirsiniz.</div>
-            </div>
-            </div>
-            
-            <!-- Kurulum Adımları -->
-            <div id="setupStepsContainer"></div>
-            
-            <button class="btn btn-secondary btn-small" onclick="addSetupStep()" style="margin-bottom: 15px;">➕ Adım Ekle</button>
-            
-            <button class="btn btn-primary" onclick="saveSetupSteps()">💾 Kaydet</button>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Yetki Düzenleme Modal -->
-<div class="modal-overlay" id="adminPermissionModal" onclick="closeModalOutside(event, 'adminPermissionModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #E65100);">
-            <div class="modal-title">👮 Admin Yetkileri</div>
-            <button class="modal-close" onclick="closeModal('adminPermissionModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <input type="hidden" id="permissionAdminEmail">
-            
-            <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 50px; height: 50px; background: linear-gradient(135deg, #FF9800, #F57C00); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px;">👤</div>
-                    <div>
-                        <div style="font-weight: bold; font-size: 16px;" id="permissionAdminName">Admin</div>
-                        <div style="font-size: 12px; color: #FF9800;" id="permissionAdminEmailDisplay">admin@email.com</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="font-weight: bold; margin-bottom: 15px;">🔐 Yetkiler</div>
-            
-            <div id="permissionsCheckboxList"></div>
-            
-            <div style="margin-top: 20px;">
-                <button class="btn btn-primary" onclick="saveAdminPermissions()" style="width: 100%;">💾 Yetkileri Kaydet</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Ekle Modal -->
-<div class="modal-overlay" id="addAdminModal" onclick="closeModalOutside(event, 'addAdminModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #388E3C);">
-            <div class="modal-title">➕ Yeni Admin Ekle</div>
-            <button class="modal-close" onclick="closeModal('addAdminModal')">✕</button>
-        </div>
-        <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 8px; font-weight: 600;">📧 E-posta Adresi</label>
-                <input type="email" id="addAdminEmailInput" class="auth-input" placeholder="admin@example.com" style="margin: 0;">
-            </div>
-            
-            <div style="font-weight: bold; margin-bottom: 15px;">🔐 Başlangıç Yetkileri</div>
-            <div style="font-size: 12px; color: #aaa; margin-bottom: 15px;">Adminin hangi işlemleri yapabileceğini seçin:</div>
-            
-            <div id="newAdminPermissionsCheckboxList"></div>
-            
-            <div style="margin-top: 20px;">
-                <button class="btn btn-primary" onclick="addAdminWithPermissions()" style="width: 100%;">✅ Admin Olarak Ekle</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ==================== ANA SAYFA ==================== -->
-<div class="page active" id="homePage">
-<div class="container" style="padding-top: 70px;">
-    <div class="header">
-        <!-- Game Store SVG Logo - Lazer Animasyonu -->
-        <div class="app-logo-container">
-            <div class="app-logo-svg">
-                <div class="laser-g"></div>
-                <div class="laser-s"></div>
-                <div class="logo-impact"></div>
-                <span class="logo-letter-g">G</span>
-                <span class="logo-letter-s">S</span>
-            </div>
-        </div>
-        <h1 class="title">Game Store</h1>
-        <p class="subtitle">Oyun Modları & Kurulum Rehberleri</p>
-        <p class="version">Sürüm: <span id="currentVersion">3.14.9</span></p>
-    </div>
-
-    <!-- ÜYELİK KARTI - Artık sidebar'da, bu kısım gizli tutulacak -->
-    <div id="authSection" style="display: none;">
-        <!-- Giriş yapmamış -->
-        <div id="loggedOutCard" class="auth-card" style="text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 10px;">👤</div>
-            <h3 style="margin-bottom: 8px;">Hoş Geldiniz!</h3>
-            <p style="color: #aaa; font-size: 13px; margin-bottom: 20px;">Satın alma ve key yönetimi için giriş yapın</p>
-            <button class="btn btn-primary btn-small" onclick="navigateTo('loginPage')" style="margin-bottom: 8px;">🔐 Giriş Yap</button>
-            <button class="btn btn-secondary btn-small" onclick="navigateTo('registerPage')">📝 Kayıt Ol</button>
-        </div>
-        
-        <!-- Giriş yapmış -->
-        <div id="loggedInCard" class="user-card" style="display: none;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                <div class="user-badge">👤 <span id="userEmail">kullanici@email.com</span></div>
-                <button onclick="logout()" style="background: rgba(244,67,54,0.2); border: none; color: #f44336; padding: 10px 15px; border-radius: 10px; font-size: 12px; cursor: pointer;">Çıkış</button>
-            </div>
-            
-            <div id="keyStatusBox" class="key-status" onclick="openKeyDetailModal()" style="cursor: pointer;">
-                <div id="keyStatusContent">
-                    <div style="font-size: 12px; color: #aaa;">Key Durumu</div>
-                    <div id="keyStatusText" style="font-weight: bold; color: #f44336;">Aktif Key Yok</div>
-                </div>
-            </div>
-            
-            <button onclick="openModal('redeemKeyModal')" style="margin-top: 12px; background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 12px 15px; border-radius: 10px; font-size: 13px; cursor: pointer; width: 100%; font-weight: bold;">🎟️ Key Kodu Gir</button>
-            <button onclick="navigateTo('myOrdersPage'); loadMyOrders();" style="width: 100%; margin-top: 8px; background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;">📦 Siparişlerim <span id="myOrderBadge" style="background: #f44336; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px; display: none;">0</span></button>
-            <button onclick="openNotificationsModal()" style="width: 100%; margin-top: 8px; background: linear-gradient(135deg, #9C27B0, #7B1FA2); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;">🔔 Bildirimler <span id="notifBadge" style="background: #f44336; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px; display: none;">0</span></button>
-            <button onclick="openUserChatModal()" style="width: 100%; margin-top: 8px; background: linear-gradient(135deg, #00BCD4, #0097A7); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;">💬 Destek <span id="chatBadge" style="background: #f44336; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px; display: none;">0</span></button>
-            <button id="adminBtn" onclick="navigateTo('adminPage'); loadPendingOrders();" style="display: none; width: 100%; margin-top: 8px; background: linear-gradient(135deg, #673AB7, #512DA8); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer;">👑 Admin Panel</button>
-        </div>
-    </div>
-
-    <!-- OYUNLAR -->
-    <div class="section">
-        <div class="section-title">🎮 Oyunlar</div>
-        
-        <div class="game-grid" id="homeGamesGrid">
-            <!-- Dinamik olarak yüklenecek -->
-            <div style="text-align: center; padding: 30px; color: #888;">
-                <div style="font-size: 30px; margin-bottom: 10px;">⏳</div>
-                <div>Oyunlar yükleniyor...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- TELEGRAM KANAL KARTI -->
-    <div class="telegram-card" onclick="window.open('https://t.me/GameStore81', '_blank')" style="cursor: pointer; margin-top: 20px;">
-        <div class="telegram-card-content">
-            <div class="telegram-icon">✈️</div>
-            <div class="telegram-info">
-                <div class="telegram-title">Telegram Kanalımız</div>
-                <div class="telegram-subtitle">Güncellemeler ve duyurular için takip edin!</div>
-            </div>
-            <button class="telegram-btn" onclick="event.stopPropagation(); window.open('https://t.me/GameStore81', '_blank')">👉 Katıl</button>
-        </div>
-    </div>
-
-    <div class="divider"></div>
-
-    <!-- YENİLE -->
-    <div class="section">
-        <button class="btn btn-purple" onclick="refreshApp()">
-            🔄 UYGULAMAYI YENİLE
-            <span class="btn-subtext">Sürüm: v<span id="currentVersionBtn">3.10.5</span></span>
-        </button>
-    </div>
-</div>
-</div>
-
-<!-- ==================== DİNAMİK OYUN DETAY SAYFA ==================== -->
-<div class="page" id="dynamicGamePage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">
-        ← Geri
-    </button>
-    
-    <div class="header" style="margin-bottom: 20px;">
-        <img id="dynamicGameIcon" src="" alt="Oyun" class="app-logo" style="width: 100px; height: 100px; border-radius: 20px;" onerror="this.style.display='none'">
-        <h1 class="title" style="font-size: 22px;" id="dynamicGameTitle">Oyun Adı</h1>
-        <p class="subtitle" id="dynamicGameDesc">Oyun Açıklaması</p>
-    </div>
-
-    <!-- HİLELER LİSTESİ -->
-    <div class="section">
-        <div class="section-title">🗡️ Mevcut Hileler</div>
-        
-        <div class="game-grid" id="dynamicCheatsGrid">
-            <!-- Dinamik olarak yüklenecek -->
-        </div>
-    </div>
-</div>
-</div>
-
-<!-- ==================== DİNAMİK HİLE DETAY SAYFA ==================== -->
-<div class="page" id="dynamicCheatPage">
-<div class="container">
-    <button class="back-btn" onclick="navigateBack()">
-        ← Geri
-    </button>
-    
-    <div class="header" style="margin-bottom: 20px;">
-        <img id="dynamicCheatIcon" src="" alt="Hile" class="app-logo" style="width: 100px; height: 100px;" onerror="this.style.display='none'">
-        <h1 class="title" style="font-size: 22px;" id="dynamicCheatTitle">Hile Adı</h1>
-        <p class="subtitle" id="dynamicCheatSubtitle">Hile Bilgisi</p>
-    </div>
-    
-    <!-- HİLE DURUM UYARILARI -->
-    <div id="dynamicCheatMaintenanceWarning" class="section" style="display: none;">
-        <div style="background: rgba(255,152,0,0.15); border: 2px solid rgba(255,152,0,0.4); border-radius: 20px; padding: 25px; text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 15px;">🔧</div>
-            <div style="font-size: 18px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">Bakım Modunda</div>
-            <div style="color: #aaa; font-size: 14px;">Bu hile şu anda bakım altında. Kısa süre içinde tekrar aktif olacaktır.</div>
-        </div>
-    </div>
-    
-    <div id="dynamicCheatInactiveWarning" class="section" style="display: none;">
-        <div style="background: rgba(244,67,54,0.15); border: 2px solid rgba(244,67,54,0.4); border-radius: 20px; padding: 25px; text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 15px;">⏸️</div>
-            <div style="font-size: 18px; font-weight: bold; color: #f44336; margin-bottom: 10px;">Hile Pasif</div>
-            <div style="color: #aaa; font-size: 14px;">Bu hile şu anda aktif değil. Lütfen daha sonra tekrar kontrol edin.</div>
-        </div>
-    </div>
-
-    <!-- AKTİF ÜYELİK KONTROLÜ -->
-    <div id="dynamicSetupLocked" class="section" style="display: none;">
-        <div style="background: rgba(244,67,54,0.1); border: 2px solid rgba(244,67,54,0.3); border-radius: 20px; padding: 25px; text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 15px;">🔒</div>
-            <div style="font-size: 18px; font-weight: bold; color: #f44336; margin-bottom: 10px;">Kurulum Talimatları Kilitli</div>
-            <div style="color: #aaa; font-size: 14px; margin-bottom: 20px;">Kurulum talimatlarını görmek için bu hileyi satın almanız gerekiyor.</div>
-            <div style="color: #888; font-size: 12px;">👇 Aşağıdaki fiyat seçeneklerinden birini seçerek satın alın</div>
-        </div>
-    </div>
-    
-    <!-- KURULUM ADIMLARI (Aktif üyelik varsa) -->
-    <div id="dynamicSetupUnlocked" class="section" style="display: none;">
-        <div class="section-title">🚀 Kurulum Adımları</div>
-        <div id="dynamicSetupSteps">
-            <!-- Dinamik olarak yüklenecek -->
-        </div>
-    </div>
-    
-    <!-- AKTİF ÜYELİK BİLGİSİ -->
-    <div id="dynamicActiveMembership" class="section" style="display: none;">
-        <div style="background: rgba(76,175,80,0.15); border: 2px solid rgba(76,175,80,0.4); border-radius: 20px; padding: 25px; text-align: center;">
-            <div style="font-size: 50px; margin-bottom: 15px;">✅</div>
-            <div style="font-size: 18px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">Aktif Üyeliğiniz Var!</div>
-            <div id="dynamicMembershipInfo" style="color: #aaa; font-size: 14px; margin-bottom: 15px;"></div>
-            <button class="btn btn-secondary btn-small" onclick="goToAccount()">👤 Hesabım</button>
-        </div>
-    </div>
-
-    <!-- ÖZELLİKLER -->
-    <div class="section">
-        <div class="section-title">🗡️ Özellikler</div>
-        <div class="features" style="margin-top: 0;">
-            <div class="feature-grid" id="dynamicCheatFeatures">
-                <!-- Dinamik olarak yüklenecek -->
-            </div>
-            
-            <!-- Video Butonu -->
-            <div id="dynamicVideoSection" style="margin-top: 15px; display: none;">
-                <button class="btn btn-warning btn-small" onclick="openDynamicVideoModal()">
-                    🎬 Tanıtım Videosunu İzle
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- FİYATLAR -->
-    <div class="section">
-        <div class="section-title">💰 Fiyatlar</div>
-        <div class="pricing-grid" id="dynamicCheatPrices">
-            <!-- Dinamik olarak yüklenecek -->
-        </div>
-    </div>
-
-    <!-- SATIN AL -->
-    <div class="section">
-        <button class="btn btn-primary" id="dynamicBuyBtn" onclick="openDynamicBuyModal()">
-            💳 SATIN AL
-            <span class="btn-subtext" id="dynamicSelectedPrice">Fiyat seçin</span>
-        </button>
-    </div>
-</div>
-</div>
-
-
-<!-- ==================== MODALS ==================== -->
-
-<!-- ÖDEME YÖNTEMİ MODAL -->
-<div class="modal-overlay" id="paymentModal" onclick="closeModalOutside(event, 'paymentModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #45a049);">
-            <div class="modal-title">💳 Ödeme Yöntemi Seçin</div>
-            <button class="modal-close" onclick="closeModal('paymentModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Seçilen Paket Bilgisi -->
-            <div style="background: rgba(76,175,80,0.15); border: 1px solid #4CAF50; border-radius: 12px; padding: 15px; margin-bottom: 20px; text-align: center;">
-                <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">Seçilen Paket</div>
-                <div style="font-size: 18px; font-weight: bold;" id="modalPackageName">30 Günlük</div>
-                <div style="font-size: 24px; font-weight: bold; color: #4CAF50; margin-top: 5px;" id="modalPackagePrice">850₺</div>
-            </div>
-            
-            <!-- Ödeme Seçenekleri -->
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <!-- Kredi Kartı / Shopier -->
-                <button onclick="selectPaymentMethod('shopier')" class="payment-method-btn" id="shopierBtn">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 30px;">💳</div>
-                        <div style="text-align: left;">
-                            <div style="font-weight: bold; font-size: 15px;">Kredi Kartı</div>
-                            <div style="font-size: 12px; color: #aaa;">Shopier ile güvenli ödeme</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 20px; color: #4CAF50;">›</div>
-                </button>
-                
-                <!-- Havale -->
-                <button onclick="selectPaymentMethod('havale')" class="payment-method-btn" id="havaleBtn">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="font-size: 30px;">🏦</div>
-                        <div style="text-align: left;">
-                            <div style="font-weight: bold; font-size: 15px;">Havale / EFT</div>
-                            <div style="font-size: 12px; color: #aaa;">Banka havalesi ile ödeme</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 20px; color: #4CAF50;">›</div>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- HAVALE ÖDEME MODAL -->
-<div class="modal-overlay" id="havaleModal" onclick="closeModalOutside(event, 'havaleModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #2196F3, #1976D2);">
-            <div class="modal-title">🏦 Havale ile Ödeme</div>
-            <button class="modal-close" onclick="closeModal('havaleModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <!-- Paket ve Tutar -->
-            <div style="background: rgba(33,150,243,0.15); border: 1px solid #2196F3; border-radius: 12px; padding: 15px; margin-bottom: 15px; text-align: center;">
-                <div id="havalePackageInfo" style="font-size: 14px; font-weight: bold;"></div>
-                <div id="havaleAmount" style="font-size: 22px; font-weight: bold; color: #2196F3; margin-top: 5px;"></div>
-            </div>
-            
-            <!-- Banka Bilgileri -->
-            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">Alıcı</div>
-                <div style="font-weight: bold; font-size: 16px;">ONUR TENK</div>
-                <div style="font-size: 12px; color: #aaa; margin-top: 12px; margin-bottom: 5px;">Banka</div>
-                <div style="font-weight: bold;">Garanti Bankası</div>
-                <div style="font-size: 12px; color: #aaa; margin-top: 12px; margin-bottom: 5px;">IBAN</div>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <div style="font-weight: bold; font-size: 13px; flex: 1;">TR26 0006 2000 7750 0006 8826 02</div>
-                    <button onclick="copyToClipboard('TR26000620007750000688260 2')" style="background: #4CAF50; border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 11px; cursor: pointer;">📋</button>
-                </div>
-            </div>
-            
-            <div class="warning-box" style="margin-bottom: 15px;">
-                <div class="boxtitle">⚠️ Önemli</div>
-                <div class="content">Açıklama kısmını BOŞ bırakın!</div>
-            </div>
-            
-            <!-- Dekont Yükleme -->
-            <div style="font-size: 13px; margin-bottom: 10px; font-weight: bold;">📸 Dekont Fotoğrafı</div>
-            <input type="file" id="dekontFile" accept="image/*" class="auth-input" style="padding: 10px;" onchange="previewDekont(this)">
-            <div id="dekontPreview" style="display: none; margin: 15px 0; text-align: center;">
-                <img id="dekontImg" style="max-width: 100%; max-height: 200px; border-radius: 10px; border: 2px solid #4CAF50;">
-            </div>
-            
-            <button class="btn btn-primary" onclick="submitOrder()" style="margin-top: 10px;">📤 Siparişi Gönder</button>
-            <p style="text-align: center; color: #666; font-size: 11px; margin-top: 10px;">Dekont incelendikten sonra key'iniz aktifleştirilecek</p>
-        </div>
-    </div>
-</div>
-
-<!-- YOUTUBE VIDEO MODAL -->
-<div class="modal-overlay" id="youtubeVideoModal" onclick="closeModal('youtubeVideoModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 800px; width: 95%; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #E040FB, #BA68C8);">
-            <div class="modal-title">🎬 Tanıtım Videosu</div>
-            <button class="modal-close" onclick="closeModal('youtubeVideoModal')">✕</button>
-        </div>
-        <div class="modal-body" style="padding: 0;">
-            <!-- Video Container -->
-            <div id="youtubeVideoContainer" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; background: #000;">
-                <!-- YouTube iframe buraya yerleştirilecek -->
-            </div>
-            
-            <!-- Özellikler Bölümü (Açılır-Kapanır) -->
-            <div style="padding: 15px; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,255,255,0.1);">
-                <div onclick="toggleVideoFeatures()" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 10px; background: rgba(138,43,226,0.2); border-radius: 8px; transition: all 0.3s;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 20px;">✨</span>
-                        <span style="font-weight: 600; font-size: 15px;">Hile Özellikleri</span>
-                    </div>
-                    <span id="videoFeaturesToggleIcon" style="font-size: 20px; transition: transform 0.3s;">▼</span>
-                </div>
-                
-                <div id="videoModalFeatures" style="max-height: 0; overflow: hidden; transition: max-height 0.4s ease; margin-top: 0;">
-                    <!-- Özellikler buraya yerleştirilecek -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SIRALAMA MODAL -->
-<div class="modal-overlay" id="sortModal" onclick="closeModalOutside(event, 'sortModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 600px; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #9C27B0, #7B1FA2);">
-            <div class="modal-title">⬍ Oyun ve Hile Sıralaması</div>
-            <button class="modal-close" onclick="closeModal('sortModal')">✕</button>
-        </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 20px;">
-            <div style="margin-bottom: 15px; padding: 10px; background: rgba(156, 39, 176, 0.1); border-radius: 8px; font-size: 13px; color: #aaa;">
-                💡 <strong>Nasıl Kullanılır:</strong><br>
-                • ☰ ikonunu tutup sürükleyerek oyunları sıralayın<br>
-                • Oyun kartına tıklayarak hilelerini açın ve sıralayın<br>
-                • Değişiklikler otomatik kaydedilir
-            </div>
-            
-            <div id="sortGameList" style="min-height: 200px;">
-                <!-- Oyun listesi buraya gelecek -->
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- AKTİF ÜYELİKLER MODAL -->
-<div class="modal-overlay" id="keyDetailModal" onclick="closeModalOutside(event, 'keyDetailModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 450px; max-height: 80vh; overflow-y: auto;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #4CAF50, #45a049);">
-            <div class="modal-title">🎮 Aktif Üyelikler</div>
-            <button class="modal-close" onclick="closeModal('keyDetailModal')">✕</button>
-        </div>
-        <div class="modal-body" id="keyDetailContent">
-            <!-- İçerik JavaScript ile doldurulacak -->
-        </div>
-    </div>
-</div>
-
-<!-- KEY GİRİŞ MODAL -->
-<div class="modal-overlay" id="redeemKeyModal" onclick="closeModalOutside(event, 'redeemKeyModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 400px;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">🎟️ Key Kodu Gir</div>
-            <button class="modal-close" onclick="closeModal('redeemKeyModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <p style="color: #aaa; font-size: 13px; margin-bottom: 15px;">Satın aldığınız key kodunu girin:</p>
-            <input type="text" id="redeemKeyInput" class="auth-input" placeholder="XXXX-XXXX-XXXX" style="text-transform: uppercase; text-align: center; font-size: 18px; letter-spacing: 2px;">
-            <button class="btn btn-primary" onclick="redeemKey()">✅ Kodu Kullan</button>
-        </div>
-    </div>
-</div>
-
-<!-- TANITIM VİDEO MODAL -->
-<div class="modal-overlay" id="videoModal" onclick="closeModalOutside(event, 'videoModal')">
-    <div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header" style="background: linear-gradient(135deg, #FF9800, #F57C00);">
-            <div class="modal-title">🎬 TheBestML Tanıtım</div>
-            <button class="modal-close" onclick="closeModal('videoModal')">✕</button>
-        </div>
-        <div class="modal-body" style="padding: 0;">
-            <div class="video-container" style="margin: 0; border-radius: 0;">
-                <video controls playsinline id="promoVideo" style="max-height: 70vh;">
-                    <source src="https://raw.githubusercontent.com/LineOft/thebestml-updates/main/tanitim-video.mp4" type="video/mp4">
-                </video>
-            </div>
-            <div style="padding: 15px;">
-                <div class="success-box" style="margin: 0;">
-                    <div class="boxtitle">🗡️ Tüm Özellikler</div>
-                    <div class="content">
-                        Oyuncu görünümü, düşman HP, kutulama, harita hilesi ve daha fazlası! Telegram'dan key satın alarak hemen kullanmaya başlayın.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- SERTİFİKA MODAL -->
-<div class="modal-overlay" id="certModal" onclick="closeModalOutside(event, 'certModal')">
-    <div class="modal" onclick="event.stopPropagation()">
-        <div class="modal-header orange">
-            <div class="modal-title">🔐 Sertifika Kapatma Rehberi</div>
-            <button class="modal-close" onclick="closeModal('certModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <div class="video-container">
-                <video controls playsinline id="certVideo">
-                    <source src="https://raw.githubusercontent.com/LineOft/thebestml-updates/main/sertifika-rehber.mp4" type="video/mp4">
-                </video>
-            </div>
-            
-            <div class="warning-box">
-                <div class="boxtitle">⚠️ ÖNEMLİ</div>
-                <div class="content">
-                    <strong style="color: #4CAF50;">GlobalSign NV-SA</strong> sertifikasını <strong>KAPATMAYIN!</strong> Bu açık kalmalı, diğer tüm sertifikaları kapatın.
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">1</div>
-                <div class="step-content">
-                    <strong>Ayarları Aç</strong>
-                    <p>Telefonunuzun Ayarlar uygulamasını açın.</p>
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">2</div>
-                <div class="step-content">
-                    <strong>Güvenlik Ayarları</strong>
-                    <p>"Güvenlik" veya "Güvenlik ve gizlilik" bölümüne girin.</p>
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">3</div>
-                <div class="step-content">
-                    <strong>Şifreleme ve Kimlik Bilgileri</strong>
-                    <p>"Şifreleme ve kimlik bilgileri" veya "Diğer güvenlik ayarları" tıklayın.</p>
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">4</div>
-                <div class="step-content">
-                    <strong>Güvenilen Kimlik Bilgileri</strong>
-                    <p>"Güvenilen kimlik bilgileri" veya "Trusted credentials" seçin.</p>
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">5</div>
-                <div class="step-content">
-                    <strong>SİSTEM Sekmesi</strong>
-                    <p>Üstteki "SİSTEM" sekmesine tıklayın.</p>
-                </div>
-            </div>
-            
-            <div class="step-item">
-                <div class="step-num">6</div>
-                <div class="step-content">
-                    <strong>Sertifikaları Kapat</strong>
-                    <p>Her sertifikaya tıklayın ve "Devre dışı bırak" seçin. GlobalSign NV-SA HARİÇ!</p>
-                </div>
-            </div>
-            
-            <button class="btn btn-warning" onclick="openSecuritySettings()" style="margin-top: 15px;">
-                🔒 Sertifika Ayarlarını Aç
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- IMGUI MODAL -->
-<div class="modal-overlay" id="imguiModal" onclick="closeModalOutside(event, 'imguiModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header">
-            <div class="modal-title">📥 TheBestML IMGUI V2.8 Kurulum Rehberi</div>
-            <button class="modal-close" onclick="closeModal('imguiModal')">✕</button>
-        </div>
-        <div class="modal-body" style="padding: 15px;">
-            
-            <!-- Tanıtım Videosu -->
-            <div style="background: linear-gradient(135deg, rgba(156,39,176,0.2), rgba(103,58,183,0.2)); border: 1px solid rgba(156,39,176,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
-                <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">🎬 Tanıtım Videosu</div>
-                <video controls style="width: 100%; border-radius: 12px; max-height: 200px;" poster="">
-                    <source src="https://raw.githubusercontent.com/LineOft/thebestml-updates/main/tanitim-video.mp4" type="video/mp4">
-                    Tarayıcınız video oynatmayı desteklemiyor.
-                </video>
-            </div>
-            
-            <!-- İndirme Butonu -->
-            <button class="btn btn-primary" onclick="downloadAPK()" style="margin-bottom: 20px; width: 100%;">
-                📥 IMGUI APK İNDİR
-                <span class="btn-subtext">TheBestML IMGUI V2.8</span>
-            </button>
-            
-            <!-- Uyumluluk Bilgisi -->
-            <div style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); border-radius: 12px; padding: 12px; margin-bottom: 20px;">
-                <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 8px;">✅ Uyumluluk</div>
-                <div style="font-size: 12px; color: #aaa;">
-                    • 💘 <strong>Mobile Legends:</strong> Playstoreden Orjinal ML indirin<br>
-                    • 💎 <strong>Cihaz:</strong> ROOT & Rootsuz TÜM Android telefonlarda çalışır<br>
-                    • ⚡️ <strong>Önemli:</strong> Eski sürümü kaldırın, temiz kurulum yapın
-                </div>
-            </div>
-            
-            <!-- Sertifika Kapatma Videosu -->
-            <div style="background: linear-gradient(135deg, rgba(255,152,0,0.2), rgba(244,67,54,0.2)); border: 1px solid rgba(255,152,0,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
-                <div style="font-size: 16px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🔞 ÖNEMLİ: Sertifika Kapatma</div>
-                <div style="font-size: 12px; color: #ffcc80; margin-bottom: 10px;">
-                    Bypass korumasının sorunsuz çalışabilmesi için aşağıdaki videoda gösterildiği gibi sertifikaları kapatmanız gerekmektedir.
-                </div>
-                <video controls style="width: 100%; border-radius: 12px; max-height: 200px;">
-                    <source src="https://raw.githubusercontent.com/LineOft/thebestml-updates/main/sertifika-rehber.mp4" type="video/mp4">
-                    Tarayıcınız video oynatmayı desteklemiyor.
-                </video>
-            </div>
-            
-            <!-- Kurulum Adımları -->
-            <div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 15px;">📋 Kurulum Adımları</div>
-            
-            <div class="step-item" style="background: rgba(33,150,243,0.1); border: 1px solid rgba(33,150,243,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #2196F3, #1976D2); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">1</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #2196F3; margin-bottom: 4px;">Orijinal ML İndirin</div>
-                        <div style="font-size: 12px; color: #aaa;">Playstoreden Mobile Legends orijinal sürümünü indirin.</div>
-                        <button onclick="openPlayStore()" style="background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 8px;">
-                            ▶️ Play Store'a Git
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="step-item" style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #FF9800, #F57C00); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">2</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #FF9800; margin-bottom: 4px;">Sertifikaları Kapatın</div>
-                        <div style="font-size: 12px; color: #aaa;">Yukarıdaki videoda gösterildiği gibi belirtilen sertifikaları kapatın. Bu adım bypass koruma için zorunludur!</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="step-item" style="background: rgba(156,39,176,0.1); border: 1px solid rgba(156,39,176,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">3</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #9C27B0; margin-bottom: 4px;">IMGUI APK İndirin</div>
-                        <div style="font-size: 12px; color: #aaa;">Üstteki indirme butonuna tıklayarak TheBestML IMGUI APK'sını indirin ve kurun.</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="step-item" style="background: rgba(0,188,212,0.1); border: 1px solid rgba(0,188,212,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #00BCD4, #0097A7); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">4</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #00BCD4; margin-bottom: 4px;">Spa Dosyasını Çalıştırın</div>
-                        <div style="font-size: 12px; color: #aaa;">İndirdiğiniz TheBestML Spa dosyasını çalıştırın. Karşınıza çıkan ekrandan izinleri verin.</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="step-item" style="background: rgba(233,30,99,0.1); border: 1px solid rgba(233,30,99,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #E91E63, #C2185B); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">5</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #E91E63; margin-bottom: 4px;">ML Klonlayın</div>
-                        <div style="font-size: 12px; color: #aaa;">Listeden Mobile Legends'ı seçin ve <strong>"Klon"</strong> yazısına tıklayın.</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="step-item" style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                    <div style="background: linear-gradient(135deg, #4CAF50, #388E3C); width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 16px; flex-shrink: 0;">6</div>
-                    <div style="flex: 1;">
-                        <div style="font-weight: bold; color: #4CAF50; margin-bottom: 4px;">Klonlanan ML'yi Başlatın</div>
-                        <div style="font-size: 12px; color: #aaa;">Klonladığınız ML sürümünü başlatın ve size verdiğimiz <strong>Key</strong> ile giriş yapın.</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Uyarılar -->
-            <div style="background: rgba(244,67,54,0.15); border: 1px solid rgba(244,67,54,0.4); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 14px; font-weight: bold; color: #f44336; margin-bottom: 8px;">⚠️ Önemli Uyarılar</div>
-                <div style="font-size: 12px; color: #ffcdd2;">
-                    • 🤖 Playstoreden <strong>Otomatik Güncellemeleri KAPATIN</strong><br>
-                    • ⚡️ Eski IMGUI sürümünü <strong>KALDIRIN</strong> ve temiz kurulum yapın<br>
-                    • 🔞 Sertifikaları kapatmadan hile <strong>ÇALIŞMAZ</strong>
-                </div>
-            </div>
-            
-            <!-- Başarılı -->
-            <div style="background: linear-gradient(135deg, rgba(76,175,80,0.2), rgba(139,195,74,0.2)); border: 1px solid rgba(76,175,80,0.5); border-radius: 12px; padding: 15px; text-align: center;">
-                <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
-                <div style="font-size: 16px; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">Kurulum Tamamlandı!</div>
-                <div style="font-size: 12px; color: #aaa;">Artık klonlanan Mobile Legends'ı açtığınızda IMGUI menüsü görünecektir.</div>
-            </div>
-            
-        </div>
-    </div>
-</div>
-
-<!-- KURULUM MODAL EDİTÖR MODAL -->
-<div class="modal-overlay" id="setupModalEditorModal" onclick="closeModalOutside(event, 'setupModalEditorModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 550px; max-height: 95vh; display: flex; flex-direction: column;">
-        <div class="modal-header" style="background: linear-gradient(135deg, #673AB7, #512DA8);">
-            <div class="modal-title" id="setupModalEditorTitle">📖 Yeni Kurulum Modalı</div>
-            <button class="modal-close" onclick="closeModal('setupModalEditorModal')">✕</button>
-        </div>
-        <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 15px;">
-            
-            <!-- Modal ID -->
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 12px; color: #aaa; display: block; margin-bottom: 5px;">Modal ID (benzersiz)</label>
-                <input type="text" id="setupModalId" class="auth-input" placeholder="örn: myCheatModal" style="font-family: monospace;">
-                <div style="font-size: 10px; color: #888; margin-top: 3px;">💡 Kurulum adımlarında bu ID'yi seçeceksiniz</div>
-            </div>
-            
-            <!-- Modal Başlığı -->
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 12px; color: #aaa; display: block; margin-bottom: 5px;">Modal Başlığı</label>
-                <input type="text" id="setupModalTitle" class="auth-input" placeholder="📖 TheBestML Kurulum Rehberi">
-            </div>
-            
-            <!-- Tanıtım Videosu -->
-            <div style="background: rgba(156,39,176,0.1); border: 1px solid rgba(156,39,176,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">🎬 Tanıtım Videosu (Opsiyonel)</div>
-                <input type="text" id="setupModalIntroVideo" class="auth-input" placeholder="YouTube veya MP4 URL (örn: https://youtube.com/watch?v=...)" style="margin-bottom: 8px;">
-                <div style="font-size: 10px; color: #888;">💡 YouTube linki veya MP4 video linki desteklenir</div>
-            </div>
-            
-            <!-- APK İndirme -->
-            <div style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">📥 APK İndirme Butonu (Opsiyonel)</div>
-                <input type="text" id="setupModalApkLabel" class="auth-input" placeholder="Buton yazısı (örn: IMGUI APK İNDİR)" style="margin-bottom: 8px;">
-                <input type="text" id="setupModalApkUrl" class="auth-input" placeholder="APK indirme URL'si">
-            </div>
-            
-            <!-- Uyumluluk Bilgisi -->
-            <div style="background: rgba(33,150,243,0.1); border: 1px solid rgba(33,150,243,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #2196F3; margin-bottom: 10px;">✅ Uyumluluk Bilgisi (Opsiyonel)</div>
-                <textarea id="setupModalCompatibility" class="auth-input" placeholder="Her satır bir madde olacak:&#10;💘 Mobile Legends: Orijinal sürüm&#10;💎 Cihaz: Tüm Android telefonlar" style="height: 80px; resize: none;"></textarea>
-            </div>
-            
-            <!-- Sertifika/Rehber Video -->
-            <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🔐 Rehber Videosu (Opsiyonel)</div>
-                <input type="text" id="setupModalGuideTitle" class="auth-input" placeholder="Rehber başlığı (örn: Sertifika Kapatma)" style="margin-bottom: 8px;">
-                <input type="text" id="setupModalGuideVideo" class="auth-input" placeholder="YouTube veya MP4 URL" style="margin-bottom: 8px;">
-                <textarea id="setupModalGuideDesc" class="auth-input" placeholder="Açıklama metni" style="height: 60px; resize: none;"></textarea>
-            </div>
-            
-            <!-- Kurulum Adımları -->
-            <div style="background: rgba(0,188,212,0.1); border: 1px solid rgba(0,188,212,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                    <div style="font-size: 13px; font-weight: bold; color: #00BCD4;">📋 Kurulum Adımları</div>
-                    <button onclick="addSetupModalStep()" style="background: #00BCD4; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">➕ Adım Ekle</button>
-                </div>
-                <div id="setupModalStepsList" style="max-height: 300px; overflow-y: auto;">
-                    <!-- Adımlar buraya eklenecek -->
-                </div>
-            </div>
-            
-            <!-- Uyarılar -->
-            <div style="background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #f44336; margin-bottom: 10px;">⚠️ Uyarılar (Opsiyonel)</div>
-                <textarea id="setupModalWarnings" class="auth-input" placeholder="Her satır bir uyarı:&#10;🤖 Otomatik güncellemeleri kapatın&#10;⚡️ Eski sürümü kaldırın" style="height: 80px; resize: none;"></textarea>
-            </div>
-            
-            <!-- Başarı Mesajı -->
-            <div style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-size: 13px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">✅ Başarı Mesajı</div>
-                <input type="text" id="setupModalSuccessTitle" class="auth-input" placeholder="Kurulum Tamamlandı!" style="margin-bottom: 8px;">
-                <input type="text" id="setupModalSuccessDesc" class="auth-input" placeholder="Artık hileyi kullanabilirsiniz.">
-            </div>
-            
-            <!-- Butonlar -->
-            <div style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn btn-primary" onclick="saveSetupModal()" style="flex: 1;">💾 Kaydet</button>
-                <button class="btn btn-warning" onclick="previewSetupModal()" style="flex: 1;">👁️ Önizle</button>
-            </div>
-            
-        </div>
-    </div>
-</div>
-
-<!-- DİNAMİK KURULUM MODAL (Önizleme/Görüntüleme) -->
-<div class="modal-overlay" id="dynamicSetupModal" onclick="closeModalOutside(event, 'dynamicSetupModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" id="dynamicSetupModalHeader" style="background: linear-gradient(135deg, #673AB7, #512DA8);">
-            <div class="modal-title" id="dynamicSetupModalTitle">📖 Kurulum Rehberi</div>
-            <button class="modal-close" onclick="closeModal('dynamicSetupModal')">✕</button>
-        </div>
-        <div class="modal-body" id="dynamicSetupModalContent" style="padding: 15px;">
-            <!-- Dinamik içerik buraya yüklenecek -->
-        </div>
-    </div>
-</div>
-
-<!-- ⚙️ UYGULAMA AYARLARI MODAL -->
-<div class="modal-overlay" id="appSettingsModal" onclick="closeModalOutside(event, 'appSettingsModal')">
-    <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px; max-height: 90vh; overflow-y: auto;">
-        <div class="modal-header" id="appSettingsModalHeader" style="background: linear-gradient(135deg, #607D8B, #455A64);">
-            <div class="modal-title" id="appSettingsModalTitle">⚙️ Uygulama Ayarları</div>
-            <button class="modal-close" onclick="closeModal('appSettingsModal')">✕</button>
-        </div>
-        <div class="modal-body" id="appSettingsModalContent" style="padding: 15px;">
-            <!-- Dinamik içerik buraya yüklenecek -->
-        </div>
-    </div>
-</div>
-
-<div class="toast" id="toast"></div>
-<div class="notification-toast" id="notificationToast"></div>
-
-<script>
     // Config
     let appConfig = {
         apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
@@ -2975,14 +16,14 @@
             overlay.classList.remove('active');
             document.body.style.overflow = '';
         } else {
-            // Aç
+            // AÃ§
             sidebar.classList.add('active');
             overlay.classList.add('active');
             document.body.style.overflow = 'hidden';
         }
     }
     
-    // Profil paneli UI'ını güncelle
+    // Profil paneli UI'Ä±nÄ± gÃ¼ncelle
     function updateProfilePanelUI() {
         const headerLoggedIn = document.getElementById('sidebarHeaderLoggedIn');
         const headerLoggedOut = document.getElementById('sidebarHeaderLoggedOut');
@@ -2992,41 +33,41 @@
         const sidebarAdminBtn = document.getElementById('sidebarAdminBtn');
         
         if (currentUser) {
-            // Giriş yapmış
+            // GiriÅŸ yapmÄ±ÅŸ
             headerLoggedIn.style.display = 'block';
             headerLoggedOut.style.display = 'none';
             contentLoggedIn.style.display = 'block';
             contentLoggedOut.style.display = 'none';
             toggleBtn.classList.add('logged-in');
             
-            // Email'i göster
+            // Email'i gÃ¶ster
             document.getElementById('sidebarEmail').textContent = currentUser.email;
             document.getElementById('sidebarUsername').textContent = currentUser.email.split('@')[0];
             
-            // Admin kontrolü
+            // Admin kontrolÃ¼
             if (isAdmin()) {
                 sidebarAdminBtn.style.display = 'flex';
             } else {
                 sidebarAdminBtn.style.display = 'none';
             }
             
-            // Profil fotoğrafını yükle
+            // Profil fotoÄŸrafÄ±nÄ± yÃ¼kle
             loadProfilePhoto();
             
         } else {
-            // Giriş yapmamış
+            // GiriÅŸ yapmamÄ±ÅŸ
             headerLoggedIn.style.display = 'none';
             headerLoggedOut.style.display = 'block';
             contentLoggedIn.style.display = 'none';
             contentLoggedOut.style.display = 'block';
             toggleBtn.classList.remove('logged-in');
             
-            // Avatarları sıfırla
+            // AvatarlarÄ± sÄ±fÄ±rla
             resetProfileAvatars();
         }
     }
     
-    // Profil fotoğrafını Firestore'dan yükle
+    // Profil fotoÄŸrafÄ±nÄ± Firestore'dan yÃ¼kle
     async function loadProfilePhoto() {
         if (!currentUser) return;
         
@@ -3039,12 +80,12 @@
                 resetProfileAvatars();
             }
         } catch(e) {
-            console.log('Profil fotoğrafı yüklenemedi:', e);
+            console.log('Profil fotoÄŸrafÄ± yÃ¼klenemedi:', e);
             resetProfileAvatars();
         }
     }
     
-    // Profil avatarlarını ayarla
+    // Profil avatarlarÄ±nÄ± ayarla
     function setProfileAvatars(photoUrl) {
         // Sidebar avatar
         const avatarImg = document.getElementById('profileAvatarImg');
@@ -3061,7 +102,7 @@
         toggleDefaultAvatar.style.display = 'none';
     }
     
-    // Profil avatarlarını sıfırla
+    // Profil avatarlarÄ±nÄ± sÄ±fÄ±rla
     function resetProfileAvatars() {
         // Sidebar avatar
         const avatarImg = document.getElementById('profileAvatarImg');
@@ -3087,27 +128,27 @@
         }
     }
     
-    // Profil fotoğrafı seçildiğinde
+    // Profil fotoÄŸrafÄ± seÃ§ildiÄŸinde
     async function handleProfilePhotoSelect(event) {
         const file = event.target.files[0];
         if (!file) return;
         
-        // Dosya boyutu kontrolü (max 2MB)
+        // Dosya boyutu kontrolÃ¼ (max 2MB)
         if (file.size > 2 * 1024 * 1024) {
-            showToast('❌ Fotoğraf 2MB\'dan küçük olmalı');
+            showToast('âŒ FotoÄŸraf 2MB\'dan kÃ¼Ã§Ã¼k olmalÄ±');
             return;
         }
         
-        // Sadece resim dosyaları
+        // Sadece resim dosyalarÄ±
         if (!file.type.startsWith('image/')) {
-            showToast('❌ Sadece resim dosyası yükleyebilirsiniz');
+            showToast('âŒ Sadece resim dosyasÄ± yÃ¼kleyebilirsiniz');
             return;
         }
         
-        showToast('⏳ Fotoğraf yükleniyor...');
+        showToast('â³ FotoÄŸraf yÃ¼kleniyor...');
         
         try {
-            // Resmi sıkıştır ve Base64'e çevir
+            // Resmi sÄ±kÄ±ÅŸtÄ±r ve Base64'e Ã§evir
             const compressedBase64 = await compressAndConvertToBase64(file);
             
             // Firestore'a kaydet
@@ -3116,28 +157,28 @@
                 profilePhotoUpdated: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
             
-            // Avatar'ları güncelle
+            // Avatar'larÄ± gÃ¼ncelle
             setProfileAvatars(compressedBase64);
             
-            showToast('✅ Profil fotoğrafı güncellendi!');
+            showToast('âœ… Profil fotoÄŸrafÄ± gÃ¼ncellendi!');
         } catch(e) {
-            console.error('Fotoğraf yükleme hatası:', e);
-            showToast('❌ Fotoğraf yüklenemedi');
+            console.error('FotoÄŸraf yÃ¼kleme hatasÄ±:', e);
+            showToast('âŒ FotoÄŸraf yÃ¼klenemedi');
         }
     }
     
-    // Resmi sıkıştır ve Base64'e çevir
+    // Resmi sÄ±kÄ±ÅŸtÄ±r ve Base64'e Ã§evir
     function compressAndConvertToBase64(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
                 const img = new Image();
                 img.onload = () => {
-                    // Canvas ile sıkıştır
+                    // Canvas ile sÄ±kÄ±ÅŸtÄ±r
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     
-                    // Max boyut 200x200 (daha küçük)
+                    // Max boyut 200x200 (daha kÃ¼Ã§Ã¼k)
                     let width = img.width;
                     let height = img.height;
                     const maxSize = 200;
@@ -3158,7 +199,7 @@
                     canvas.height = height;
                     ctx.drawImage(img, 0, 0, width, height);
                     
-                    // JPEG olarak %50 kalitede kaydet (daha düşük)
+                    // JPEG olarak %50 kalitede kaydet (daha dÃ¼ÅŸÃ¼k)
                     const base64 = canvas.toDataURL('image/jpeg', 0.5);
                     resolve(base64);
                 };
@@ -3170,7 +211,7 @@
         });
     }
 
-    // Dekont/resim gibi büyük görselleri Firestore'a daha uygun hale getir
+    // Dekont/resim gibi bÃ¼yÃ¼k gÃ¶rselleri Firestore'a daha uygun hale getir
     function compressReceiptImageToDataUrl(file, opts = {}) {
         const {
             maxSize = 1280,
@@ -3180,14 +221,14 @@
         } = opts || {};
 
         return new Promise((resolve, reject) => {
-            if (!file) return reject(new Error('Dosya seçilmedi'));
-            if (!file.type || !file.type.startsWith('image/')) return reject(new Error('Sadece resim dosyası seçin'));
+            if (!file) return reject(new Error('Dosya seÃ§ilmedi'));
+            if (!file.type || !file.type.startsWith('image/')) return reject(new Error('Sadece resim dosyasÄ± seÃ§in'));
 
-            // Çok küçük dosyaları olduğu gibi geçir (okunabilirliği koru)
+            // Ã‡ok kÃ¼Ã§Ã¼k dosyalarÄ± olduÄŸu gibi geÃ§ir (okunabilirliÄŸi koru)
             if (Number.isFinite(file.size) && file.size > 0 && file.size <= passthroughUnderBytes) {
                 const passthroughReader = new FileReader();
                 passthroughReader.onload = (e) => resolve(e.target.result);
-                passthroughReader.onerror = () => reject(new Error('Dosya okunamadı'));
+                passthroughReader.onerror = () => reject(new Error('Dosya okunamadÄ±'));
                 passthroughReader.readAsDataURL(file);
                 return;
             }
@@ -3221,10 +262,10 @@
                         reject(err);
                     }
                 };
-                img.onerror = () => reject(new Error('Resim okunamadı'));
+                img.onerror = () => reject(new Error('Resim okunamadÄ±'));
                 img.src = e.target.result;
             };
-            reader.onerror = () => reject(new Error('Dosya okunamadı'));
+            reader.onerror = () => reject(new Error('Dosya okunamadÄ±'));
             reader.readAsDataURL(file);
         });
     }
@@ -3248,9 +289,9 @@
 
     async function uploadReceiptToStorage(dekontFile, { orderId, userId }) {
         const st = getFirebaseStorageSafe();
-        if (!st) throw new Error('Storage hazır değil');
-        if (!userId) throw new Error('Kullanıcı bulunamadı');
-        if (!orderId) throw new Error('Sipariş kimliği oluşturulamadı');
+        if (!st) throw new Error('Storage hazÄ±r deÄŸil');
+        if (!userId) throw new Error('KullanÄ±cÄ± bulunamadÄ±');
+        if (!orderId) throw new Error('SipariÅŸ kimliÄŸi oluÅŸturulamadÄ±');
 
         const blob = await compressReceiptImageToJpegBlob(dekontFile);
         const filename = `${orderId}_${Date.now()}.jpg`;
@@ -3294,8 +335,8 @@
     }
 
     async function prepareReceiptForOrder(dekontFile, { orderId, userId }) {
-        // Asıl hedef: Firestore'a base64 yazmamak (kota/limit tasarrufu)
-        // Storage yoksa geri uyumluluk için base64'e düş.
+        // AsÄ±l hedef: Firestore'a base64 yazmamak (kota/limit tasarrufu)
+        // Storage yoksa geri uyumluluk iÃ§in base64'e dÃ¼ÅŸ.
         const st = getFirebaseStorageSafe();
         if (!st) {
             const base64 = await compressReceiptImageToDataUrl(dekontFile, { maxSize: 1024, quality: 0.66, passthroughUnderBytes: 220 * 1024 });
@@ -3303,7 +344,7 @@
         }
 
         try {
-            // Mobilde yavaş ağ/Storage takılmalarında sipariş dakikalarca beklemesin
+            // Mobilde yavaÅŸ aÄŸ/Storage takÄ±lmalarÄ±nda sipariÅŸ dakikalarca beklemesin
             const uploaded = await withTimeout(
                 uploadReceiptToStorage(dekontFile, { orderId, userId }),
                 25000,
@@ -3311,7 +352,7 @@
             );
             return { ...uploaded, dekontBase64: null };
         } catch (err) {
-            console.warn('Dekont Storage yükleme başarısız, base64 fallback kullanılacak:', err);
+            console.warn('Dekont Storage yÃ¼kleme baÅŸarÄ±sÄ±z, base64 fallback kullanÄ±lacak:', err);
             const base64 = await compressReceiptImageToDataUrl(dekontFile, { maxSize: 1024, quality: 0.66, passthroughUnderBytes: 220 * 1024 });
             return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
         }
@@ -3322,40 +363,40 @@
         const msg = String((e && e.message) || e || '').trim();
         const msgLower = msg.toLowerCase();
 
-        // Firebase Storage hataları
+        // Firebase Storage hatalarÄ±
         if (code.startsWith('storage/')) {
-            if (code.includes('unauthorized')) return 'Dekont yükleme yetkisi yok. Lütfen tekrar giriş yapın.';
-            if (code.includes('canceled')) return 'Dekont yükleme iptal edildi.';
-            if (code.includes('retry-limit-exceeded')) return 'Dekont yükleme başarısız. Lütfen tekrar deneyin.';
-            if (code.includes('quota-exceeded')) return 'Depolama kotası dolu. Lütfen daha sonra tekrar deneyin.';
-            return 'Dekont yüklenemedi. Lütfen tekrar deneyin.';
+            if (code.includes('unauthorized')) return 'Dekont yÃ¼kleme yetkisi yok. LÃ¼tfen tekrar giriÅŸ yapÄ±n.';
+            if (code.includes('canceled')) return 'Dekont yÃ¼kleme iptal edildi.';
+            if (code.includes('retry-limit-exceeded')) return 'Dekont yÃ¼kleme baÅŸarÄ±sÄ±z. LÃ¼tfen tekrar deneyin.';
+            if (code.includes('quota-exceeded')) return 'Depolama kotasÄ± dolu. LÃ¼tfen daha sonra tekrar deneyin.';
+            return 'Dekont yÃ¼klenemedi. LÃ¼tfen tekrar deneyin.';
         }
 
         // Firebase/Firestore RESOURCE_EXHAUSTED genelde "Quota exceeded." olarak gelir
         if (code === 'resource-exhausted' || msgLower.includes('quota exceeded')) {
-            return 'Sistem yoğun veya kota doldu. Lütfen birkaç dakika sonra tekrar deneyin.';
+            return 'Sistem yoÄŸun veya kota doldu. LÃ¼tfen birkaÃ§ dakika sonra tekrar deneyin.';
         }
 
-        // Firestore doküman / istek boyutu limitleri
+        // Firestore dokÃ¼man / istek boyutu limitleri
         if (
             msgLower.includes('request message must not be larger') ||
             msgLower.includes('payload too large') ||
             msgLower.includes('entity too large') ||
             msgLower.includes('too large')
         ) {
-            return 'Dekont fotoğrafı çok büyük. Daha küçük bir fotoğraf deneyin (ekran görüntüsü veya kırpma işe yarar).';
+            return 'Dekont fotoÄŸrafÄ± Ã§ok bÃ¼yÃ¼k. Daha kÃ¼Ã§Ã¼k bir fotoÄŸraf deneyin (ekran gÃ¶rÃ¼ntÃ¼sÃ¼ veya kÄ±rpma iÅŸe yarar).';
         }
 
         if (code === 'permission-denied' || msgLower.includes('missing or insufficient permissions')) {
-            return 'Yetki hatası. Lütfen çıkış yapıp tekrar giriş yapın.';
+            return 'Yetki hatasÄ±. LÃ¼tfen Ã§Ä±kÄ±ÅŸ yapÄ±p tekrar giriÅŸ yapÄ±n.';
         }
 
         return msg || 'Bilinmeyen hata';
     }
     
-    // Sidebar badge'lerini güncelle
+    // Sidebar badge'lerini gÃ¼ncelle
     function updateSidebarBadges() {
-        // Sipariş badge
+        // SipariÅŸ badge
         const orderBadge = document.getElementById('sidebarOrderBadge');
         const mainOrderBadge = document.getElementById('myOrderBadge');
         if (mainOrderBadge && mainOrderBadge.textContent !== '0') {
@@ -3393,7 +434,7 @@
         notifDot.style.display = hasNotifications ? 'block' : 'none';
     }
     
-    // Sidebar key durumunu güncelle
+    // Sidebar key durumunu gÃ¼ncelle
     function updateSidebarKeyStatus(text, isActive) {
         const keyStatus = document.getElementById('sidebarKeyStatus');
         const keyText = document.getElementById('sidebarKeyText');
@@ -3403,9 +444,9 @@
         keyText.className = 'profile-key-value' + (isActive ? ' active' : ' expired');
     }
     
-    // ==================== MERKEZİ GİRİŞ KONTROLÜ ====================
-    // Satın alma işlemleri için giriş zorunluluğu
-    function requireLogin(action = 'bu işlemi yapmak') {
+    // ==================== MERKEZÄ° GÄ°RÄ°Å KONTROLÃœ ====================
+    // SatÄ±n alma iÅŸlemleri iÃ§in giriÅŸ zorunluluÄŸu
+    function requireLogin(action = 'bu iÅŸlemi yapmak') {
         if (!currentUser) {
             showLoginRequiredModal(action);
             return false;
@@ -3413,28 +454,28 @@
         return true;
     }
     
-    // Giriş gerekli modal'ını göster
+    // GiriÅŸ gerekli modal'Ä±nÄ± gÃ¶ster
     function showLoginRequiredModal(action) {
-        // Overlay oluştur
+        // Overlay oluÅŸtur
         const overlay = document.createElement('div');
         overlay.id = 'loginRequiredOverlay';
         overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(5px); animation: fadeIn 0.3s ease;';
         
         overlay.innerHTML = `
             <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 20px; padding: 30px; text-align: center; max-width: 350px; width: 100%; border: 2px solid rgba(255,152,0,0.5); box-shadow: 0 0 30px rgba(255,152,0,0.2); animation: scaleIn 0.3s ease;">
-                <div style="font-size: 60px; margin-bottom: 15px;">🔐</div>
-                <h3 style="color: #FF9800; margin-bottom: 10px; font-size: 20px;">Giriş Yapmanız Gerekiyor</h3>
+                <div style="font-size: 60px; margin-bottom: 15px;">ğŸ”</div>
+                <h3 style="color: #FF9800; margin-bottom: 10px; font-size: 20px;">GiriÅŸ YapmanÄ±z Gerekiyor</h3>
                 <p style="color: #aaa; font-size: 14px; margin-bottom: 25px; line-height: 1.5;">
-                    ${action.charAt(0).toUpperCase() + action.slice(1)} için hesabınıza giriş yapmanız gerekmektedir.
+                    ${action.charAt(0).toUpperCase() + action.slice(1)} iÃ§in hesabÄ±nÄ±za giriÅŸ yapmanÄ±z gerekmektedir.
                 </p>
                 <button onclick="closeLoginRequiredModal(); navigateTo('loginPage');" style="width: 100%; background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px; border-radius: 12px; font-size: 15px; font-weight: bold; cursor: pointer; margin-bottom: 10px;">
-                    🔐 Giriş Yap
+                    ğŸ” GiriÅŸ Yap
                 </button>
                 <button onclick="closeLoginRequiredModal(); navigateTo('registerPage');" style="width: 100%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); color: #fff; padding: 15px; border-radius: 12px; font-size: 15px; font-weight: bold; cursor: pointer; margin-bottom: 10px;">
-                    📝 Kayıt Ol
+                    ğŸ“ KayÄ±t Ol
                 </button>
                 <button onclick="closeLoginRequiredModal();" style="width: 100%; background: transparent; border: none; color: #888; padding: 10px; font-size: 13px; cursor: pointer;">
-                    ← Vazgeç
+                    â† VazgeÃ§
                 </button>
             </div>
         `;
@@ -3443,7 +484,7 @@
         document.body.style.overflow = 'hidden';
     }
     
-    // Giriş gerekli modal'ını kapat
+    // GiriÅŸ gerekli modal'Ä±nÄ± kapat
     function closeLoginRequiredModal() {
         const overlay = document.getElementById('loginRequiredOverlay');
         if (overlay) {
@@ -3453,10 +494,10 @@
     }
     
     // ==================== PUSH NOTIFICATION SERVER ====================
-    // Ücretsiz Vercel sunucusu ile push bildirimi gönderme
+    // Ãœcretsiz Vercel sunucusu ile push bildirimi gÃ¶nderme
     const PUSH_SERVER = {
         url: 'https://push-server-psi.vercel.app', // Vercel deploy URL
-        apiKey: 'thebestml_push_secret_2024' // Güvenlik anahtarı
+        apiKey: 'thebestml_push_secret_2024' // GÃ¼venlik anahtarÄ±
     };
 
     async function registerFcmTokenOnServer(tokenValue, topicName = 'all_users') {
@@ -3510,12 +551,12 @@
 
     async function sendPushToAdmins(title, body, data = {}) {
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
-            console.log('Push server yapılandırılmamış');
+            console.log('Push server yapÄ±landÄ±rÄ±lmamÄ±ÅŸ');
             return false;
         }
 
         try {
-            console.log('📤 Adminlere bildirim (topic: admin_users)');
+            console.log('ğŸ“¤ Adminlere bildirim (topic: admin_users)');
 
             const response = await fetch(PUSH_SERVER.url + '/api/send-notification', {
                 method: 'POST',
@@ -3534,7 +575,7 @@
             const result = await response.json();
             return !!result.success;
         } catch (e) {
-            console.error('Admin push bildirim hatası:', e);
+            console.error('Admin push bildirim hatasÄ±:', e);
             return false;
         }
     }
@@ -3560,34 +601,34 @@
     
     // FCM Debug - Bildirim durumunu test et
     async function testFcmNotification() {
-        // Güvenlik/UX: test aracı son kullanıcıdan gizli tutulur
-        showToast('ℹ️ Bu bölüm devre dışı');
+        // GÃ¼venlik/UX: test aracÄ± son kullanÄ±cÄ±dan gizli tutulur
+        showToast('â„¹ï¸ Bu bÃ¶lÃ¼m devre dÄ±ÅŸÄ±');
         return;
-        showToast('🔔 FCM test başlatılıyor...');
+        showToast('ğŸ”” FCM test baÅŸlatÄ±lÄ±yor...');
         
         const debugInfo = [];
         debugInfo.push('=== FCM DEBUG ===');
         debugInfo.push('Push Server: ' + PUSH_SERVER.url);
         debugInfo.push('API Key: ' + (PUSH_SERVER.apiKey ? 'VAR' : 'YOK'));
         
-        // Token'ı göster ve kopyala seçeneği sun
+        // Token'Ä± gÃ¶ster ve kopyala seÃ§eneÄŸi sun
         if (fcmToken) {
             debugInfo.push('');
             debugInfo.push('FCM TOKEN (tam):');
             debugInfo.push(fcmToken);
             debugInfo.push('');
             
-            // Token'ı panoya kopyala
+            // Token'Ä± panoya kopyala
             try {
                 if (navigator.clipboard) {
                     await navigator.clipboard.writeText(fcmToken);
-                    debugInfo.push('📋 Token panoya kopyalandı!');
+                    debugInfo.push('ğŸ“‹ Token panoya kopyalandÄ±!');
                 }
             } catch(e) {
-                debugInfo.push('(Kopyalama başarısız)');
+                debugInfo.push('(Kopyalama baÅŸarÄ±sÄ±z)');
             }
             
-            // Doğrudan token'a bildirim gönder
+            // DoÄŸrudan token'a bildirim gÃ¶nder
             try {
                 const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
                     method: 'POST',
@@ -3597,22 +638,22 @@
                     },
                     body: JSON.stringify({ 
                         token: fcmToken, 
-                        title: '🧪 FCM Token Test', 
-                        body: 'Doğrudan token\'a gönderildi - ' + new Date().toLocaleTimeString(),
+                        title: 'ğŸ§ª FCM Token Test', 
+                        body: 'DoÄŸrudan token\'a gÃ¶nderildi - ' + new Date().toLocaleTimeString(),
                         data: { type: 'test' }
                     })
                 });
                 const result = await response.json();
-                debugInfo.push('Token Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + (result.error || result.details)));
+                debugInfo.push('Token Test: ' + (result.success ? 'âœ… BAÅARILI' : 'âŒ HATA: ' + (result.error || result.details)));
             } catch(e) {
-                debugInfo.push('Token Test: ❌ HATA: ' + e.message);
+                debugInfo.push('Token Test: âŒ HATA: ' + e.message);
             }
         } else {
             debugInfo.push('FCM Token: YOK');
-            debugInfo.push('Token Test: ⚠️ Token yok, atlandı');
+            debugInfo.push('Token Test: âš ï¸ Token yok, atlandÄ±');
         }
 
-        // Token'ı server-side topic'e abone et (client plugin gerektirmez)
+        // Token'Ä± server-side topic'e abone et (client plugin gerektirmez)
         if (fcmToken) {
             try {
                 const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
@@ -3628,15 +669,15 @@
                     })
                 });
                 const result = await response.json();
-                debugInfo.push('Register Token: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + (result.error || result.details)));
+                debugInfo.push('Register Token: ' + (result.success ? 'âœ… BAÅARILI' : 'âŒ HATA: ' + (result.error || result.details)));
             } catch (e) {
-                debugInfo.push('Register Token: ❌ HATA: ' + e.message);
+                debugInfo.push('Register Token: âŒ HATA: ' + e.message);
             }
         } else {
-            debugInfo.push('Register Token: ⚠️ Token yok, atlandı');
+            debugInfo.push('Register Token: âš ï¸ Token yok, atlandÄ±');
         }
         
-        // Topic'e de gönder
+        // Topic'e de gÃ¶nder
         try {
             const response = await fetch(`${PUSH_SERVER.url}/api/send-notification`, {
                 method: 'POST',
@@ -3646,22 +687,22 @@
                 },
                 body: JSON.stringify({ 
                     topic: 'all_users', 
-                    title: '🧪 FCM Topic Test', 
-                    body: 'Bu bildirim all_users topic\'ine gönderildi - ' + new Date().toLocaleTimeString(),
+                    title: 'ğŸ§ª FCM Topic Test', 
+                    body: 'Bu bildirim all_users topic\'ine gÃ¶nderildi - ' + new Date().toLocaleTimeString(),
                     data: { type: 'test' }
                 })
             });
             const result = await response.json();
-            debugInfo.push('Topic Test: ' + (result.success ? '✅ BAŞARILI' : '❌ HATA: ' + (result.error || result.details)));
+            debugInfo.push('Topic Test: ' + (result.success ? 'âœ… BAÅARILI' : 'âŒ HATA: ' + (result.error || result.details)));
         } catch(e) {
-            debugInfo.push('Topic Test: ❌ HATA: ' + e.message);
+            debugInfo.push('Topic Test: âŒ HATA: ' + e.message);
         }
         
-        // Sonuçları göster
+        // SonuÃ§larÄ± gÃ¶ster
         alert(debugInfo.join('\n'));
     }
     
-    // Push notification gönder (sunucu üzerinden) - detaylı sonuç döndürür
+    // Push notification gÃ¶nder (sunucu Ã¼zerinden) - detaylÄ± sonuÃ§ dÃ¶ndÃ¼rÃ¼r
     async function sendPushNotificationWithResult(token, title, body, data = {}) {
         const out = {
             success: false,
@@ -3672,7 +713,7 @@
 
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
             out.error = 'push_server_not_configured';
-            console.log('Push server yapılandırılmamış');
+            console.log('Push server yapÄ±landÄ±rÄ±lmamÄ±ÅŸ');
             return out;
         }
 
@@ -3694,22 +735,22 @@
                 out.result = { raw };
             }
             out.success = !!(out.result && out.result.success);
-            console.log('Push bildirim gönderildi:', out.result);
+            console.log('Push bildirim gÃ¶nderildi:', out.result);
             return out;
         } catch (e) {
             out.error = e?.message || String(e);
-            console.error('Push bildirim hatası:', e);
+            console.error('Push bildirim hatasÄ±:', e);
             return out;
         }
     }
 
-    // Push notification gönder (sunucu üzerinden)
+    // Push notification gÃ¶nder (sunucu Ã¼zerinden)
     async function sendPushNotification(token, title, body, data = {}) {
         const res = await sendPushNotificationWithResult(token, title, body, data);
         return !!res.success;
     }
     
-    // Birden fazla kullanıcıya push bildirim gönder
+    // Birden fazla kullanÄ±cÄ±ya push bildirim gÃ¶nder
     async function sendPushToMultiple(tokens, title, body, data = {}) {
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey || !tokens.length) {
             return false;
@@ -3728,21 +769,21 @@
             const result = await response.json();
             return result.success;
         } catch (e) {
-            console.error('Çoklu push bildirim hatası:', e);
+            console.error('Ã‡oklu push bildirim hatasÄ±:', e);
             return false;
         }
     }
     
-    // Tüm kullanıcılara push bildirim gönder - TOPIC BASED (server-side subscribe)
+    // TÃ¼m kullanÄ±cÄ±lara push bildirim gÃ¶nder - TOPIC BASED (server-side subscribe)
     async function sendPushToAll(title, body, data = {}) {
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
-            console.log('Push server yapılandırılmamış');
-            showToast('⚠️ Push server ayarlanmamış');
+            console.log('Push server yapÄ±landÄ±rÄ±lmamÄ±ÅŸ');
+            showToast('âš ï¸ Push server ayarlanmamÄ±ÅŸ');
             return false;
         }
 
         try {
-            console.log('📤 Tüm kullanıcılara bildirim (topic: all_users)');
+            console.log('ğŸ“¤ TÃ¼m kullanÄ±cÄ±lara bildirim (topic: all_users)');
 
             const response = await fetch(PUSH_SERVER.url + '/api/send-notification', {
                 method: 'POST',
@@ -3762,44 +803,44 @@
             console.log('Bildirim sonucu:', result);
             
             if (result.success) {
-                showToast('✅ Bildirim gönderildi');
+                showToast('âœ… Bildirim gÃ¶nderildi');
                 return true;
             } else {
-                showToast('❌ Bildirim gönderilemedi: ' + (result.error || result.details || 'Bilinmeyen hata'));
+                showToast('âŒ Bildirim gÃ¶nderilemedi: ' + (result.error || result.details || 'Bilinmeyen hata'));
                 return false;
             }
         } catch (e) {
-            console.error('Push bildirim hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Push bildirim hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
             return false;
         }
     }
     
-    // ==================== MERKEZİ ÖDEME SİSTEMİ ====================
-    // Tüm ödeme işlemleri bu sistem üzerinden yönetilir
+    // ==================== MERKEZÄ° Ã–DEME SÄ°STEMÄ° ====================
+    // TÃ¼m Ã¶deme iÅŸlemleri bu sistem Ã¼zerinden yÃ¶netilir
     let paymentSettings = {
         bankInfo: {
             name: 'ONUR TENK',
-            bank: 'Garanti Bankası',
+            bank: 'Garanti BankasÄ±',
             iban: 'TR26 0006 2000 7750 0006 8826 02',
             ibanClean: 'TR2600062000775000068826 02'
         },
         shopier: {
             enabled: true,
             storeUrl: 'https://www.shopier.com/CheatsStore',
-            // Varsayılan linkler (hile bazında özelleştirilebilir)
+            // VarsayÄ±lan linkler (hile bazÄ±nda Ã¶zelleÅŸtirilebilir)
             defaultLinks: {}
         },
         methods: [
-            { id: 'shopier', name: 'Kredi Kartı', icon: '💳', desc: 'Shopier ile güvenli ödeme', enabled: true, comingSoon: true },
-            { id: 'havale', name: 'Havale / EFT', icon: '🏦', desc: 'Banka havalesi ile ödeme', enabled: true }
+            { id: 'shopier', name: 'Kredi KartÄ±', icon: 'ğŸ’³', desc: 'Shopier ile gÃ¼venli Ã¶deme', enabled: true, comingSoon: true },
+            { id: 'havale', name: 'Havale / EFT', icon: 'ğŸ¦', desc: 'Banka havalesi ile Ã¶deme', enabled: true }
         ]
     };
     
-    // Merkezi sipariş verisi
+    // Merkezi sipariÅŸ verisi
     let currentPaymentOrder = null;
     
-    // Ödeme ayarlarını Firestore'dan yükle
+    // Ã–deme ayarlarÄ±nÄ± Firestore'dan yÃ¼kle
     async function loadPaymentSettings() {
         try {
             const doc = await db.collection('settings').doc('paymentSettings').get();
@@ -3808,30 +849,30 @@
                 if (data.bankInfo) paymentSettings.bankInfo = data.bankInfo;
                 if (data.methods) paymentSettings.methods = data.methods;
                 if (data.shopier) paymentSettings.shopier = { ...paymentSettings.shopier, ...data.shopier };
-                // Push server ayarlarını yükle - SADECE geçerli URL varsa
+                // Push server ayarlarÄ±nÄ± yÃ¼kle - SADECE geÃ§erli URL varsa
                 if (data.pushServer && data.pushServer.url && data.pushServer.url.includes('push-server-psi')) {
                     PUSH_SERVER.url = data.pushServer.url;
                     PUSH_SERVER.apiKey = data.pushServer.apiKey || PUSH_SERVER.apiKey;
-                    console.log('📱 Push server ayarları Firestore\'dan yüklendi');
+                    console.log('ğŸ“± Push server ayarlarÄ± Firestore\'dan yÃ¼klendi');
                 } else {
-                    console.log('📱 Push server varsayılan ayarlar kullanılıyor:', PUSH_SERVER.url);
+                    console.log('ğŸ“± Push server varsayÄ±lan ayarlar kullanÄ±lÄ±yor:', PUSH_SERVER.url);
                 }
             }
         } catch(e) {
-            console.log('Ödeme ayarları yüklenemedi, varsayılan kullanılıyor');
+            console.log('Ã–deme ayarlarÄ± yÃ¼klenemedi, varsayÄ±lan kullanÄ±lÄ±yor');
         }
     }
     
-    // Merkezi ödeme modalını aç (tüm satın alma işlemleri için)
+    // Merkezi Ã¶deme modalÄ±nÄ± aÃ§ (tÃ¼m satÄ±n alma iÅŸlemleri iÃ§in)
     async function openUnifiedPaymentModal(orderData) {
         // orderData: { type, game, cheat, package, packageName, price, days, keyCode?, currentExpiry?, newExpiry? }
-        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Satın alma yapmadan önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'SatÄ±n alma yapmadan Ã¶nce lÃ¼tfen ban riski bilgilendirmesini onaylayÄ±n.' });
         if (!canProceed) return;
 
         currentPaymentOrder = orderData;
         
-        // Modal içeriğini oluştur
-        let typeLabel = orderData.type === 'extension' ? '⏰ Süre Uzatma' : '🛒 Yeni Satın Alma';
+        // Modal iÃ§eriÄŸini oluÅŸtur
+        let typeLabel = orderData.type === 'extension' ? 'â° SÃ¼re Uzatma' : 'ğŸ›’ Yeni SatÄ±n Alma';
         let infoHtml = '';
         
         if (orderData.type === 'extension') {
@@ -3851,20 +892,20 @@
         document.getElementById('unifiedPaymentInfo').innerHTML = infoHtml;
         document.getElementById('unifiedPaymentPrice').textContent = orderData.price;
         
-        // Ödeme yöntemlerini render et
+        // Ã–deme yÃ¶ntemlerini render et
         renderPaymentMethods();
         
         openModal('unifiedPaymentModal');
     }
     
-    // Ödeme yöntemlerini render et
+    // Ã–deme yÃ¶ntemlerini render et
     function renderPaymentMethods() {
         const container = document.getElementById('unifiedPaymentMethods');
         container.innerHTML = paymentSettings.methods.filter(m => m.enabled).map(method => {
             if (method.comingSoon) {
-                // Yakında gelecek - devre dışı görünüm
+                // YakÄ±nda gelecek - devre dÄ±ÅŸÄ± gÃ¶rÃ¼nÃ¼m
                 return `
-                    <button onclick="showToast('🔜 Bu ödeme yöntemi yakında aktif edilecek!', 'info')" class="payment-method-btn" style="opacity: 0.6; cursor: not-allowed; position: relative;">
+                    <button onclick="showToast('ğŸ”œ Bu Ã¶deme yÃ¶ntemi yakÄ±nda aktif edilecek!', 'info')" class="payment-method-btn" style="opacity: 0.6; cursor: not-allowed; position: relative;">
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <div style="font-size: 30px;">${method.icon}</div>
                             <div style="text-align: left;">
@@ -3872,7 +913,7 @@
                                 <div style="font-size: 12px; color: #aaa;">${method.desc}</div>
                             </div>
                         </div>
-                        <div style="background: linear-gradient(135deg, #FF9800, #FF5722); color: white; font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight: bold;">🔜 Yakında</div>
+                        <div style="background: linear-gradient(135deg, #FF9800, #FF5722); color: white; font-size: 11px; padding: 4px 10px; border-radius: 12px; font-weight: bold;">ğŸ”œ YakÄ±nda</div>
                     </button>
                 `;
             } else {
@@ -3886,66 +927,66 @@
                                 <div style="font-size: 12px; color: #aaa;">${method.desc}</div>
                             </div>
                         </div>
-                        <div style="font-size: 20px; color: #4CAF50;">›</div>
+                        <div style="font-size: 20px; color: #4CAF50;">â€º</div>
                     </button>
                 `;
             }
         }).join('');
     }
     
-    // Ödeme yöntemi seç
+    // Ã–deme yÃ¶ntemi seÃ§
     function selectUnifiedPaymentMethod(method) {
         if (!currentPaymentOrder) return;
         
         closeModal('unifiedPaymentModal');
         
         if (method === 'shopier') {
-            // Shopier'a yönlendir
+            // Shopier'a yÃ¶nlendir
             redirectToShopier();
         } else if (method === 'havale') {
             openUnifiedHavaleModal();
         }
     }
     
-    // Shopier'a yönlendirme fonksiyonu
+    // Shopier'a yÃ¶nlendirme fonksiyonu
     function redirectToShopier() {
         if (!currentPaymentOrder) {
-            showToast('❌ Sipariş bilgisi bulunamadı');
+            showToast('âŒ SipariÅŸ bilgisi bulunamadÄ±');
             return;
         }
         
-        // Önce fiyat içindeki shopierLink'i kontrol et
+        // Ã–nce fiyat iÃ§indeki shopierLink'i kontrol et
         let shopierUrl = null;
         
-        // 1. Seçilen fiyat paketinde shopierLink varsa onu kullan
+        // 1. SeÃ§ilen fiyat paketinde shopierLink varsa onu kullan
         if (currentPaymentOrder.shopierLink) {
             shopierUrl = currentPaymentOrder.shopierLink;
         }
-        // 2. Hilenin genel shopierLinks ayarlarından gün bazlı bul
+        // 2. Hilenin genel shopierLinks ayarlarÄ±ndan gÃ¼n bazlÄ± bul
         else if (currentPaymentOrder.cheatId && currentPaymentOrder.days) {
             const cheatShopierLinks = getCheatShopierLinks(currentPaymentOrder.gameId, currentPaymentOrder.cheatId);
             if (cheatShopierLinks && cheatShopierLinks[currentPaymentOrder.days]) {
                 shopierUrl = cheatShopierLinks[currentPaymentOrder.days];
             }
         }
-        // 3. Varsayılan mağaza linkine yönlendir
+        // 3. VarsayÄ±lan maÄŸaza linkine yÃ¶nlendir
         if (!shopierUrl) {
             shopierUrl = paymentSettings.shopier?.storeUrl || 'https://www.shopier.com/CheatsStore';
-            showToast('ℹ️ Shopier mağazasına yönlendiriliyorsunuz. Lütfen ürünü manuel seçin.');
+            showToast('â„¹ï¸ Shopier maÄŸazasÄ±na yÃ¶nlendiriliyorsunuz. LÃ¼tfen Ã¼rÃ¼nÃ¼ manuel seÃ§in.');
         } else {
-            showToast('🔗 Shopier ödeme sayfasına yönlendiriliyorsunuz...');
+            showToast('ğŸ”— Shopier Ã¶deme sayfasÄ±na yÃ¶nlendiriliyorsunuz...');
         }
         
-        // Yeni sekmede aç
+        // Yeni sekmede aÃ§
         setTimeout(() => {
             window.open(shopierUrl, '_blank');
         }, 500);
     }
     
-    // Hile bazlı Shopier linklerini al
+    // Hile bazlÄ± Shopier linklerini al
     function getCheatShopierLinks(gameId, cheatId) {
         try {
-            // Firebase'den yüklenen gamesData'dan al
+            // Firebase'den yÃ¼klenen gamesData'dan al
             const game = Object.values(gamesData || {}).find(g => g.id === gameId);
             if (game && game.cheats) {
                 const cheat = Object.values(game.cheats).find(c => c.id === cheatId);
@@ -3954,12 +995,12 @@
                 }
             }
         } catch(e) {
-            console.log('Shopier links alınamadı:', e);
+            console.log('Shopier links alÄ±namadÄ±:', e);
         }
         return null;
     }
     
-    // Sadakat puanı kullanımı (havale)
+    // Sadakat puanÄ± kullanÄ±mÄ± (havale)
     let unifiedBaseAmount = 0;
 
     function normalizeNonNegativeInt(value, fallback = 0) {
@@ -3985,12 +1026,12 @@
             input.value = String(usePts);
 
             const payable = Math.max(0, normalizeNonNegativeInt(unifiedBaseAmount, 0) - usePts);
-            amountEl.textContent = payable + '₺';
+            amountEl.textContent = payable + 'â‚º';
 
             if (discountLine) {
                 if (usePts > 0) {
                     discountLine.style.display = 'block';
-                    discountLine.textContent = 'Sadakat indirimi: -' + usePts + '₺';
+                    discountLine.textContent = 'Sadakat indirimi: -' + usePts + 'â‚º';
                 } else {
                     discountLine.style.display = 'none';
                 }
@@ -4000,19 +1041,19 @@
 
     window.updateUnifiedLoyaltySpendUI = updateUnifiedLoyaltySpendUI;
 
-    // Merkezi havale modalını aç
+    // Merkezi havale modalÄ±nÄ± aÃ§
     async function openUnifiedHavaleModal() {
         if (!currentPaymentOrder) return;
 
         unifiedBaseAmount = parsePriceToAmount(currentPaymentOrder.price);
         
         // Bilgileri doldur
-        document.getElementById('unifiedHavaleAmount').textContent = unifiedBaseAmount + '₺';
+        document.getElementById('unifiedHavaleAmount').textContent = unifiedBaseAmount + 'â‚º';
         const discountLine = document.getElementById('unifiedHavaleDiscountLine');
         if (discountLine) discountLine.style.display = 'none';
         
         let infoText = currentPaymentOrder.type === 'extension' 
-            ? `${currentPaymentOrder.game} - ${currentPaymentOrder.cheat} için ${currentPaymentOrder.packageName}`
+            ? `${currentPaymentOrder.game} - ${currentPaymentOrder.cheat} iÃ§in ${currentPaymentOrder.packageName}`
             : `${currentPaymentOrder.game || ''} ${currentPaymentOrder.cheat || ''} - ${currentPaymentOrder.packageName}`;
         document.getElementById('unifiedHavaleInfo').textContent = infoText;
         
@@ -4021,7 +1062,7 @@
         document.getElementById('unifiedBankBank').textContent = paymentSettings.bankInfo.bank;
         document.getElementById('unifiedBankIban').textContent = paymentSettings.bankInfo.iban;
 
-        // Sadakat puanı göster
+        // Sadakat puanÄ± gÃ¶ster
         try {
             const points = await refreshLoyaltyUI(true);
             const availableEl = document.getElementById('unifiedLoyaltyAvailablePoints');
@@ -4043,14 +1084,14 @@
             updateUnifiedLoyaltySpendUI();
         }
         
-        // Dekont önizlemeyi sıfırla
+        // Dekont Ã¶nizlemeyi sÄ±fÄ±rla
         document.getElementById('unifiedDekontFile').value = '';
         document.getElementById('unifiedDekontPreview').style.display = 'none';
         
         openModal('unifiedHavaleModal');
     }
     
-    // Dekont önizleme
+    // Dekont Ã¶nizleme
     function previewUnifiedDekont(input) {
         if (input.files && input.files[0]) {
             const reader = new FileReader();
@@ -4067,72 +1108,72 @@
         copyToClipboard(paymentSettings.bankInfo.ibanClean);
     }
     
-    // Merkezi sipariş gönder
+    // Merkezi sipariÅŸ gÃ¶nder
     async function submitUnifiedOrder() {
         if (!currentUser) {
-            showToast('❌ Giriş yapmanız gerekiyor');
+            showToast('âŒ GiriÅŸ yapmanÄ±z gerekiyor');
             return;
         }
 
-        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Sipariş göndermeden önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'SipariÅŸ gÃ¶ndermeden Ã¶nce lÃ¼tfen ban riski bilgilendirmesini onaylayÄ±n.' });
         if (!canProceed) return;
         
         if (!currentPaymentOrder) {
-            showToast('❌ Sipariş bilgisi bulunamadı');
+            showToast('âŒ SipariÅŸ bilgisi bulunamadÄ±');
             return;
         }
         
         const fileInput = document.getElementById('unifiedDekontFile');
         if (!fileInput.files[0]) {
-            showToast('❌ Dekont fotoğrafı seçin');
+            showToast('âŒ Dekont fotoÄŸrafÄ± seÃ§in');
             return;
         }
 
         const dekontFile = fileInput.files[0];
         if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
-            showToast('❌ Sadece resim dosyası seçin');
+            showToast('âŒ Sadece resim dosyasÄ± seÃ§in');
             return;
         }
 
-        // Çok büyük dosyalarda cihaz/webview bellek sorunları yaşanabiliyor
+        // Ã‡ok bÃ¼yÃ¼k dosyalarda cihaz/webview bellek sorunlarÄ± yaÅŸanabiliyor
         if (dekontFile.size > 10 * 1024 * 1024) {
-            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            showToast('âŒ Dekont dosyasÄ± Ã§ok bÃ¼yÃ¼k (max 10MB)');
             return;
         }
         
-        showToast('⏳ Sipariş gönderiliyor...');
+        showToast('â³ SipariÅŸ gÃ¶nderiliyor...');
         
         try {
             // Prefer Cloudflare Worker API (Firestore-free)
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = getOrdersApiBase();
 
-            // Sipariş objesi
+            // SipariÅŸ objesi
             const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
             const baseAmount = parsePriceToAmount(currentPaymentOrder.price);
 
-            // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
-            // Worker API için de aynı dekont URL/base64 alanları kullanılır.
+            // Dekontu mÃ¼mkÃ¼nse Storage'a yÃ¼kle (Firestore kota/limit tasarrufu)
+            // Worker API iÃ§in de aynÄ± dekont URL/base64 alanlarÄ± kullanÄ±lÄ±r.
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())), userId: currentUser.uid });
 
-            // Worker modu: sadakat puanı şimdilik devre dışı (Firestore bağımlı)
+            // Worker modu: sadakat puanÄ± ÅŸimdilik devre dÄ±ÅŸÄ± (Firestore baÄŸÄ±mlÄ±)
             if (ordersApiBase) {
                 if (requestedPoints > 0) {
-                    showToast('⚠️ Sadakat puanı şu an kullanılamıyor');
+                    showToast('âš ï¸ Sadakat puanÄ± ÅŸu an kullanÄ±lamÄ±yor');
                     return;
                 }
 
-                // Worker şeması strict: bazı paketlerde sayı gelebiliyor; burada stringe çevir
+                // Worker ÅŸemasÄ± strict: bazÄ± paketlerde sayÄ± gelebiliyor; burada stringe Ã§evir
                 const gameStr = String(currentPaymentOrder.game || '').trim();
                 const cheatStr = String(currentPaymentOrder.cheat || '').trim();
                 const packageStr = String((typeof currentPaymentOrder.package === 'undefined' || currentPaymentOrder.package === null) ? '' : currentPaymentOrder.package).trim();
                 const packageNameStr = String(currentPaymentOrder.packageName || '').trim();
                 const priceStr = String((typeof currentPaymentOrder.price === 'undefined' || currentPaymentOrder.price === null) ? '' : currentPaymentOrder.price).trim();
 
-                if (!gameStr) { showToast('❌ Oyun bilgisi eksik'); return; }
-                if (!packageStr) { showToast('❌ Paket bilgisi eksik'); return; }
-                if (!packageNameStr) { showToast('❌ Paket adı eksik'); return; }
-                if (!priceStr) { showToast('❌ Fiyat bilgisi eksik'); return; }
+                if (!gameStr) { showToast('âŒ Oyun bilgisi eksik'); return; }
+                if (!packageStr) { showToast('âŒ Paket bilgisi eksik'); return; }
+                if (!packageNameStr) { showToast('âŒ Paket adÄ± eksik'); return; }
+                if (!priceStr) { showToast('âŒ Fiyat bilgisi eksik'); return; }
 
                 const payload = {
                     userId: currentUser.uid,
@@ -4156,7 +1197,7 @@
                     status: 'pending'
                 };
 
-                // Süre uzatma için ek alanlar
+                // SÃ¼re uzatma iÃ§in ek alanlar
                 if (currentPaymentOrder.type === 'extension') {
                     payload.keyCode = currentPaymentOrder.keyCode;
                     payload.keyId = currentPaymentOrder.keyId;
@@ -4169,7 +1210,7 @@
 
                 closeModal('unifiedHavaleModal');
                 showOrderSuccessModal();
-                showToast('✅ Siparişiniz alındı!');
+                showToast('âœ… SipariÅŸiniz alÄ±ndÄ±!');
                 currentPaymentOrder = null;
                 return;
             }
@@ -4179,13 +1220,13 @@
             const orderRef = db.collection('orders').doc();
             let pointsUsed = 0;
 
-            // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
-            // (Yukarıda üretildi; Firestore için orderId'yi gerçek doc id ile yenileyelim)
+            // Dekontu mÃ¼mkÃ¼nse Storage'a yÃ¼kle (Firestore kota/limit tasarrufu)
+            // (YukarÄ±da Ã¼retildi; Firestore iÃ§in orderId'yi gerÃ§ek doc id ile yenileyelim)
             const receiptFs = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
 
             await db.runTransaction(async (tx) => {
                 const userSnap = await tx.get(userRef);
-                if (!userSnap.exists) throw new Error('Kullanıcı kaydı bulunamadı');
+                if (!userSnap.exists) throw new Error('KullanÄ±cÄ± kaydÄ± bulunamadÄ±');
                 const userData = userSnap.data() || {};
                 const currentPoints = getLoyaltyPoints(userData);
 
@@ -4212,14 +1253,14 @@
                     days: currentPaymentOrder.days,
                     dekontUrl: receiptFs.dekontUrl || null,
                     dekontStoragePath: receiptFs.dekontStoragePath || null,
-                    // Storage yoksa geri uyumluluk için base64 alanı dolabilir
+                    // Storage yoksa geri uyumluluk iÃ§in base64 alanÄ± dolabilir
                     dekont: receiptFs.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
 
-                // Süre uzatma için ek alanlar
+                // SÃ¼re uzatma iÃ§in ek alanlar
                 if (currentPaymentOrder.type === 'extension') {
                     orderData.keyCode = currentPaymentOrder.keyCode;
                     orderData.keyId = currentPaymentOrder.keyId;
@@ -4239,21 +1280,21 @@
                 tx.set(orderRef, orderData);
             });
             
-            // UI'da puanı anlık güncelle
+            // UI'da puanÄ± anlÄ±k gÃ¼ncelle
             try { await refreshLoyaltyUI(true); } catch (e) {}
 
-            // Admin'lere yeni sipariş bildirimi gönder
+            // Admin'lere yeni sipariÅŸ bildirimi gÃ¶nder
             try {
                 await sendNewOrderNotificationToAdmins(currentUser.email, currentPaymentOrder.packageName, currentPaymentOrder.price);
             } catch (e) {}
             
             closeModal('unifiedHavaleModal');
             showOrderSuccessModal();
-            showToast('✅ Siparişiniz alındı!');
+            showToast('âœ… SipariÅŸiniz alÄ±ndÄ±!');
             currentPaymentOrder = null;
             
         } catch(e) {
-            console.error('Sipariş hatası:', e);
+            console.error('SipariÅŸ hatasÄ±:', e);
             const friendly = getFriendlyOrderErrorMessage(e);
             let debug = '';
             try {
@@ -4262,10 +1303,10 @@
                 const payloadShort = payload ? payload.slice(0, 220) : '';
                 debug = (http || payloadShort) ? ` (${[http, payloadShort].filter(Boolean).join(' ')})` : '';
             } catch (err) {}
-            showToast('❌ Hata: ' + friendly + debug);
+            showToast('âŒ Hata: ' + friendly + debug);
         }
     }
-    // ==================== MERKEZİ ÖDEME SİSTEMİ SON ====================
+    // ==================== MERKEZÄ° Ã–DEME SÄ°STEMÄ° SON ====================
 
     // Firebase Auth State
     let currentUser = null;
@@ -4273,7 +1314,7 @@
     let orderPollingInterval = null; // Worker API polling
 
     // Presence / Online durum takibi
-    // NOT: Firestore kota tüketimini azaltmak için heartbeat sadece admin/owner için çalışır.
+    // NOT: Firestore kota tÃ¼ketimini azaltmak iÃ§in heartbeat sadece admin/owner iÃ§in Ã§alÄ±ÅŸÄ±r.
     let presenceHeartbeatInterval = null;
     let presenceInitializedUid = null;
     const PRESENCE_HEARTBEAT_MS = 60000;
@@ -4284,10 +1325,10 @@
     let banRiskAcceptedCached = false;
     let banRiskLastCheckedAtMs = 0;
 
-    // Sadakat puanı
-    const LOYALTY_EARN_PERCENT = 5; // %5 (TL bazlı) — basit MVP
+    // Sadakat puanÄ±
+    const LOYALTY_EARN_PERCENT = 5; // %5 (TL bazlÄ±) â€” basit MVP
 
-    // Sadakat ayarları (admin panelden yönetilebilir)
+    // Sadakat ayarlarÄ± (admin panelden yÃ¶netilebilir)
     let loyaltyConfigCache = null;
     let loyaltyConfigLoadedAtMs = 0;
     const LOYALTY_CONFIG_CACHE_MS = 5 * 60 * 1000;
@@ -4332,7 +1373,7 @@
             loyaltyConfigLoadedAtMs = Date.now();
             return loyaltyConfigCache;
         } catch (e) {
-            console.log('Sadakat ayarları yüklenemedi:', e);
+            console.log('Sadakat ayarlarÄ± yÃ¼klenemedi:', e);
             return getLoyaltyConfigSync();
         }
     }
@@ -4362,12 +1403,12 @@
 
             updateLoyaltyEarnModeUI();
         } catch (e) {
-            console.log('Sadakat ayar modal yükleme hatası:', e);
+            console.log('Sadakat ayar modal yÃ¼kleme hatasÄ±:', e);
         }
     }
 
     async function saveLoyaltySettingsAdmin() {
-        if (!requirePermission('app_settings', 'sadakat ayarlarını düzenlemek')) return;
+        if (!requirePermission('app_settings', 'sadakat ayarlarÄ±nÄ± dÃ¼zenlemek')) return;
         try {
             const mode = (document.getElementById('settingLoyaltyEarnMode')?.value || 'percent');
             const earnMode = (mode === 'fixed' || mode === 'percent') ? mode : 'percent';
@@ -4386,10 +1427,10 @@
             }, { merge: true });
 
             await refreshLoyaltyConfig(true);
-            showToast('✅ Sadakat ayarları kaydedildi');
+            showToast('âœ… Sadakat ayarlarÄ± kaydedildi');
         } catch (e) {
-            console.error('Sadakat ayar kaydetme hatası:', e);
-            showToast('❌ Kaydetme hatası: ' + e.message);
+            console.error('Sadakat ayar kaydetme hatasÄ±:', e);
+            showToast('âŒ Kaydetme hatasÄ±: ' + e.message);
         }
     }
 
@@ -4415,7 +1456,7 @@
 
             await db.collection('users').doc(currentUser.uid).set(payload, { merge: true });
         } catch (e) {
-            console.log('Presence güncelleme hatası:', e);
+            console.log('Presence gÃ¼ncelleme hatasÄ±:', e);
         }
     }
 
@@ -4427,7 +1468,7 @@
                 lastSeenAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
         } catch (e) {
-            console.log('Presence offline hatası:', e);
+            console.log('Presence offline hatasÄ±:', e);
         }
     }
 
@@ -4435,7 +1476,7 @@
         stopPresenceHeartbeat();
         if (!currentUser) return;
 
-        // Normal kullanıcılar için periyodik presence yazımı kapalı (kota tüketimini ciddi azaltır)
+        // Normal kullanÄ±cÄ±lar iÃ§in periyodik presence yazÄ±mÄ± kapalÄ± (kota tÃ¼ketimini ciddi azaltÄ±r)
         if (!(isAdmin() || isOwner())) return;
 
         touchPresence({ isLogin: false });
@@ -4444,7 +1485,7 @@
         }, PRESENCE_HEARTBEAT_MS);
     }
 
-    // Web kapanışında/offline işaretle (best-effort)
+    // Web kapanÄ±ÅŸÄ±nda/offline iÅŸaretle (best-effort)
     window.addEventListener('beforeunload', () => {
         try { markCurrentUserOffline(); } catch (e) {}
     });
@@ -4458,9 +1499,9 @@
         }
     });
 
-    // ========== ACİL BAKIM (GitHub config.json) ==========
-    // Firestore kota dolduğunda bile kullanıcı trafiğini kesebilmek için
-    // bakım bayrağını GitHub'daki config.json'dan okur.
+    // ========== ACÄ°L BAKIM (GitHub config.json) ==========
+    // Firestore kota dolduÄŸunda bile kullanÄ±cÄ± trafiÄŸini kesebilmek iÃ§in
+    // bakÄ±m bayraÄŸÄ±nÄ± GitHub'daki config.json'dan okur.
     var remoteRuntimeConfig = null;
     var remoteRuntimeConfigLoaded = false;
     var remoteRuntimeConfigPromise = null;
@@ -4477,7 +1518,7 @@
 
     async function loadRemoteRuntimeConfig() {
         if (remoteRuntimeConfigLoaded && remoteRuntimeConfig) return remoteRuntimeConfig;
-        // Eğer önceki deneme başarısızsa, kısa backoff uygula
+        // EÄŸer Ã¶nceki deneme baÅŸarÄ±sÄ±zsa, kÄ±sa backoff uygula
         if (!remoteRuntimeConfig && remoteRuntimeConfigLastAttemptMs && (Date.now() - remoteRuntimeConfigLastAttemptMs) < REMOTE_RUNTIME_CONFIG_RETRY_BACKOFF_MS) {
             return remoteRuntimeConfig;
         }
@@ -4494,7 +1535,7 @@
             } catch (e) {
                 remoteRuntimeConfig = remoteRuntimeConfig || null;
             } finally {
-                // Eğer config alınamadıysa loaded=true yapma; sonraki çağrılarda tekrar denensin
+                // EÄŸer config alÄ±namadÄ±ysa loaded=true yapma; sonraki Ã§aÄŸrÄ±larda tekrar denensin
                 remoteRuntimeConfigLoaded = !!remoteRuntimeConfig;
                 remoteRuntimeConfigPromise = null;
             }
@@ -4603,13 +1644,13 @@
         if (!isRemoteMaintenanceEnabled()) return;
         const options = opts || {};
         const existing = document.getElementById('remoteMaintenanceScreen');
-        // Overlay zaten varsa, içeriği güncellemek için yeniden oluştur.
+        // Overlay zaten varsa, iÃ§eriÄŸi gÃ¼ncellemek iÃ§in yeniden oluÅŸtur.
         if (existing) {
             try { existing.remove(); } catch (e) {}
         }
 
-        const title = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceTitle) || '🔧 Bakım Modu';
-        const message = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceMessage) || 'Sistem şu anda bakımda. Lütfen daha sonra tekrar deneyin.';
+        const title = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceTitle) || 'ğŸ”§ BakÄ±m Modu';
+        const message = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceMessage) || 'Sistem ÅŸu anda bakÄ±mda. LÃ¼tfen daha sonra tekrar deneyin.';
         const estimated = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceEstimatedTime) || '';
 
         const allowContinue = !!options.allowContinue;
@@ -4617,26 +1658,26 @@
         const html = `
             <div id="remoteMaintenanceScreen" style="position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999999;">
                 <div style="max-width: 420px; width: 100%; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 22px; text-align: center;">
-                    <div style="font-size: 54px; margin-bottom: 10px;">🔧</div>
+                    <div style="font-size: 54px; margin-bottom: 10px;">ğŸ”§</div>
                     <h1 style="color: #fff; margin-bottom: 12px; font-size: 22px;">${title}</h1>
                     <p style="color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 14px;">${message}</p>
-                    ${estimated ? `<div style="color: #ffcc80; font-size: 12px; margin-bottom: 16px;">⏳ ${estimated}</div>` : ''}
+                    ${estimated ? `<div style="color: #ffcc80; font-size: 12px; margin-bottom: 16px;">â³ ${estimated}</div>` : ''}
                     ${allowContinue ? `
-                        <button onclick="hideRemoteMaintenanceScreen()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">✅ Devam Et</button>
-                        <div style="color:#bbb; font-size: 12px; margin-top: 10px;">Ekip erişimi var. Devam edebilirsiniz.</div>
+                        <button onclick="hideRemoteMaintenanceScreen()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">âœ… Devam Et</button>
+                        <div style="color:#bbb; font-size: 12px; margin-top: 10px;">Ekip eriÅŸimi var. Devam edebilirsiniz.</div>
                     ` : `
-                        <button onclick="openRemoteMaintenanceTeamLogin()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">🔐 Ekip Girişi</button>
+                        <button onclick="openRemoteMaintenanceTeamLogin()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">ğŸ” Ekip GiriÅŸi</button>
                         <div id="remoteTeamLogin" style="display:none; margin-top: 14px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; padding: 14px; text-align: left;">
-                            <div style="color:#fff; font-weight: 700; font-size: 13px; margin-bottom: 10px;">Ekip Girişi</div>
+                            <div style="color:#fff; font-weight: 700; font-size: 13px; margin-bottom: 10px;">Ekip GiriÅŸi</div>
                             <input type="email" id="remoteTeamLoginEmail" placeholder="E-posta" autocomplete="username" style="width: 100%; padding: 11px 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; background: rgba(255,255,255,0.06); color: #fff; margin-bottom: 10px; box-sizing: border-box;">
-                            <input type="password" id="remoteTeamLoginPassword" placeholder="Şifre" autocomplete="current-password" style="width: 100%; padding: 11px 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; background: rgba(255,255,255,0.06); color: #fff; margin-bottom: 10px; box-sizing: border-box;">
-                            <button onclick="remoteMaintenanceTeamLogin()" style="width: 100%; background: rgba(103,58,183,0.95); color: #fff; border: none; padding: 11px 12px; border-radius: 10px; font-weight: 800; cursor: pointer;">🔓 Giriş Yap</button>
-                            <button onclick="closeRemoteMaintenanceTeamLogin()" style="width: 100%; margin-top: 8px; background: rgba(255,255,255,0.08); color: #ddd; border: none; padding: 10px 12px; border-radius: 10px; font-weight: 700; cursor: pointer;">← Geri</button>
+                            <input type="password" id="remoteTeamLoginPassword" placeholder="Åifre" autocomplete="current-password" style="width: 100%; padding: 11px 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; background: rgba(255,255,255,0.06); color: #fff; margin-bottom: 10px; box-sizing: border-box;">
+                            <button onclick="remoteMaintenanceTeamLogin()" style="width: 100%; background: rgba(103,58,183,0.95); color: #fff; border: none; padding: 11px 12px; border-radius: 10px; font-weight: 800; cursor: pointer;">ğŸ”“ GiriÅŸ Yap</button>
+                            <button onclick="closeRemoteMaintenanceTeamLogin()" style="width: 100%; margin-top: 8px; background: rgba(255,255,255,0.08); color: #ddd; border: none; padding: 10px 12px; border-radius: 10px; font-weight: 700; cursor: pointer;">â† Geri</button>
                             <div id="remoteTeamLoginError" style="display:none; margin-top: 10px; color: #ff6b6b; font-size: 12px; line-height: 1.4;"></div>
-                            <div style="color:#9aa; font-size: 11px; margin-top: 10px;">Not: Bu giriş sadece Firebase Auth kullanır (Firestore gerekmez).</div>
+                            <div style="color:#9aa; font-size: 11px; margin-top: 10px;">Not: Bu giriÅŸ sadece Firebase Auth kullanÄ±r (Firestore gerekmez).</div>
                         </div>
                     `}
-                    <div style="color:#777; font-size: 11px; margin-top: 12px;">Not: Bu ekran acil bakım kilididir (Firestore bağımsız).</div>
+                    <div style="color:#777; font-size: 11px; margin-top: 12px;">Not: Bu ekran acil bakÄ±m kilididir (Firestore baÄŸÄ±msÄ±z).</div>
                 </div>
             </div>
         `;
@@ -4644,7 +1685,7 @@
         try {
             document.body.insertAdjacentHTML('beforeend', html);
         } catch (e) {
-            // Fallback: en azından body'yi boş bırakmayalım
+            // Fallback: en azÄ±ndan body'yi boÅŸ bÄ±rakmayalÄ±m
             try { document.body.innerHTML = html; } catch (e2) {}
         }
     }
@@ -4683,13 +1724,13 @@
             const email = (document.getElementById('remoteTeamLoginEmail')?.value || '').trim().toLowerCase();
             const password = (document.getElementById('remoteTeamLoginPassword')?.value || '');
             if (!email || !password) {
-                setErr('❌ E-posta ve şifre gerekli');
+                setErr('âŒ E-posta ve ÅŸifre gerekli');
                 return;
             }
 
-            setErr('⏳ Giriş yapılıyor...', '#8ab4f8');
+            setErr('â³ GiriÅŸ yapÄ±lÄ±yor...', '#8ab4f8');
 
-            if (!firebase || !firebase.auth) throw new Error('Firebase Auth hazır değil');
+            if (!firebase || !firebase.auth) throw new Error('Firebase Auth hazÄ±r deÄŸil');
 
             const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
             const u = userCredential && userCredential.user ? userCredential.user : null;
@@ -4697,37 +1738,37 @@
 
             // Yetki: Owner veya config allowlist
             if (isAllowedDuringRemoteMaintenance(signedEmail)) {
-                setErr('✅ Ekip girişi başarılı. Devam edebilirsiniz.', '#7CFC9A');
+                setErr('âœ… Ekip giriÅŸi baÅŸarÄ±lÄ±. Devam edebilirsiniz.', '#7CFC9A');
                 // Overlay'i "Devam Et" moduna al
                 try { showRemoteMaintenanceScreen({ allowContinue: true }); } catch (e) {}
             } else {
-                setErr('⚠️ Bu hesap ekip listesinde değil. Bakım bitene kadar bekleyin.');
+                setErr('âš ï¸ Bu hesap ekip listesinde deÄŸil. BakÄ±m bitene kadar bekleyin.');
                 try { await firebase.auth().signOut(); } catch (e) {}
             }
         } catch (e) {
             const code = e && e.code ? e.code : '';
-            let msg = '❌ Giriş başarısız: ' + (e && e.message ? e.message : 'Bilinmeyen hata');
-            if (code === 'auth/user-not-found') msg = '❌ Bu e-posta ile kayıtlı kullanıcı yok';
-            else if (code === 'auth/wrong-password') msg = '❌ Şifre yanlış';
-            else if (code === 'auth/invalid-email') msg = '❌ Geçersiz e-posta formatı';
-            else if (code === 'auth/invalid-credential') msg = '❌ E-posta veya şifre hatalı';
-            else if (code === 'auth/too-many-requests') msg = '❌ Çok fazla deneme. Biraz bekleyin.';
-            else if (code === 'auth/network-request-failed') msg = '❌ İnternet bağlantısı yok';
+            let msg = 'âŒ GiriÅŸ baÅŸarÄ±sÄ±z: ' + (e && e.message ? e.message : 'Bilinmeyen hata');
+            if (code === 'auth/user-not-found') msg = 'âŒ Bu e-posta ile kayÄ±tlÄ± kullanÄ±cÄ± yok';
+            else if (code === 'auth/wrong-password') msg = 'âŒ Åifre yanlÄ±ÅŸ';
+            else if (code === 'auth/invalid-email') msg = 'âŒ GeÃ§ersiz e-posta formatÄ±';
+            else if (code === 'auth/invalid-credential') msg = 'âŒ E-posta veya ÅŸifre hatalÄ±';
+            else if (code === 'auth/too-many-requests') msg = 'âŒ Ã‡ok fazla deneme. Biraz bekleyin.';
+            else if (code === 'auth/network-request-failed') msg = 'âŒ Ä°nternet baÄŸlantÄ±sÄ± yok';
             setErr(msg);
         }
     };
 
     window.tryOpenMaintenanceTeamLogin = function() {
         try {
-            // Login ekranına geç
+            // Login ekranÄ±na geÃ§
             if (typeof navigateTo === 'function') {
                 navigateTo('loginPage');
             }
         } catch (e) {}
     };
 
-    // Sayfa açılır açılmaz bakım aktifse ekranı bas (auth beklemeden).
-    // Auth callback'i izinli ekip/owner için ekranı zaten kaldırır.
+    // Sayfa aÃ§Ä±lÄ±r aÃ§Ä±lmaz bakÄ±m aktifse ekranÄ± bas (auth beklemeden).
+    // Auth callback'i izinli ekip/owner iÃ§in ekranÄ± zaten kaldÄ±rÄ±r.
     (async () => {
         try {
             await loadRemoteRuntimeConfig();
@@ -4736,12 +1777,12 @@
             }
         } catch (e) {}
     })();
-    // ========== ACİL BAKIM SON ==========
+    // ========== ACÄ°L BAKIM SON ==========
     
     auth.onAuthStateChanged(async (user) => {
         currentUser = user;
 
-        // Acil bakım kilidi: önce GitHub config'i oku, sonra Firestore'a dokun.
+        // Acil bakÄ±m kilidi: Ã¶nce GitHub config'i oku, sonra Firestore'a dokun.
         try { await loadRemoteRuntimeConfig(); } catch (e) {}
 
         if (isRemoteMaintenanceEnabled()) {
@@ -4756,50 +1797,50 @@
                 showRemoteMaintenanceScreen({ allowContinue: false });
                 return;
             } else {
-                // Ekip/owner izinli ise ekranı otomatik kapatma.
-                // Bakım modunun görünür kalması için "Devam Et" ile kullanıcı kapatsın.
+                // Ekip/owner izinli ise ekranÄ± otomatik kapatma.
+                // BakÄ±m modunun gÃ¶rÃ¼nÃ¼r kalmasÄ± iÃ§in "Devam Et" ile kullanÄ±cÄ± kapatsÄ±n.
                 try { showRemoteMaintenanceScreen({ allowContinue: true }); } catch (e) {}
             }
         }
 
         if (user) {
-            // Önce admin listesini yükle, sonra UI güncelle
+            // Ã–nce admin listesini yÃ¼kle, sonra UI gÃ¼ncelle
             await loadAdminList();
             updateAuthUI();
             await loadUserData();
-            startOrderListener(); // Anlık sipariş dinleme başlat
+            startOrderListener(); // AnlÄ±k sipariÅŸ dinleme baÅŸlat
 
-            // Ban risk bilgilendirme (girişte prompt)
+            // Ban risk bilgilendirme (giriÅŸte prompt)
             try {
-                await ensureBanRiskAccepted({ prompt: true, reason: 'Devam etmek için lütfen ban riski bilgilendirmesini onaylayın.' });
+                await ensureBanRiskAccepted({ prompt: true, reason: 'Devam etmek iÃ§in lÃ¼tfen ban riski bilgilendirmesini onaylayÄ±n.' });
             } catch (e) {}
 
-            // Admin/Kurucu hesapları için: sipariş dinleyici çalışmadığı için bildirim/push kurulumunu burada yap
+            // Admin/Kurucu hesaplarÄ± iÃ§in: sipariÅŸ dinleyici Ã§alÄ±ÅŸmadÄ±ÄŸÄ± iÃ§in bildirim/push kurulumunu burada yap
             if (isAdmin() || isOwner()) {
                 startNotificationListener();
                 try {
                     await initPushNotifications();
                 } catch (e) {
-                    console.log('FCM init hatası (admin, atlanıyor):', e.message);
+                    console.log('FCM init hatasÄ± (admin, atlanÄ±yor):', e.message);
                 }
                 try {
                     await initLocalNotifications();
                 } catch (e) {
-                    console.log('Local notifications hatası (admin, atlanıyor):', e.message);
+                    console.log('Local notifications hatasÄ± (admin, atlanÄ±yor):', e.message);
                 }
             }
 
-            // Admin/Kurucu: kullanım süresi takibi
+            // Admin/Kurucu: kullanÄ±m sÃ¼resi takibi
             if (isAdmin() || isOwner()) {
                 startAdminUsageTracking();
             } else {
                 stopAdminUsageTracking();
             }
             
-            // Arka plan bildirimleri için email'i native'e kaydet
+            // Arka plan bildirimleri iÃ§in email'i native'e kaydet
             saveUserEmailForBackgroundNotifications(user.email);
 
-            // Presence başlangıcı
+            // Presence baÅŸlangÄ±cÄ±
             if (presenceInitializedUid !== user.uid) {
                 presenceInitializedUid = user.uid;
                 await touchPresence({ isLogin: true });
@@ -4823,12 +1864,12 @@
 
             stopUsersRealtimeListener();
 
-            // Çıkışta bildirim dinleyicilerini de kapat (eski snapshot'lar state'e geri dolmasın)
+            // Ã‡Ä±kÄ±ÅŸta bildirim dinleyicilerini de kapat (eski snapshot'lar state'e geri dolmasÄ±n)
             stopNotificationListener();
             notificationCutoffDate = null;
             listenerStartTime = null;
             
-            // Çıkış yapıldığında email'i temizle
+            // Ã‡Ä±kÄ±ÅŸ yapÄ±ldÄ±ÄŸÄ±nda email'i temizle
             clearUserEmailForBackgroundNotifications();
         }
     });
@@ -4858,7 +1899,7 @@
 
     async function openLoyaltyModal() {
         if (!currentUser) {
-            showToast('⚠️ Giriş yapmanız gerekiyor');
+            showToast('âš ï¸ GiriÅŸ yapmanÄ±z gerekiyor');
             openModal('loginModal');
             return;
         }
@@ -4899,7 +1940,7 @@
     async function ensureBanRiskAccepted({ prompt = false, reason = '' } = {}) {
         if (!currentUser) return true;
 
-        // En güncel durumu çek
+        // En gÃ¼ncel durumu Ã§ek
         await refreshCurrentUserDocData(true);
 
         if (banRiskAcceptedCached) return true;
@@ -4907,7 +1948,7 @@
         if (prompt) {
             try {
                 if (reason) {
-                    showToast('⚠️ ' + reason, 'info');
+                    showToast('âš ï¸ ' + reason, 'info');
                 }
             } catch (e) {}
             openModal('banRiskModal');
@@ -4919,7 +1960,7 @@
     async function acceptBanRiskDisclosure() {
         try {
             if (!currentUser) {
-                showToast('⚠️ Giriş yapmanız gerekiyor');
+                showToast('âš ï¸ GiriÅŸ yapmanÄ±z gerekiyor');
                 return;
             }
 
@@ -4932,10 +1973,10 @@
             banRiskLastCheckedAtMs = Date.now();
 
             closeModal('banRiskModal');
-            showToast('✅ Teşekkürler, devam edebilirsiniz');
+            showToast('âœ… TeÅŸekkÃ¼rler, devam edebilirsiniz');
         } catch (e) {
-            console.log('Ban risk onay hatası:', e);
-            showToast('❌ Bir hata oluştu, tekrar deneyin');
+            console.log('Ban risk onay hatasÄ±:', e);
+            showToast('âŒ Bir hata oluÅŸtu, tekrar deneyin');
         }
     }
 
@@ -4950,37 +1991,37 @@
     window.acceptBanRiskDisclosure = acceptBanRiskDisclosure;
     window.declineBanRiskDisclosure = declineBanRiskDisclosure;
     
-    // Arka plan bildirimleri için kullanıcı email'ini native'e kaydet
+    // Arka plan bildirimleri iÃ§in kullanÄ±cÄ± email'ini native'e kaydet
     async function saveUserEmailForBackgroundNotifications(email) {
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { NotificationPrefs } = Capacitor.Plugins;
                 if (NotificationPrefs) {
                     await NotificationPrefs.setUserEmail({ email: email });
-                    console.log('📱 Arka plan bildirimleri için email kaydedildi:', email);
+                    console.log('ğŸ“± Arka plan bildirimleri iÃ§in email kaydedildi:', email);
                 }
             }
         } catch(e) {
-            console.log('Email kaydetme hatası:', e);
+            console.log('Email kaydetme hatasÄ±:', e);
         }
     }
     
-    // Arka plan bildirimleri için email'i temizle
+    // Arka plan bildirimleri iÃ§in email'i temizle
     async function clearUserEmailForBackgroundNotifications() {
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { NotificationPrefs } = Capacitor.Plugins;
                 if (NotificationPrefs) {
                     await NotificationPrefs.clearUserEmail();
-                    console.log('📱 Arka plan bildirimleri için email temizlendi');
+                    console.log('ğŸ“± Arka plan bildirimleri iÃ§in email temizlendi');
                 }
             }
         } catch(e) {
-            console.log('Email temizleme hatası:', e);
+            console.log('Email temizleme hatasÄ±:', e);
         }
     }
     
-    // Anlık bildirim göster
+    // AnlÄ±k bildirim gÃ¶ster
     function showNotification(message, type = 'success') {
         const toast = document.getElementById('notificationToast');
         toast.textContent = message;
@@ -4989,7 +2030,7 @@
         setTimeout(() => toast.classList.remove('show'), 5000);
     }
     
-    // Sipariş dinleyici başlat
+    // SipariÅŸ dinleyici baÅŸlat
     async function startOrderListener() {
         if (!currentUser || isAdmin()) return;
         stopOrderListener();
@@ -4998,7 +2039,7 @@
         try { await loadRemoteRuntimeConfig(); } catch (e) {}
         const ordersApiBase = getOrdersApiBase();
         if (ordersApiBase) {
-            // Bildirim gönderilen sipariş ID'lerini takip et
+            // Bildirim gÃ¶nderilen sipariÅŸ ID'lerini takip et
             const notifiedOrders = JSON.parse(localStorage.getItem('notifiedOrders') || '[]');
 
             async function pollOnce() {
@@ -5012,9 +2053,9 @@
                         if (notifiedOrders.includes(notifKey)) return;
 
                         if (order.status === 'approved') {
-                            showNotification('🎉 Siparişiniz onaylandı! Key: ' + (order.keyCode || ''), 'success');
+                            showNotification('ğŸ‰ SipariÅŸiniz onaylandÄ±! Key: ' + (order.keyCode || ''), 'success');
                             await showFullNotification({
-                                title: '🎉 Siparişiniz Onaylandı!',
+                                title: 'ğŸ‰ SipariÅŸiniz OnaylandÄ±!',
                                 message: `Paketiniz aktif edildi! Key: ${order.keyCode || ''}`,
                                 type: 'order',
                                 keyCode: order.keyCode || null,
@@ -5027,9 +2068,9 @@
                             notifiedOrders.push(notifKey);
                             localStorage.setItem('notifiedOrders', JSON.stringify(notifiedOrders));
                         } else if (order.status === 'rejected') {
-                            showNotification('❌ Siparişiniz reddedildi: ' + (order.rejectReason || 'Sebep belirtilmedi'), 'error');
+                            showNotification('âŒ SipariÅŸiniz reddedildi: ' + (order.rejectReason || 'Sebep belirtilmedi'), 'error');
                             await showFullNotification({
-                                title: '❌ Sipariş Reddedildi',
+                                title: 'âŒ SipariÅŸ Reddedildi',
                                 message: order.rejectReason || 'Sebep belirtilmedi',
                                 type: 'warning',
                                 showPopup: true,
@@ -5050,7 +2091,7 @@
             return;
         }
         
-        // Bildirim gönderilen sipariş ID'lerini takip et
+        // Bildirim gÃ¶nderilen sipariÅŸ ID'lerini takip et
         const notifiedOrders = JSON.parse(localStorage.getItem('notifiedOrders') || '[]');
         
         orderListener = db.collection('orders')
@@ -5060,30 +2101,30 @@
                     if (change.type === 'modified') {
                         const orderId = change.doc.id;
                         const order = change.doc.data();
-                        const notifKey = orderId + '_' + order.status; // Sipariş ID + durum
+                        const notifKey = orderId + '_' + order.status; // SipariÅŸ ID + durum
                         
-                        // Bu sipariş+durum için daha önce bildirim gönderildi mi?
+                        // Bu sipariÅŸ+durum iÃ§in daha Ã¶nce bildirim gÃ¶nderildi mi?
                         if (notifiedOrders.includes(notifKey)) {
-                            console.log('Bu sipariş için zaten bildirim gönderildi:', notifKey);
+                            console.log('Bu sipariÅŸ iÃ§in zaten bildirim gÃ¶nderildi:', notifKey);
                             return;
                         }
                         
                         if (order.status === 'approved') {
-                            console.log('🎉 SİPARİŞ ONAYLANDI - MERKEZİ BİLDİRİM GÖNDERİLİYOR');
+                            console.log('ğŸ‰ SÄ°PARÄ°Å ONAYLANDI - MERKEZÄ° BÄ°LDÄ°RÄ°M GÃ–NDERÄ°LÄ°YOR');
                             
                             // Toast bildirimi
-                            showNotification('🎉 Siparişiniz onaylandı! Key: ' + order.keyCode);
+                            showNotification('ğŸ‰ SipariÅŸiniz onaylandÄ±! Key: ' + order.keyCode);
                             
-                            // TELEFON BİLDİRİMİ - Doğrudan Local Notification
+                            // TELEFON BÄ°LDÄ°RÄ°MÄ° - DoÄŸrudan Local Notification
                             try {
                                 if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                                     const { LocalNotifications } = Capacitor.Plugins;
                                     if (LocalNotifications) {
                                         const notifId = Math.floor(Math.random() * 100000);
-                                        console.log('📱 Bildirim gönderiliyor, ID:', notifId);
+                                        console.log('ğŸ“± Bildirim gÃ¶nderiliyor, ID:', notifId);
                                         await LocalNotifications.schedule({
                                             notifications: [{
-                                                title: 'Siparişiniz Onaylandı!',
+                                                title: 'SipariÅŸiniz OnaylandÄ±!',
                                                 body: 'Key aktif: ' + order.keyCode,
                                                 id: notifId,
                                                 channelId: 'orders',
@@ -5093,48 +2134,48 @@
                                                 extra: { orderId: order.orderId }
                                             }]
                                         });
-                                        console.log('✅ Telefon bildirimi gönderildi!');
+                                        console.log('âœ… Telefon bildirimi gÃ¶nderildi!');
                                     }
                                 }
                             } catch(notifErr) {
-                                console.log('Telefon bildirimi hatası:', notifErr);
+                                console.log('Telefon bildirimi hatasÄ±:', notifErr);
                             }
                             
-                            // MERKEZİ BİLDİRİM SİSTEMİ - Tüm kanallar
+                            // MERKEZÄ° BÄ°LDÄ°RÄ°M SÄ°STEMÄ° - TÃ¼m kanallar
                             await showFullNotification({
-                                title: '🎉 Siparişiniz Onaylandı!',
+                                title: 'ğŸ‰ SipariÅŸiniz OnaylandÄ±!',
                                 message: `Paketiniz aktif edildi! Key: ${order.keyCode}`,
                                 type: 'order',
                                 keyCode: order.keyCode,
                                 showPopup: true,
                                 playSound: true,
-                                showNative: false, // Zaten yukarıda gönderdik
+                                showNative: false, // Zaten yukarÄ±da gÃ¶nderdik
                                 vibrate: true,
                                 updateBadge: true
                             });
                             
-                            // Key durumunu HEMEN güncelle
+                            // Key durumunu HEMEN gÃ¼ncelle
                             loadUserData();
                             
-                            // Bildirim gönderildi olarak işaretle
+                            // Bildirim gÃ¶nderildi olarak iÅŸaretle
                             notifiedOrders.push(notifKey);
                             localStorage.setItem('notifiedOrders', JSON.stringify(notifiedOrders));
                             
                         } else if (order.status === 'rejected') {
-                            console.log('❌ SİPARİŞ REDDEDİLDİ - MERKEZİ BİLDİRİM GÖNDERİLİYOR');
+                            console.log('âŒ SÄ°PARÄ°Å REDDEDÄ°LDÄ° - MERKEZÄ° BÄ°LDÄ°RÄ°M GÃ–NDERÄ°LÄ°YOR');
                             
-                            showNotification('❌ Siparişiniz reddedildi: ' + (order.rejectReason || 'Sebep belirtilmedi'), 'error');
+                            showNotification('âŒ SipariÅŸiniz reddedildi: ' + (order.rejectReason || 'Sebep belirtilmedi'), 'error');
                             
-                            // TELEFON BİLDİRİMİ - Doğrudan Local Notification
+                            // TELEFON BÄ°LDÄ°RÄ°MÄ° - DoÄŸrudan Local Notification
                             try {
                                 if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                                     const { LocalNotifications } = Capacitor.Plugins;
                                     if (LocalNotifications) {
                                         const notifId = Math.floor(Math.random() * 100000);
-                                        console.log('📱 Red bildirimi gönderiliyor, ID:', notifId);
+                                        console.log('ğŸ“± Red bildirimi gÃ¶nderiliyor, ID:', notifId);
                                         await LocalNotifications.schedule({
                                             notifications: [{
-                                                title: 'Sipariş Reddedildi',
+                                                title: 'SipariÅŸ Reddedildi',
                                                 body: order.rejectReason || 'Sebep belirtilmedi',
                                                 id: notifId,
                                                 channelId: 'orders',
@@ -5144,21 +2185,21 @@
                                                 extra: { orderId: order.orderId }
                                             }]
                                         });
-                                        console.log('✅ Telefon bildirimi gönderildi (red)!');
+                                        console.log('âœ… Telefon bildirimi gÃ¶nderildi (red)!');
                                     }
                                 }
                             } catch(notifErr) {
-                                console.log('Telefon bildirimi hatası:', notifErr);
+                                console.log('Telefon bildirimi hatasÄ±:', notifErr);
                             }
                             
-                            // MERKEZİ BİLDİRİM SİSTEMİ - Tüm kanallar
+                            // MERKEZÄ° BÄ°LDÄ°RÄ°M SÄ°STEMÄ° - TÃ¼m kanallar
                             await showFullNotification({
-                                title: '❌ Sipariş Reddedildi',
+                                title: 'âŒ SipariÅŸ Reddedildi',
                                 message: order.rejectReason || 'Sebep belirtilmedi',
                                 type: 'warning',
                                 showPopup: true,
                                 playSound: true,
-                                showNative: false, // Zaten yukarıda gönderdik
+                                showNative: false, // Zaten yukarÄ±da gÃ¶nderdik
                                 vibrate: true,
                                 updateBadge: true
                             });
@@ -5171,30 +2212,30 @@
                 updateOrderBadge();
             });
         
-        // Bildirim dinleyiciyi de başlat
+        // Bildirim dinleyiciyi de baÅŸlat
         startNotificationListener();
         
-        // KEY DURUMU DİNLEYİCİ - Realtime key güncellemesi
+        // KEY DURUMU DÄ°NLEYÄ°CÄ° - Realtime key gÃ¼ncellemesi
         startKeyStatusListener();
         
-        // Chat dinleyiciyi başlat
+        // Chat dinleyiciyi baÅŸlat
         startChatListener();
         
         // Push notifications (FCM token kaydetme)
         try {
             await initPushNotifications();
         } catch(e) {
-            console.log('FCM init hatası (atlanıyor):', e.message);
+            console.log('FCM init hatasÄ± (atlanÄ±yor):', e.message);
         }
         
         // Local Notifications
         try {
             await initLocalNotifications();
         } catch(e) {
-            console.log('Local notifications hatası (atlanıyor):', e.message);
+            console.log('Local notifications hatasÄ± (atlanÄ±yor):', e.message);
         }
         
-        // Arka planda çalışma - geri tuşunda minimize et, kapatma
+        // Arka planda Ã§alÄ±ÅŸma - geri tuÅŸunda minimize et, kapatma
         setupBackgroundMode();
     }
     
@@ -5204,33 +2245,33 @@
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { LocalNotifications } = Capacitor.Plugins;
                 if (LocalNotifications) {
-                    // 1. İzin iste
+                    // 1. Ä°zin iste
                     const permStatus = await LocalNotifications.checkPermissions();
-                    console.log('📱 LocalNotifications izin durumu:', permStatus.display);
+                    console.log('ğŸ“± LocalNotifications izin durumu:', permStatus.display);
                     
                     if (permStatus.display !== 'granted') {
                         const result = await LocalNotifications.requestPermissions();
-                        console.log('📱 LocalNotifications izin istendi:', result.display);
+                        console.log('ğŸ“± LocalNotifications izin istendi:', result.display);
                     }
                     
-                    // 2. Bildirim kanalı oluştur (Android 8+)
+                    // 2. Bildirim kanalÄ± oluÅŸtur (Android 8+)
                     try {
                         await LocalNotifications.createChannel({
                             id: 'orders',
-                            name: 'Sipariş Bildirimleri',
-                            description: 'Sipariş onay ve red bildirimleri',
+                            name: 'SipariÅŸ Bildirimleri',
+                            description: 'SipariÅŸ onay ve red bildirimleri',
                             importance: 5, // MAX importance
                             visibility: 1, // PUBLIC
                             sound: 'default',
                             vibration: true,
                             lights: true
                         });
-                        console.log('📱 ✅ Bildirim kanalı oluşturuldu: orders');
+                        console.log('ğŸ“± âœ… Bildirim kanalÄ± oluÅŸturuldu: orders');
                     } catch(chErr) {
                         console.log('Kanal zaten var veya hata:', chErr);
                     }
                     
-                    // 3. Default kanal da oluştur
+                    // 3. Default kanal da oluÅŸtur
                     try {
                         await LocalNotifications.createChannel({
                             id: 'default',
@@ -5242,26 +2283,26 @@
                             vibration: true,
                             lights: true
                         });
-                        console.log('📱 ✅ Bildirim kanalı oluşturuldu: default');
+                        console.log('ğŸ“± âœ… Bildirim kanalÄ± oluÅŸturuldu: default');
                     } catch(chErr2) {
                         console.log('Default kanal zaten var veya hata:', chErr2);
                     }
                     
-                    console.log('📱 ✅ LocalNotifications hazır!');
+                    console.log('ğŸ“± âœ… LocalNotifications hazÄ±r!');
                 }
             }
         } catch(e) {
-            console.log('LocalNotifications kurulum hatası:', e);
+            console.log('LocalNotifications kurulum hatasÄ±:', e);
         }
     }
     
-    // ==================== ARKA PLANDA ÇALIŞMA ====================
+    // ==================== ARKA PLANDA Ã‡ALIÅMA ====================
     function setupBackgroundMode() {
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { App } = Capacitor.Plugins;
                 if (App) {
-                    // Geri tuşuna basıldığında uygulamayı kapat değil, minimize et
+                    // Geri tuÅŸuna basÄ±ldÄ±ÄŸÄ±nda uygulamayÄ± kapat deÄŸil, minimize et
                     App.addListener('backButton', ({ canGoBack }) => {
                         if (!canGoBack) {
                             // Ana sayfadaysa minimize et (kapatma)
@@ -5271,37 +2312,37 @@
                             window.history.back();
                         }
                     });
-                    console.log('✅ Arka plan modu aktif - geri tuşu minimize yapacak');
+                    console.log('âœ… Arka plan modu aktif - geri tuÅŸu minimize yapacak');
                 }
             }
         } catch(e) {
-            console.log('Arka plan modu hatası:', e);
+            console.log('Arka plan modu hatasÄ±:', e);
         }
     }
     
-    // ==================== KEY DURUMU REALTİME DİNLEYİCİ ====================
+    // ==================== KEY DURUMU REALTÄ°ME DÄ°NLEYÄ°CÄ° ====================
     let keyStatusListener = null;
     
     function startKeyStatusListener() {
         if (!currentUser) {
-            console.log('🔑 Key listener: currentUser yok');
+            console.log('ğŸ”‘ Key listener: currentUser yok');
             return;
         }
         stopKeyStatusListener();
         
-        console.log('🔑 Key durumu dinleyici başlatılıyor... UID:', currentUser.uid);
+        console.log('ğŸ”‘ Key durumu dinleyici baÅŸlatÄ±lÄ±yor... UID:', currentUser.uid);
         
         keyStatusListener = db.collection('users').doc(currentUser.uid)
             .onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
                     const keyCount = data.keys ? data.keys.length : 0;
-                    console.log('🔑 ✅ Key durumu REALTIME güncellendi:', keyCount, 'key');
+                    console.log('ğŸ”‘ âœ… Key durumu REALTIME gÃ¼ncellendi:', keyCount, 'key');
                     
-                    // Key durumunu güncelle (ana sayfa + sidebar)
+                    // Key durumunu gÃ¼ncelle (ana sayfa + sidebar)
                     updateKeyStatus(data.keys || []);
                     
-                    // Aktif key var mı kontrol et
+                    // Aktif key var mÄ± kontrol et
                     const now = new Date();
                     const activeKeys = (data.keys || []).filter(k => {
                         const exp = toDate(k.expiresAt);
@@ -5309,45 +2350,45 @@
                     });
                     
                     if (activeKeys.length > 0) {
-                        console.log('🔑 🎉 AKTİF KEY TESPİT EDİLDİ!', activeKeys.length, 'adet');
+                        console.log('ğŸ”‘ ğŸ‰ AKTÄ°F KEY TESPÄ°T EDÄ°LDÄ°!', activeKeys.length, 'adet');
                     }
                 } else {
-                    console.log('🔑 Kullanıcı dökümanı bulunamadı');
+                    console.log('ğŸ”‘ KullanÄ±cÄ± dÃ¶kÃ¼manÄ± bulunamadÄ±');
                 }
             }, (error) => {
-                console.error('🔑 ❌ Key dinleyici hatası:', error);
+                console.error('ğŸ”‘ âŒ Key dinleyici hatasÄ±:', error);
                 // Hata durumunda 5 saniye sonra tekrar dene
                 setTimeout(() => {
                     if (currentUser) {
-                        console.log('🔑 Dinleyici yeniden başlatılıyor...');
+                        console.log('ğŸ”‘ Dinleyici yeniden baÅŸlatÄ±lÄ±yor...');
                         startKeyStatusListener();
                     }
                 }, 5000);
             });
         
-        console.log('🔑 Key dinleyici aktif');
+        console.log('ğŸ”‘ Key dinleyici aktif');
     }
     
     function stopKeyStatusListener() {
         if (keyStatusListener) {
             keyStatusListener();
             keyStatusListener = null;
-            console.log('🔑 Key dinleyici durduruldu');
+            console.log('ğŸ”‘ Key dinleyici durduruldu');
         }
     }
     
-    // ==================== MERKEZİ BİLDİRİM SİSTEMİ ====================
+    // ==================== MERKEZÄ° BÄ°LDÄ°RÄ°M SÄ°STEMÄ° ====================
     /*
-     * Tüm bildirimler bu merkezi sistem üzerinden gönderilir.
-     * showFullNotification() - Tüm bildirim kanallarını kullanır:
-     *   1. In-app popup (sağ üst köşe)
+     * TÃ¼m bildirimler bu merkezi sistem Ã¼zerinden gÃ¶nderilir.
+     * showFullNotification() - TÃ¼m bildirim kanallarÄ±nÄ± kullanÄ±r:
+     *   1. In-app popup (saÄŸ Ã¼st kÃ¶ÅŸe)
      *   2. Bildirim sesi
-     *   3. Native push notification (telefon üst bar)
-     *   4. Titreşim
-     *   5. Badge güncelleme
+     *   3. Native push notification (telefon Ã¼st bar)
+     *   4. TitreÅŸim
+     *   5. Badge gÃ¼ncelleme
      */
     
-    // MERKEZİ BİLDİRİM GÖNDERİCİ
+    // MERKEZÄ° BÄ°LDÄ°RÄ°M GÃ–NDERÄ°CÄ°
     async function showFullNotification(options = {}) {
         const {
             title = 'Bildirim',
@@ -5361,9 +2402,9 @@
             updateBadge = true
         } = options;
         
-        console.log('🔔 MERKEZİ BİLDİRİM:', title, message);
+        console.log('ğŸ”” MERKEZÄ° BÄ°LDÄ°RÄ°M:', title, message);
         
-        // 1. In-app popup göster
+        // 1. In-app popup gÃ¶ster
         if (showPopup) {
             if (type === 'order' && keyCode) {
                 showOrderApprovalPopup({ title, message, keyCode });
@@ -5372,17 +2413,17 @@
             }
         }
         
-        // 2. Bildirim sesi çal
+        // 2. Bildirim sesi Ã§al
         if (playSound) {
             playNotificationSound();
         }
         
-        // 3. Native push notification (telefon üst bar)
+        // 3. Native push notification (telefon Ã¼st bar)
         if (showNative) {
             await sendNativeNotification(title, message, { type, keyCode });
         }
         
-        // 4. Titreşim
+        // 4. TitreÅŸim
         if (vibrate && navigator.vibrate) {
             if (type === 'order') {
                 navigator.vibrate([200, 100, 200, 100, 200, 100, 400]);
@@ -5391,16 +2432,16 @@
             }
         }
         
-        // 5. Badge güncelle
+        // 5. Badge gÃ¼ncelle
         if (updateBadge) {
             updateProfileNotifBadge();
             updateNotificationBadge();
         }
         
-        console.log('✅ Merkezi bildirim gönderildi');
+        console.log('âœ… Merkezi bildirim gÃ¶nderildi');
     }
     
-    // ==================== BİLDİRİM SİSTEMİ ====================
+    // ==================== BÄ°LDÄ°RÄ°M SÄ°STEMÄ° ====================
     
     let notificationListener = null;
     let allNotificationListener = null;
@@ -5409,7 +2450,7 @@
     let userNotifications = [];
     let fcmToken = null;
 
-    let notificationCutoffDate = null; // max(kayıt tarihi, kullanıcı temizleme tarihi)
+    let notificationCutoffDate = null; // max(kayÄ±t tarihi, kullanÄ±cÄ± temizleme tarihi)
 
     function getAuthCreationDate() {
         try {
@@ -5425,19 +2466,19 @@
     async function ensureNotificationCutoffDate() {
         if (!currentUser || !db) return null;
 
-        // Not: "Tüm bildirimleri temizle" cihazlar arası çalışsın diye
-        // localStorage (hızlı) + Firestore (en doğru) birlikte değerlendirilir.
+        // Not: "TÃ¼m bildirimleri temizle" cihazlar arasÄ± Ã§alÄ±ÅŸsÄ±n diye
+        // localStorage (hÄ±zlÄ±) + Firestore (en doÄŸru) birlikte deÄŸerlendirilir.
 
-        // Mevcut değeri baz al (varsa)
+        // Mevcut deÄŸeri baz al (varsa)
         if (notificationCutoffDate && !isNaN(notificationCutoffDate.getTime())) {
-            // devam et: localStorage/Firestore daha yeni bir değer taşıyabilir
+            // devam et: localStorage/Firestore daha yeni bir deÄŸer taÅŸÄ±yabilir
         } else {
             notificationCutoffDate = null;
         }
 
         let hasLocalCache = false;
 
-        // 1) Cache (en hızlı)
+        // 1) Cache (en hÄ±zlÄ±)
         try {
             const cached = localStorage.getItem('notifCutoff_' + currentUser.uid);
             if (cached) {
@@ -5472,12 +2513,12 @@
             }
         }
 
-        // Local cache varsa, Firestore okumasını atla (quota dostu)
+        // Local cache varsa, Firestore okumasÄ±nÄ± atla (quota dostu)
         if (hasLocalCache) {
             return notificationCutoffDate;
         }
 
-        // 3) Firestore user.createdAt + notificationsClearedAt (cihazlar arası en doğru)
+        // 3) Firestore user.createdAt + notificationsClearedAt (cihazlar arasÄ± en doÄŸru)
         try {
             const doc = await db.collection('users').doc(currentUser.uid).get();
             if (doc.exists) {
@@ -5503,61 +2544,61 @@
                 }
             }
         } catch (e) {
-            // sessiz geç: auth fallback ile devam
+            // sessiz geÃ§: auth fallback ile devam
         }
 
         return notificationCutoffDate;
     }
     
-    // Push Notifications başlat (FCM)
+    // Push Notifications baÅŸlat (FCM)
     async function initPushNotifications() {
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { PushNotifications } = Capacitor.Plugins;
                 if (!PushNotifications) {
-                    console.log('PushNotifications plugin bulunamadı');
+                    console.log('PushNotifications plugin bulunamadÄ±');
                     return;
                 }
                 
-                console.log('🔔 FCM Push Notifications başlatılıyor...');
+                console.log('ğŸ”” FCM Push Notifications baÅŸlatÄ±lÄ±yor...');
                 
-                // İzin iste
+                // Ä°zin iste
                 const permResult = await PushNotifications.requestPermissions();
-                console.log('🔔 İzin durumu:', permResult.receive);
+                console.log('ğŸ”” Ä°zin durumu:', permResult.receive);
                 
                 if (permResult.receive !== 'granted') {
                     console.log('Push notification izni reddedildi');
-                    showToast('⚠️ Bildirim izni verilmedi! Sipariş bildirimleri alamazsınız.');
+                    showToast('âš ï¸ Bildirim izni verilmedi! SipariÅŸ bildirimleri alamazsÄ±nÄ±z.');
                     return;
                 }
                 
                 // Kaydol
                 await PushNotifications.register();
-                console.log('🔔 FCM kayıt isteği gönderildi');
+                console.log('ğŸ”” FCM kayÄ±t isteÄŸi gÃ¶nderildi');
                 
-                // Token alındığında
+                // Token alÄ±ndÄ±ÄŸÄ±nda
                 PushNotifications.addListener('registration', async (token) => {
                     try {
-                        console.log('🔔 ========== FCM TOKEN ALINDI ==========');
-                        console.log('🔔 Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
+                        console.log('ğŸ”” ========== FCM TOKEN ALINDI ==========');
+                        console.log('ğŸ”” Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
                         fcmToken = token.value;
 
-                        // Cloudflare Worker (orders/support) push registry (Firestore bağımsız olmalı)
+                        // Cloudflare Worker (orders/support) push registry (Firestore baÄŸÄ±msÄ±z olmalÄ±)
                         if (currentUser && fcmToken) {
                             try {
                                 await registerDeviceTokenOnWorker(fcmToken, 'android');
-                                showToast('✅ Bildirimler aktif!');
+                                showToast('âœ… Bildirimler aktif!');
                             } catch (e) {
-                                console.log('🔔 Worker token register başarısız:', e?.message || e);
+                                console.log('ğŸ”” Worker token register baÅŸarÄ±sÄ±z:', e?.message || e);
                             }
                         } else {
-                            console.log('🔔 ⚠️ Worker token kaydı atlandı - currentUser yok');
+                            console.log('ğŸ”” âš ï¸ Worker token kaydÄ± atlandÄ± - currentUser yok');
                         }
 
-                        // Token'ı Firestore'a kaydet (best-effort, opsiyonel)
+                        // Token'Ä± Firestore'a kaydet (best-effort, opsiyonel)
                         if (currentUser && fcmToken && db) {
                             try {
-                                console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
+                                console.log('ğŸ”” Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
                                 await db.collection('users').doc(currentUser.uid).set({
                                     email: currentUser.email || null,
                                     fcmToken: fcmToken,
@@ -5566,41 +2607,41 @@
                                     fcmPlatform: 'android',
                                     fcmLastUpdate: new Date().toISOString()
                                 }, { merge: true });
-                                console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
+                                console.log('ğŸ”” âœ… FCM token Firestore\'a BAÅARIYLA kaydedildi!');
 
-                                // Server-side topic subscription: toplu bildirim için kritik
-                                // Firestore'dan tüm users taramaya gerek kalmaz.
+                                // Server-side topic subscription: toplu bildirim iÃ§in kritik
+                                // Firestore'dan tÃ¼m users taramaya gerek kalmaz.
                                 registerFcmTokenOnServer(fcmToken, 'all_users');
 
-                                // Admin hesapları: admin topic'e de abone et
+                                // Admin hesaplarÄ±: admin topic'e de abone et
                                 ensureAdminTopicSubscription();
                             } catch(e) {
-                                console.error('🔔 ❌ FCM token kaydetme hatası:', e);
+                                console.error('ğŸ”” âŒ FCM token kaydetme hatasÄ±:', e);
                             }
                         }
                     } catch(outerErr) {
-                        console.log('🔔 Token listener hatası:', outerErr.message);
+                        console.log('ğŸ”” Token listener hatasÄ±:', outerErr.message);
                     }
                 });
                 
-                // Kayıt hatası
+                // KayÄ±t hatasÄ±
                 PushNotifications.addListener('registrationError', (error) => {
-                    console.error('Push kayıt hatası:', error);
+                    console.error('Push kayÄ±t hatasÄ±:', error);
                 });
                 
-                // Bildirim alındığında (uygulama açıkken)
-                // Xiaomi MIUI uyumlu - Local Notification ile göster
+                // Bildirim alÄ±ndÄ±ÄŸÄ±nda (uygulama aÃ§Ä±kken)
+                // Xiaomi MIUI uyumlu - Local Notification ile gÃ¶ster
                 PushNotifications.addListener('pushNotificationReceived', async (notification) => {
                     try {
-                        // Destek yanıtı: uygulama açıksa Firestore bildirimi zaten showFullNotification tetikler.
-                        // Bu yüzden aynı anda gelen FCM'i burada tekrar LocalNotification'a çevirmeyip tek seferlik gösterim sağlarız.
+                        // Destek yanÄ±tÄ±: uygulama aÃ§Ä±ksa Firestore bildirimi zaten showFullNotification tetikler.
+                        // Bu yÃ¼zden aynÄ± anda gelen FCM'i burada tekrar LocalNotification'a Ã§evirmeyip tek seferlik gÃ¶sterim saÄŸlarÄ±z.
                         const nType = (notification?.data?.type || notification?.data?.category || '').toString();
                         if (nType === 'support_reply' && currentUser && listenerStartTime) {
-                            console.log('🔔 support_reply: foreground duplicate önlendi (FCM local atlandı)');
+                            console.log('ğŸ”” support_reply: foreground duplicate Ã¶nlendi (FCM local atlandÄ±)');
                             return;
                         }
-                        console.log('Push bildirim alındı:', notification.title);
-                        // Local notification ile göster
+                        console.log('Push bildirim alÄ±ndÄ±:', notification.title);
+                        // Local notification ile gÃ¶ster
                         const { LocalNotifications } = Capacitor.Plugins;
                         if (LocalNotifications) {
                             await LocalNotifications.schedule({
@@ -5616,21 +2657,21 @@
                             });
                         }
                     } catch(e) {
-                        console.log('Local notification hatası:', e);
+                        console.log('Local notification hatasÄ±:', e);
                     }
                 });
                 
-                // Bildirime tıklandığında
+                // Bildirime tÄ±klandÄ±ÄŸÄ±nda
                 PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
                     try {
-                        console.log('Push bildirime tıklandı');
+                        console.log('Push bildirime tÄ±klandÄ±');
                     } catch(e) {}
                 });
                 
-                console.log('Push notifications başlatıldı');
+                console.log('Push notifications baÅŸlatÄ±ldÄ±');
             }
         } catch(e) {
-            console.error('Push notification başlatma hatası:', e);
+            console.error('Push notification baÅŸlatma hatasÄ±:', e);
         }
     }
     
@@ -5652,41 +2693,41 @@
                 return permission === 'granted';
             }
         } catch(e) {
-            console.log('Bildirim izni hatası:', e);
+            console.log('Bildirim izni hatasÄ±:', e);
         }
         return false;
     }
     
-    // Native Push Notification gönder
+    // Native Push Notification gÃ¶nder
     async function sendNativeNotification(title, body, data = {}) {
-        console.log('📱 sendNativeNotification çağrıldı:', title, body);
+        console.log('ğŸ“± sendNativeNotification Ã§aÄŸrÄ±ldÄ±:', title, body);
         
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
-                console.log('📱 Capacitor native platform algılandı');
+                console.log('ğŸ“± Capacitor native platform algÄ±landÄ±');
                 
                 // Capacitor Local Notifications
                 const { LocalNotifications } = Capacitor.Plugins;
                 if (LocalNotifications) {
-                    console.log('📱 LocalNotifications plugin mevcut');
+                    console.log('ğŸ“± LocalNotifications plugin mevcut');
                     
-                    // Önce izin kontrol et
+                    // Ã–nce izin kontrol et
                     const permStatus = await LocalNotifications.checkPermissions();
-                    console.log('📱 Bildirim izin durumu:', permStatus.display);
+                    console.log('ğŸ“± Bildirim izin durumu:', permStatus.display);
                     
                     if (permStatus.display !== 'granted') {
                         const reqResult = await LocalNotifications.requestPermissions();
-                        console.log('📱 İzin istek sonucu:', reqResult.display);
+                        console.log('ğŸ“± Ä°zin istek sonucu:', reqResult.display);
                         if (reqResult.display !== 'granted') {
-                            console.log('📱 Bildirim izni reddedildi');
+                            console.log('ğŸ“± Bildirim izni reddedildi');
                             return;
                         }
                     }
                     
                     const notifId = Math.floor(Math.random() * 100000);
-                    console.log('📱 Bildirim gönderiliyor, ID:', notifId);
+                    console.log('ğŸ“± Bildirim gÃ¶nderiliyor, ID:', notifId);
                     
-                    // orders kanalını kullan (MAX importance)
+                    // orders kanalÄ±nÄ± kullan (MAX importance)
                     await LocalNotifications.schedule({
                         notifications: [{
                             title: title,
@@ -5699,12 +2740,12 @@
                             extra: data
                         }]
                     });
-                    console.log('📱 ✅ Native bildirim gönderildi:', title);
+                    console.log('ğŸ“± âœ… Native bildirim gÃ¶nderildi:', title);
                 } else {
-                    console.log('📱 LocalNotifications plugin bulunamadı');
+                    console.log('ğŸ“± LocalNotifications plugin bulunamadÄ±');
                 }
             } else if ('Notification' in window) {
-                console.log('Web Notification API kullanılıyor');
+                console.log('Web Notification API kullanÄ±lÄ±yor');
                 if (Notification.permission === 'granted') {
                     new Notification(title, {
                         body: body,
@@ -5712,7 +2753,7 @@
                         requireInteraction: true,
                         vibrate: [200, 100, 200]
                     });
-                    console.log('Web bildirim gönderildi');
+                    console.log('Web bildirim gÃ¶nderildi');
                 } else if (Notification.permission !== 'denied') {
                     const permission = await Notification.requestPermission();
                     if (permission === 'granted') {
@@ -5723,21 +2764,21 @@
                 console.log('Bildirim desteklenmiyor');
             }
         } catch(e) {
-            console.error('📱 Native bildirim hatası:', e);
+            console.error('ğŸ“± Native bildirim hatasÄ±:', e);
         }
     }
     
-    // Bildirim kanalları oluştur (Android 8+)
+    // Bildirim kanallarÄ± oluÅŸtur (Android 8+)
     let channelsCreated = false;
     
     async function createNotificationChannel() {
-        if (channelsCreated) return; // Zaten oluşturulduysa tekrar oluşturma
+        if (channelsCreated) return; // Zaten oluÅŸturulduysa tekrar oluÅŸturma
         
         try {
             if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform()) {
                 const { LocalNotifications } = Capacitor.Plugins;
                 if (LocalNotifications && LocalNotifications.createChannel) {
-                    // Genel bildirim kanalı
+                    // Genel bildirim kanalÄ±
                     await LocalNotifications.createChannel({
                         id: 'default',
                         name: 'Game Store Bildirimleri',
@@ -5749,11 +2790,11 @@
                         lights: true
                     });
                     
-                    // Sipariş bildirim kanalı (MAX öncelik)
+                    // SipariÅŸ bildirim kanalÄ± (MAX Ã¶ncelik)
                     await LocalNotifications.createChannel({
                         id: 'orders',
-                        name: 'Sipariş Bildirimleri',
-                        description: 'Sipariş onay ve red bildirimleri',
+                        name: 'SipariÅŸ Bildirimleri',
+                        description: 'SipariÅŸ onay ve red bildirimleri',
                         importance: 5, // MAX
                         visibility: 1, // PUBLIC
                         sound: 'default',
@@ -5762,71 +2803,71 @@
                     });
                     
                     channelsCreated = true;
-                    console.log('📱 ✅ Bildirim kanalları oluşturuldu (default, orders)');
+                    console.log('ğŸ“± âœ… Bildirim kanallarÄ± oluÅŸturuldu (default, orders)');
                 }
             }
         } catch(e) {
-            console.log('Kanal oluşturma hatası:', e);
+            console.log('Kanal oluÅŸturma hatasÄ±:', e);
         }
     }
     
-    // Bildirim dinleyici başlat
-    let listenerStartTime = null; // Dinleyici başlangıç zamanı
+    // Bildirim dinleyici baÅŸlat
+    let listenerStartTime = null; // Dinleyici baÅŸlangÄ±Ã§ zamanÄ±
     
     async function startNotificationListener() {
         if (!currentUser) return;
         stopNotificationListener();
 
-        // Kayıt/temizleme cutoff'unu ayarla (eski bildirimleri hiç listeleme)
-        // ÖNEMLİ: Çıkış-giriş sonrası temizlenen bildirimlerin geri gelmemesi için
-        // listener'lar kurulmadan önce cache/Firestore'dan cutoff okunmalı.
+        // KayÄ±t/temizleme cutoff'unu ayarla (eski bildirimleri hiÃ§ listeleme)
+        // Ã–NEMLÄ°: Ã‡Ä±kÄ±ÅŸ-giriÅŸ sonrasÄ± temizlenen bildirimlerin geri gelmemesi iÃ§in
+        // listener'lar kurulmadan Ã¶nce cache/Firestore'dan cutoff okunmalÄ±.
         notificationCutoffDate = null;
         await ensureNotificationCutoffDate();
         
-        // Bildirim izni ve kanalı oluştur
+        // Bildirim izni ve kanalÄ± oluÅŸtur
         requestNotificationPermission();
         createNotificationChannel();
         
         // Email'i normalize et
         const userEmail = currentUser.email.toLowerCase().trim();
-        console.log('🔔 Bildirim dinleyiciler başlatılıyor...', userEmail);
+        console.log('ğŸ”” Bildirim dinleyiciler baÅŸlatÄ±lÄ±yor...', userEmail);
         
-        // Dinleyici başlangıç zamanını kaydet - bu zamandan sonra gelen bildirimler yeni sayılır
+        // Dinleyici baÅŸlangÄ±Ã§ zamanÄ±nÄ± kaydet - bu zamandan sonra gelen bildirimler yeni sayÄ±lÄ±r
         listenerStartTime = new Date();
-        console.log('🔔 Listener başlangıç zamanı:', listenerStartTime.toISOString());
+        console.log('ğŸ”” Listener baÅŸlangÄ±Ã§ zamanÄ±:', listenerStartTime.toISOString());
         
-        // Genel bildirimleri dinle (all) - orderBy kaldırıldı, index gerektirmez
+        // Genel bildirimleri dinle (all) - orderBy kaldÄ±rÄ±ldÄ±, index gerektirmez
         allNotificationListener = db.collection('notifications')
             .where('targetType', '==', 'all')
             .limit(50)
             .onSnapshot((snapshot) => {
-                console.log('🔔 Genel bildirim snapshot:', snapshot.size, 'adet');
+                console.log('ğŸ”” Genel bildirim snapshot:', snapshot.size, 'adet');
                 processNotificationSnapshot(snapshot);
             }, (error) => {
-                console.error('Genel bildirim dinleyici hatası:', error);
-                showToast('⚠️ Bildirim bağlantı hatası');
+                console.error('Genel bildirim dinleyici hatasÄ±:', error);
+                showToast('âš ï¸ Bildirim baÄŸlantÄ± hatasÄ±');
             });
         
-        // Kullanıcıya özel bildirimleri dinle (normalize edilmiş email)
+        // KullanÄ±cÄ±ya Ã¶zel bildirimleri dinle (normalize edilmiÅŸ email)
         notificationListener = db.collection('notifications')
             .where('targetType', '==', userEmail)
             .limit(50)
             .onSnapshot((snapshot) => {
-                console.log('🔔 Kullanıcı bildirim snapshot (targetType):', snapshot.size, 'adet');
+                console.log('ğŸ”” KullanÄ±cÄ± bildirim snapshot (targetType):', snapshot.size, 'adet');
                 processNotificationSnapshot(snapshot);
             }, (error) => {
-                console.error('Kullanıcı bildirim dinleyici hatası:', error);
+                console.error('KullanÄ±cÄ± bildirim dinleyici hatasÄ±:', error);
             });
         
-        // Email alanına göre de dinle (eski bildirimler için)
+        // Email alanÄ±na gÃ¶re de dinle (eski bildirimler iÃ§in)
         emailNotificationListener = db.collection('notifications')
             .where('email', '==', userEmail)
             .limit(50)
             .onSnapshot((snapshot) => {
-                console.log('🔔 Kullanıcı bildirim snapshot (email):', snapshot.size, 'adet');
+                console.log('ğŸ”” KullanÄ±cÄ± bildirim snapshot (email):', snapshot.size, 'adet');
                 processNotificationSnapshot(snapshot);
             }, (error) => {
-                console.error('Email bildirim dinleyici hatası:', error);
+                console.error('Email bildirim dinleyici hatasÄ±:', error);
             });
 
         // Admin hedefli bildirimleri dinle
@@ -5835,24 +2876,24 @@
                 .where('targetType', '==', 'admins')
                 .limit(50)
                 .onSnapshot((snapshot) => {
-                    console.log('🔔 Admin bildirim snapshot (admins):', snapshot.size, 'adet');
+                    console.log('ğŸ”” Admin bildirim snapshot (admins):', snapshot.size, 'adet');
                     processNotificationSnapshot(snapshot);
                 }, (error) => {
-                    console.error('Admin bildirim dinleyici hatası:', error);
+                    console.error('Admin bildirim dinleyici hatasÄ±:', error);
                 });
         }
     }
     
-    // Bildirim snapshot işle - YENİ VERSİYON
+    // Bildirim snapshot iÅŸle - YENÄ° VERSÄ°YON
     function processNotificationSnapshot(snapshot) {
-        // Daha önce bildirim gönderilmiş ID'leri al
+        // Daha Ã¶nce bildirim gÃ¶nderilmiÅŸ ID'leri al
         const notifiedIds = JSON.parse(localStorage.getItem('notifiedNotifications') || '[]');
         const readNotifs = JSON.parse(localStorage.getItem('readNotifications') || '[]');
         
         snapshot.docChanges().forEach((change) => {
             if (change.type === 'added') {
                 const notif = { id: change.doc.id, ...change.doc.data() };
-                console.log('🔔 Bildirim algılandı:', notif.title, 'ID:', notif.id);
+                console.log('ğŸ”” Bildirim algÄ±landÄ±:', notif.title, 'ID:', notif.id);
 
                 // Bildirim tarihi
                 let notifDate = null;
@@ -5864,7 +2905,7 @@
                     notifDate = null;
                 }
 
-                // Kayıt tarihinden eski bildirimleri tamamen yok say
+                // KayÄ±t tarihinden eski bildirimleri tamamen yok say
                 if (notificationCutoffDate && notifDate && notifDate < notificationCutoffDate) {
                     return;
                 }
@@ -5873,53 +2914,53 @@
                     return;
                 }
                 
-                // Listede zaten var mı kontrol et
+                // Listede zaten var mÄ± kontrol et
                 const existingIndex = userNotifications.findIndex(n => n.id === notif.id);
                 if (existingIndex === -1) {
                     userNotifications.push(notif);
                 }
                 
-                // Bildirim daha önce gösterilmiş mi?
+                // Bildirim daha Ã¶nce gÃ¶sterilmiÅŸ mi?
                 const alreadyNotified = notifiedIds.includes(notif.id);
                 const alreadyRead = readNotifs.includes(notif.id);
                 
                 if (alreadyNotified || alreadyRead) {
-                    console.log('🔔 Bu bildirim zaten gösterildi:', notif.id);
+                    console.log('ğŸ”” Bu bildirim zaten gÃ¶sterildi:', notif.id);
                     return;
                 }
                 
-                // Bildirim tarihi kontrolü - listenerStartTime'dan sonra mı oluşturulmuş?
+                // Bildirim tarihi kontrolÃ¼ - listenerStartTime'dan sonra mÄ± oluÅŸturulmuÅŸ?
                 if (!notifDate) {
-                    notifDate = new Date(); // cutoff'tan geçtiyse, popup kontrolü için şimdiki zaman kabul et
+                    notifDate = new Date(); // cutoff'tan geÃ§tiyse, popup kontrolÃ¼ iÃ§in ÅŸimdiki zaman kabul et
                 }
                 
                 const now = new Date();
                 const diffSeconds = (now - notifDate) / 1000;
                 
-                console.log('🔔 Bildirim tarihi:', notifDate.toISOString());
-                console.log('🔔 Listener başlangıç:', listenerStartTime ? listenerStartTime.toISOString() : 'null');
-                console.log('🔔 Bildirim yaşı:', diffSeconds, 'saniye');
+                console.log('ğŸ”” Bildirim tarihi:', notifDate.toISOString());
+                console.log('ğŸ”” Listener baÅŸlangÄ±Ã§:', listenerStartTime ? listenerStartTime.toISOString() : 'null');
+                console.log('ğŸ”” Bildirim yaÅŸÄ±:', diffSeconds, 'saniye');
                 
-                // KRITIK: Bildirim listener başladıktan SONRA veya son 10 saniye içinde oluşturulduysa göster
+                // KRITIK: Bildirim listener baÅŸladÄ±ktan SONRA veya son 10 saniye iÃ§inde oluÅŸturulduysa gÃ¶ster
                 // Bu, realtime olarak gelen yeni bildirimleri yakalar
                 let shouldShowPopup = false;
                 
                 if (listenerStartTime && notifDate >= listenerStartTime) {
-                    // Listener başladıktan sonra oluşturulan bildirim
+                    // Listener baÅŸladÄ±ktan sonra oluÅŸturulan bildirim
                     shouldShowPopup = true;
-                    console.log('🔔 ✅ Listener başladıktan sonra oluşturulmuş - GÖSTER');
+                    console.log('ğŸ”” âœ… Listener baÅŸladÄ±ktan sonra oluÅŸturulmuÅŸ - GÃ–STER');
                 } else if (diffSeconds <= 10) {
-                    // Son 10 saniye içinde oluşturulan bildirim (race condition için)
+                    // Son 10 saniye iÃ§inde oluÅŸturulan bildirim (race condition iÃ§in)
                     shouldShowPopup = true;
-                    console.log('🔔 ✅ Son 10 saniye içinde oluşturulmuş - GÖSTER');
+                    console.log('ğŸ”” âœ… Son 10 saniye iÃ§inde oluÅŸturulmuÅŸ - GÃ–STER');
                 } else {
-                    console.log('🔔 ❌ Eski bildirim, popup gösterilmeyecek');
+                    console.log('ğŸ”” âŒ Eski bildirim, popup gÃ¶sterilmeyecek');
                 }
                 
                 if (shouldShowPopup) {
-                    console.log('🔔 🚀 YENİ BİLDİRİM GÖSTERİLİYOR:', notif.title);
+                    console.log('ğŸ”” ğŸš€ YENÄ° BÄ°LDÄ°RÄ°M GÃ–STERÄ°LÄ°YOR:', notif.title);
                     
-                    // MERKEZİ BİLDİRİM SİSTEMİ KULLAN
+                    // MERKEZÄ° BÄ°LDÄ°RÄ°M SÄ°STEMÄ° KULLAN
                     showFullNotification({
                         title: notif.title || 'Bildirim',
                         message: notif.message || '',
@@ -5933,7 +2974,7 @@
                     });
                 }
                 
-                // Bu ID'yi notified listesine ekle (tekrar gösterilmesin)
+                // Bu ID'yi notified listesine ekle (tekrar gÃ¶sterilmesin)
                 notifiedIds.push(notif.id);
             }
         });
@@ -5941,7 +2982,7 @@
         // Notified listesini kaydet
         localStorage.setItem('notifiedNotifications', JSON.stringify([...new Set(notifiedIds)]));
         
-        // Bildirimleri tarihe göre sırala
+        // Bildirimleri tarihe gÃ¶re sÄ±rala
         userNotifications.sort((a, b) => {
             const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
             const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
@@ -5972,14 +3013,14 @@
         userNotifications = [];
     }
     
-    // Bildirim popup göster
+    // Bildirim popup gÃ¶ster
     function showNotificationPopup(notif) {
         const icons = {
-            'info': 'ℹ️',
-            'success': '✅',
-            'warning': '⚠️',
-            'promo': '🎁',
-            'order': '📦'
+            'info': 'â„¹ï¸',
+            'success': 'âœ…',
+            'warning': 'âš ï¸',
+            'promo': 'ğŸ',
+            'order': 'ğŸ“¦'
         };
         
         const colors = {
@@ -5990,7 +3031,7 @@
             'order': '#9C27B0'
         };
         
-        const icon = icons[notif.type] || '🔔';
+        const icon = icons[notif.type] || 'ğŸ””';
         const color = colors[notif.type] || '#2196F3';
         
         // Popup container
@@ -6004,7 +3045,7 @@
                         <div style="font-weight: bold; color: #fff; margin-bottom: 5px;">${notif.title || 'Bildirim'}</div>
                         <div style="color: rgba(255,255,255,0.9); font-size: 13px;">${notif.message || ''}</div>
                     </div>
-                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: 0.7;">✕</button>
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" style="background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: 0.7;">âœ•</button>
                 </div>
             </div>
         `;
@@ -6020,7 +3061,7 @@
         }, 5000);
     }
     
-    // Bildirim badge güncelle
+    // Bildirim badge gÃ¼ncelle
     function updateNotificationBadge() {
         const badge = document.getElementById('notifBadge');
         if (!badge) return;
@@ -6038,11 +3079,11 @@
             badge.style.display = 'none';
         }
         
-        // Profil butonu badge'ini de güncelle
+        // Profil butonu badge'ini de gÃ¼ncelle
         updateProfileNotifBadge();
     }
     
-    // Profil butonu bildirim badge güncelle
+    // Profil butonu bildirim badge gÃ¼ncelle
     function updateProfileNotifBadge() {
         const badge = document.getElementById('profileNotifBadge');
         if (!badge) return;
@@ -6080,31 +3121,31 @@
         return d >= notificationCutoffDate;
     }
     
-    // Bildirim sesi çal
+    // Bildirim sesi Ã§al
     function playNotificationSound() {
         try {
-            // Web Audio API ile bildirim sesi oluştur
+            // Web Audio API ile bildirim sesi oluÅŸtur
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             
-            // İlk beep
+            // Ä°lk beep
             const oscillator1 = audioContext.createOscillator();
             const gainNode1 = audioContext.createGain();
             oscillator1.connect(gainNode1);
             gainNode1.connect(audioContext.destination);
-            oscillator1.frequency.value = 880; // A5 notası
+            oscillator1.frequency.value = 880; // A5 notasÄ±
             oscillator1.type = 'sine';
             gainNode1.gain.setValueAtTime(0.3, audioContext.currentTime);
             gainNode1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
             oscillator1.start(audioContext.currentTime);
             oscillator1.stop(audioContext.currentTime + 0.2);
             
-            // İkinci beep (daha yüksek)
+            // Ä°kinci beep (daha yÃ¼ksek)
             setTimeout(() => {
                 const oscillator2 = audioContext.createOscillator();
                 const gainNode2 = audioContext.createGain();
                 oscillator2.connect(gainNode2);
                 gainNode2.connect(audioContext.destination);
-                oscillator2.frequency.value = 1108; // C#6 notası
+                oscillator2.frequency.value = 1108; // C#6 notasÄ±
                 oscillator2.type = 'sine';
                 gainNode2.gain.setValueAtTime(0.3, audioContext.currentTime);
                 gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
@@ -6112,13 +3153,13 @@
                 oscillator2.stop(audioContext.currentTime + 0.3);
             }, 150);
             
-            console.log('🔊 Bildirim sesi çalındı');
+            console.log('ğŸ”Š Bildirim sesi Ã§alÄ±ndÄ±');
         } catch(e) {
-            console.log('Ses çalınamadı:', e.message);
+            console.log('Ses Ã§alÄ±namadÄ±:', e.message);
         }
     }
     
-    // Sipariş onay popup göster (büyük, ekran ortası)
+    // SipariÅŸ onay popup gÃ¶ster (bÃ¼yÃ¼k, ekran ortasÄ±)
     function showOrderApprovalPopup(notif) {
         const popup = document.getElementById('orderApprovalPopup');
         const messageEl = document.getElementById('approvalPopupMessage');
@@ -6131,18 +3172,18 @@
         
         popup.style.display = 'flex';
         
-        // Titreşim (varsa)
+        // TitreÅŸim (varsa)
         if (navigator.vibrate) {
             navigator.vibrate([200, 100, 200, 100, 200]);
         }
         
-        // Ses çal
+        // Ses Ã§al
         playNotificationSound();
         
-        console.log('🎉 Sipariş onay popup gösterildi');
+        console.log('ğŸ‰ SipariÅŸ onay popup gÃ¶sterildi');
     }
     
-    // Sipariş onay popup kapat
+    // SipariÅŸ onay popup kapat
     function closeOrderApprovalPopup() {
         const popup = document.getElementById('orderApprovalPopup');
         if (popup) {
@@ -6150,51 +3191,51 @@
         }
     }
     
-    // Bildirimler modalını aç
+    // Bildirimler modalÄ±nÄ± aÃ§
     async function openNotificationsModal() {
         const container = document.getElementById('notificationsList');
         
-        // Loading göster
+        // Loading gÃ¶ster
         container.innerHTML = `
             <div style="text-align: center; padding: 40px;">
                 <div class="spinner"></div>
-                <div style="color: #888; margin-top: 15px;">Bildirimler yükleniyor...</div>
+                <div style="color: #888; margin-top: 15px;">Bildirimler yÃ¼kleniyor...</div>
             </div>
         `;
         openModal('notificationsModal');
         
-        // Firestore'dan bildirimleri çek (dinleyici çalışmasa bile)
+        // Firestore'dan bildirimleri Ã§ek (dinleyici Ã§alÄ±ÅŸmasa bile)
         try {
             if (!currentUser) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px;">
-                        <div style="font-size: 50px; margin-bottom: 15px;">🔔</div>
-                        <div style="color: #888;">Giriş yapmalısınız</div>
+                        <div style="font-size: 50px; margin-bottom: 15px;">ğŸ””</div>
+                        <div style="color: #888;">GiriÅŸ yapmalÄ±sÄ±nÄ±z</div>
                     </div>
                 `;
                 return;
             }
             
             const userEmail = currentUser.email.toLowerCase().trim();
-            console.log('🔔 Bildirimler yükleniyor... Email:', userEmail);
+            console.log('ğŸ”” Bildirimler yÃ¼kleniyor... Email:', userEmail);
 
             await ensureNotificationCutoffDate();
             
-            // Genel bildirimleri çek
+            // Genel bildirimleri Ã§ek
             const allNotifs = await db.collection('notifications')
                 .where('targetType', '==', 'all')
                 .orderBy('createdAt', 'desc')
                 .limit(50)
                 .get();
             
-            // Kullanıcıya özel bildirimleri çek
+            // KullanÄ±cÄ±ya Ã¶zel bildirimleri Ã§ek
             const userNotifs = await db.collection('notifications')
                 .where('targetType', '==', userEmail)
                 .orderBy('createdAt', 'desc')
                 .limit(50)
                 .get();
 
-            // Admin hedefli bildirimleri çek
+            // Admin hedefli bildirimleri Ã§ek
             let adminNotifs = null;
             if (isAdmin()) {
                 adminNotifs = await db.collection('notifications')
@@ -6204,11 +3245,11 @@
                     .get();
             }
             
-            console.log('🔔 Genel bildirim sayısı:', allNotifs.size);
-            console.log('🔔 Kullanıcı bildirim sayısı:', userNotifs.size);
-            if (adminNotifs) console.log('🔔 Admin bildirim sayısı:', adminNotifs.size);
+            console.log('ğŸ”” Genel bildirim sayÄ±sÄ±:', allNotifs.size);
+            console.log('ğŸ”” KullanÄ±cÄ± bildirim sayÄ±sÄ±:', userNotifs.size);
+            if (adminNotifs) console.log('ğŸ”” Admin bildirim sayÄ±sÄ±:', adminNotifs.size);
             
-            // Bildirimleri birleştir (temizlenenleri hariç tut)
+            // Bildirimleri birleÅŸtir (temizlenenleri hariÃ§ tut)
             userNotifications = [];
             allNotifs.forEach(doc => {
                 const n = { id: doc.id, ...doc.data() };
@@ -6218,7 +3259,7 @@
                 }
             });
             userNotifs.forEach(doc => {
-                // Duplikasyonu önle
+                // Duplikasyonu Ã¶nle
                 if (!userNotifications.find(n => n.id === doc.id)) {
                     const n = { id: doc.id, ...doc.data() };
                     const d = n.createdAt?.toDate ? n.createdAt.toDate() : (n.notifiedAt ? new Date(n.notifiedAt) : null);
@@ -6240,20 +3281,20 @@
                 });
             }
             
-            // Tarihe göre sırala
+            // Tarihe gÃ¶re sÄ±rala
             userNotifications.sort((a, b) => {
                 const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
                 const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
                 return dateB - dateA;
             });
             
-            console.log('🔔 Toplam bildirim (temizlenenler hariç):', userNotifications.length);
+            console.log('ğŸ”” Toplam bildirim (temizlenenler hariÃ§):', userNotifications.length);
             
             renderNotificationsList(container);
             
         } catch(e) {
-            console.error('🔔 Bildirim yükleme hatası:', e);
-            // Index hatası olabilir - orderBy olmadan dene
+            console.error('ğŸ”” Bildirim yÃ¼kleme hatasÄ±:', e);
+            // Index hatasÄ± olabilir - orderBy olmadan dene
             try {
                 const userEmail = currentUser.email.toLowerCase().trim();
 
@@ -6311,8 +3352,8 @@
             } catch(e2) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px;">
-                        <div style="font-size: 50px; margin-bottom: 15px;">❌</div>
-                        <div style="color: #888;">Bildirimler yüklenemedi</div>
+                        <div style="font-size: 50px; margin-bottom: 15px;">âŒ</div>
+                        <div style="color: #888;">Bildirimler yÃ¼klenemedi</div>
                         <div style="color: #666; font-size: 12px; margin-top: 10px;">${e2.message}</div>
                     </div>
                 `;
@@ -6325,8 +3366,8 @@
         if (userNotifications.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 40px;">
-                    <div style="font-size: 50px; margin-bottom: 15px;">🔔</div>
-                    <div style="color: #888;">Henüz bildirim yok</div>
+                    <div style="font-size: 50px; margin-bottom: 15px;">ğŸ””</div>
+                    <div style="color: #888;">HenÃ¼z bildirim yok</div>
                 </div>
             `;
             return;
@@ -6336,9 +3377,9 @@
         
         let html = '';
         userNotifications.forEach(notif => {
-            const icons = { 'info': 'ℹ️', 'success': '✅', 'warning': '⚠️', 'promo': '🎁', 'order': '📦' };
+            const icons = { 'info': 'â„¹ï¸', 'success': 'âœ…', 'warning': 'âš ï¸', 'promo': 'ğŸ', 'order': 'ğŸ“¦' };
             const colors = { 'info': '#2196F3', 'success': '#4CAF50', 'warning': '#FF9800', 'promo': '#E91E63', 'order': '#9C27B0' };
-            const icon = icons[notif.type] || '🔔';
+            const icon = icons[notif.type] || 'ğŸ””';
             const color = colors[notif.type] || '#2196F3';
             const isRead = readNotifs.includes(notif.id);
             const date = notif.createdAt?.toDate ? notif.createdAt.toDate().toLocaleString('tr-TR') : '';
@@ -6350,7 +3391,7 @@
                         <div style="flex: 1;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div style="font-weight: bold; color: #fff;">${notif.title || 'Bildirim'}</div>
-                                ${!isRead ? '<span style="background: #f44336; color: #fff; padding: 2px 6px; border-radius: 8px; font-size: 9px;">YENİ</span>' : ''}
+                                ${!isRead ? '<span style="background: #f44336; color: #fff; padding: 2px 6px; border-radius: 8px; font-size: 9px;">YENÄ°</span>' : ''}
                             </div>
                             <div style="color: #aaa; font-size: 13px; margin-top: 5px;">${notif.message || ''}</div>
                             <div style="color: #666; font-size: 11px; margin-top: 8px;">${date}</div>
@@ -6362,16 +3403,16 @@
         
         container.innerHTML = html;
         
-        // Tüm bildirimleri okundu olarak işaretle
+        // TÃ¼m bildirimleri okundu olarak iÅŸaretle
         const allIds = userNotifications.map(n => n.id);
         localStorage.setItem('readNotifications', JSON.stringify([...new Set([...readNotifs, ...allIds])]));
         updateNotificationBadge();
     }
     
-    // Tüm bildirimleri temizle
+    // TÃ¼m bildirimleri temizle
     async function clearAllNotifications() {
         if (userNotifications.length === 0) {
-            showToast('📭 Temizlenecek bildirim yok');
+            showToast('ğŸ“­ Temizlenecek bildirim yok');
             return;
         }
 
@@ -6379,7 +3420,7 @@
             const now = new Date();
             notificationCutoffDate = now;
 
-            // Hafızadaki bildirimleri de temizle (aksi halde badge eski listeden 9+ gösterebilir)
+            // HafÄ±zadaki bildirimleri de temizle (aksi halde badge eski listeden 9+ gÃ¶sterebilir)
             userNotifications = [];
 
             if (currentUser?.uid) {
@@ -6394,7 +3435,7 @@
                 localStorage.setItem('notifiedNotifications', '[]');
             } catch (e) {}
 
-            // Badge'leri anında sıfırla
+            // Badge'leri anÄ±nda sÄ±fÄ±rla
             try {
                 updateNotificationBadge();
                 updateProfileNotifBadge();
@@ -6438,7 +3479,7 @@
                         if (snap.size < batchLimit) break;
                     }
                 } catch (e) {
-                    // security rules izin vermediyse sadece gizleme çalışır
+                    // security rules izin vermediyse sadece gizleme Ã§alÄ±ÅŸÄ±r
                 }
             }
 
@@ -6447,41 +3488,41 @@
             userNotifications = [];
         }
         
-        // UI güncelle
+        // UI gÃ¼ncelle
         const container = document.getElementById('notificationsList');
         container.innerHTML = `
             <div style="text-align: center; padding: 40px;">
-                <div style="font-size: 50px; margin-bottom: 15px;">✅</div>
-                <div style="color: #4CAF50;">Tüm bildirimler temizlendi!</div>
+                <div style="font-size: 50px; margin-bottom: 15px;">âœ…</div>
+                <div style="color: #4CAF50;">TÃ¼m bildirimler temizlendi!</div>
             </div>
         `;
         
         updateNotificationBadge();
-        showToast('✅ Bildirimler temizlendi');
+        showToast('âœ… Bildirimler temizlendi');
     }
     
-    // ============ KURULUM MODALLARI YÖNETİMİ ============
-    let setupModals = {}; // Tüm kurulum modalları
-    let editingModalSteps = []; // Editor'daki adımlar
-    let editingModalId = null; // Düzenlenen modal ID
+    // ============ KURULUM MODALLARI YÃ–NETÄ°MÄ° ============
+    let setupModals = {}; // TÃ¼m kurulum modallarÄ±
+    let editingModalSteps = []; // Editor'daki adÄ±mlar
+    let editingModalId = null; // DÃ¼zenlenen modal ID
     
-    // Kurulum modallarını Firestore'dan yükle
+    // Kurulum modallarÄ±nÄ± Firestore'dan yÃ¼kle
     async function loadSetupModals() {
         try {
             const doc = await db.collection('settings').doc('setupModals').get();
             if (doc.exists) {
                 setupModals = doc.data().modals || {};
             }
-            console.log('Kurulum modalları yüklendi:', Object.keys(setupModals).length);
+            console.log('Kurulum modallarÄ± yÃ¼klendi:', Object.keys(setupModals).length);
         } catch(e) {
-            console.error('Kurulum modalları yüklenemedi:', e);
+            console.error('Kurulum modallarÄ± yÃ¼klenemedi:', e);
         }
     }
     
-    // =============== UYGULAMA AYARLARI YÖNETİMİ ===============
+    // =============== UYGULAMA AYARLARI YÃ–NETÄ°MÄ° ===============
     let appSettingsData = null;
     
-    // GitHub API Ayarları - Token Firestore'dan yüklenir
+    // GitHub API AyarlarÄ± - Token Firestore'dan yÃ¼klenir
     const GITHUB_CONFIG = {
         owner: 'LineOft',
         repo: 'thebestml-updates',
@@ -6489,26 +3530,26 @@
         token: ''
     };
     
-    // GitHub token'ı Firestore'dan yükle
+    // GitHub token'Ä± Firestore'dan yÃ¼kle
     async function loadGithubToken() {
         try {
             const doc = await db.collection('settings').doc('github_config').get();
             if (doc.exists && doc.data().token) {
                 GITHUB_CONFIG.token = doc.data().token;
-                console.log('✅ GitHub token yüklendi');
+                console.log('âœ… GitHub token yÃ¼klendi');
             } else {
-                // Token yoksa ve owner ise, varsayılan token'ı kaydet
-                console.log('⚠️ GitHub token bulunamadı');
+                // Token yoksa ve owner ise, varsayÄ±lan token'Ä± kaydet
+                console.log('âš ï¸ GitHub token bulunamadÄ±');
             }
         } catch(e) {
-            console.log('GitHub token yüklenemedi:', e.message);
+            console.log('GitHub token yÃ¼klenemedi:', e.message);
         }
     }
     
-    // Gizli kurulum fonksiyonu (konsol üzerinden çağrılabilir)
+    // Gizli kurulum fonksiyonu (konsol Ã¼zerinden Ã§aÄŸrÄ±labilir)
     window.setupGithubToken = async function(token) {
         if (!isOwner()) {
-            console.error('❌ Bu işlem sadece owner için!');
+            console.error('âŒ Bu iÅŸlem sadece owner iÃ§in!');
             return;
         }
         try {
@@ -6518,22 +3559,22 @@
                 updatedBy: currentUser.email
             });
             GITHUB_CONFIG.token = token;
-            console.log('✅ GitHub token kaydedildi!');
+            console.log('âœ… GitHub token kaydedildi!');
         } catch(e) {
-            console.error('❌ Hata:', e);
+            console.error('âŒ Hata:', e);
         }
     };
     
-    // Tema sıfırlama fonksiyonu (konsol üzerinden çağrılabilir)
+    // Tema sÄ±fÄ±rlama fonksiyonu (konsol Ã¼zerinden Ã§aÄŸrÄ±labilir)
     window.resetThemeToDefaults = async function() {
         if (!isOwner()) {
-            console.error('❌ Bu işlem sadece owner için!');
+            console.error('âŒ Bu iÅŸlem sadece owner iÃ§in!');
             return;
         }
         try {
-            console.log('⏳ Tema sıfırlanıyor...');
+            console.log('â³ Tema sÄ±fÄ±rlanÄ±yor...');
             
-            // Orijinal tema ayarları
+            // Orijinal tema ayarlarÄ±
             const originalTheme = {
                 primaryColor: '#4CAF50',
                 secondaryColor: '#2196F3',
@@ -6545,29 +3586,29 @@
                 accentColor: '#FF9800'
             };
             
-            // Firestore'daki appConfig'i güncelle
+            // Firestore'daki appConfig'i gÃ¼ncelle
             await db.collection('settings').doc('appConfig').update({
                 theme: originalTheme,
                 lastUpdated: firebase.firestore.FieldValue.serverTimestamp(),
                 updatedBy: currentUser.email
             });
             
-            console.log('✅ Tema Firestore\'a kaydedildi!');
-            console.log('🔄 Sayfa yenileniyor...');
+            console.log('âœ… Tema Firestore\'a kaydedildi!');
+            console.log('ğŸ”„ Sayfa yenileniyor...');
             setTimeout(() => window.location.href = 'index.html', 1000);
         } catch(e) {
-            console.error('❌ Hata:', e);
+            console.error('âŒ Hata:', e);
         }
     };
     
-    // Tüm ayarları sıfırlama fonksiyonu (konsol üzerinden çağrılabilir)
+    // TÃ¼m ayarlarÄ± sÄ±fÄ±rlama fonksiyonu (konsol Ã¼zerinden Ã§aÄŸrÄ±labilir)
     window.resetAllSettings = async function() {
         if (!isOwner()) {
-            console.error('❌ Bu işlem sadece owner için!');
+            console.error('âŒ Bu iÅŸlem sadece owner iÃ§in!');
             return;
         }
         try {
-            console.log('⏳ Tüm ayarlar sıfırlanıyor...');
+            console.log('â³ TÃ¼m ayarlar sÄ±fÄ±rlanÄ±yor...');
             
             const defaults = JSON.parse(JSON.stringify(defaultAppSettings));
             defaults.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
@@ -6575,22 +3616,22 @@
             
             await db.collection('settings').doc('appConfig').set(defaults);
             
-            console.log('✅ Tüm ayarlar Firestore\'a kaydedildi!');
-            console.log('🔄 Sayfa yenileniyor...');
+            console.log('âœ… TÃ¼m ayarlar Firestore\'a kaydedildi!');
+            console.log('ğŸ”„ Sayfa yenileniyor...');
             setTimeout(() => window.location.href = 'index.html', 1000);
         } catch(e) {
-            console.error('❌ Hata:', e);
+            console.error('âŒ Hata:', e);
         }
     };
     
-    // Varsayılan ayarlar
+    // VarsayÄ±lan ayarlar
     const defaultAppSettings = {
         general: {
             appName: 'Game Store',
-            appSubtitle: 'Oyun Modları & Kurulum Rehberleri',
+            appSubtitle: 'Oyun ModlarÄ± & Kurulum Rehberleri',
             logoUrl: '',
             iconUrl: '',
-            footerText: '© 2025 Game Store. Tüm hakları saklıdır.'
+            footerText: 'Â© 2025 Game Store. TÃ¼m haklarÄ± saklÄ±dÄ±r.'
         },
         theme: {
             primaryColor: '#4CAF50',
@@ -6604,7 +3645,7 @@
         },
         popup: {
             enabled: false,
-            title: '📢 Duyuru',
+            title: 'ğŸ“¢ Duyuru',
             message: '',
             buttonText: 'Tamam',
             buttonUrl: '',
@@ -6621,15 +3662,15 @@
         },
         maintenance: {
             enabled: false,
-            title: '🔧 Bakım Modu',
-            message: 'Uygulama şu anda bakımda. Lütfen daha sonra tekrar deneyin.',
+            title: 'ğŸ”§ BakÄ±m Modu',
+            message: 'Uygulama ÅŸu anda bakÄ±mda. LÃ¼tfen daha sonra tekrar deneyin.',
             estimatedTime: ''
         },
         texts: {
             homeTitle: 'Game Store',
-            homeSubtitle: 'Oyun Modları & Kurulum Rehberleri',
-            welcomeMessage: 'Hoş Geldiniz!',
-            footerText: '© 2025 Game Store'
+            homeSubtitle: 'Oyun ModlarÄ± & Kurulum Rehberleri',
+            welcomeMessage: 'HoÅŸ Geldiniz!',
+            footerText: 'Â© 2025 Game Store'
         },
         update: {
             currentVersion: APP_VERSION,
@@ -6642,7 +3683,7 @@
         updatedBy: null
     };
     
-    // Uygulama ayarlarını yükle
+    // Uygulama ayarlarÄ±nÄ± yÃ¼kle
     async function loadAppSettings() {
         try {
             const doc = await db.collection('settings').doc('appConfig').get();
@@ -6652,23 +3693,23 @@
                 appSettingsData = { ...defaultAppSettings };
             }
             
-            // UI'ı güncelle
+            // UI'Ä± gÃ¼ncelle
             updateAppSettingsUI();
             
-            // Ayarları uygula (sadece popup, duyuru, bakım modu)
+            // AyarlarÄ± uygula (sadece popup, duyuru, bakÄ±m modu)
             applyAppSettings();
             
-            // Orijinal ayarlar bilgisini yükle
+            // Orijinal ayarlar bilgisini yÃ¼kle
             loadOriginalDefaultsInfo();
             
-            console.log('✅ Uygulama ayarları yüklendi');
+            console.log('âœ… Uygulama ayarlarÄ± yÃ¼klendi');
         } catch(e) {
-            console.error('❌ Uygulama ayarları yüklenemedi:', e);
+            console.error('âŒ Uygulama ayarlarÄ± yÃ¼klenemedi:', e);
             appSettingsData = { ...defaultAppSettings };
         }
     }
     
-    // Son güncelleme bilgisini göster
+    // Son gÃ¼ncelleme bilgisini gÃ¶ster
     function updateAppSettingsUI() {
         const container = document.getElementById('appSettingsLastUpdate');
         if (!container || !appSettingsData) return;
@@ -6676,29 +3717,29 @@
         if (appSettingsData.lastUpdated) {
             const date = appSettingsData.lastUpdated.toDate ? appSettingsData.lastUpdated.toDate() : new Date(appSettingsData.lastUpdated);
             container.innerHTML = `
-                <div>📅 Son Güncelleme: ${date.toLocaleString('tr-TR')}</div>
-                <div style="margin-top: 3px;">👤 ${appSettingsData.updatedBy || 'Bilinmiyor'}</div>
+                <div>ğŸ“… Son GÃ¼ncelleme: ${date.toLocaleString('tr-TR')}</div>
+                <div style="margin-top: 3px;">ğŸ‘¤ ${appSettingsData.updatedBy || 'Bilinmiyor'}</div>
             `;
         } else {
-            container.innerHTML = 'Henüz ayar kaydedilmemiş';
+            container.innerHTML = 'HenÃ¼z ayar kaydedilmemiÅŸ';
         }
     }
     
-    // Ayarları uygulamaya uygula (sadece popup, duyuru, bakım modu)
+    // AyarlarÄ± uygulamaya uygula (sadece popup, duyuru, bakÄ±m modu)
     function applyAppSettings() {
         if (!appSettingsData) return;
         
-        console.log('🔄 Uygulama ayarları uygulanıyor (popup/duyuru/bakım)...');
+        console.log('ğŸ”„ Uygulama ayarlarÄ± uygulanÄ±yor (popup/duyuru/bakÄ±m)...');
         
-        // Versiyon gösterimi - HER ZAMAN APP_VERSION kullan
+        // Versiyon gÃ¶sterimi - HER ZAMAN APP_VERSION kullan
         const displayVersion = APP_VERSION;
         document.querySelectorAll('#currentVersion, #currentVersionBtn, .app-version').forEach(el => {
             el.textContent = displayVersion;
         });
         localStorage.setItem('displayed_version', displayVersion);
-        console.log('📱 Görünen versiyon:', displayVersion);
+        console.log('ğŸ“± GÃ¶rÃ¼nen versiyon:', displayVersion);
         
-        // Popup kontrolü
+        // Popup kontrolÃ¼
         if (appSettingsData.popup?.enabled) {
             showStartupPopup();
         }
@@ -6708,22 +3749,22 @@
             showAnnouncementBanner();
         }
         
-        // Bakım modu
+        // BakÄ±m modu
         if (appSettingsData.maintenance?.enabled) {
             showMaintenanceScreen();
         }
         
-        console.log('✅ Uygulama ayarları uygulandı');
+        console.log('âœ… Uygulama ayarlarÄ± uygulandÄ±');
     }
     
-    // Açılış popup'ı göster
+    // AÃ§Ä±lÄ±ÅŸ popup'Ä± gÃ¶ster
     function showStartupPopup() {
         if (!appSettingsData?.popup?.enabled) return;
         
         const p = appSettingsData.popup;
         const popupKey = 'startup_popup_' + (p.title || '').replace(/\s/g, '_');
         
-        // Sadece bir kez göster seçeneği
+        // Sadece bir kez gÃ¶ster seÃ§eneÄŸi
         if (p.showOnce && localStorage.getItem(popupKey)) {
             return;
         }
@@ -6731,7 +3772,7 @@
         const popupHtml = `
             <div id="startupPopupOverlay" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 99999; display: flex; align-items: center; justify-content: center; padding: 20px;">
                 <div style="background: ${p.bgColor || '#1a1a2e'}; border: 2px solid ${p.borderColor || '#4CAF50'}; border-radius: 20px; padding: 25px; max-width: 350px; text-align: center; animation: popupBounce 0.5s ease;">
-                    <div style="font-size: 24px; font-weight: bold; margin-bottom: 15px; color: #fff;">${p.title || '📢 Duyuru'}</div>
+                    <div style="font-size: 24px; font-weight: bold; margin-bottom: 15px; color: #fff;">${p.title || 'ğŸ“¢ Duyuru'}</div>
                     <div style="color: #ccc; font-size: 14px; line-height: 1.6; margin-bottom: 20px; white-space: pre-line;">${p.message || ''}</div>
                     ${p.buttonUrl ? `
                         <a href="${p.buttonUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, ${p.borderColor || '#4CAF50'}, ${p.borderColor || '#45a049'}); color: #fff; border: none; padding: 12px 30px; border-radius: 25px; font-weight: bold; font-size: 14px; cursor: pointer; text-decoration: none; margin-bottom: 10px;">${p.buttonText || 'Tamam'}</a>
@@ -6753,7 +3794,7 @@
         if (popupKey) localStorage.setItem(popupKey, 'shown');
     }
     
-    // Duyuru banner'ı göster
+    // Duyuru banner'Ä± gÃ¶ster
     function showAnnouncementBanner() {
         if (!appSettingsData?.announcement?.enabled) return;
         
@@ -6766,55 +3807,55 @@
                 <div style="flex: 1; color: ${a.textColor || '#000'}; font-size: 13px; font-weight: 500;">
                     ${a.link ? `<a href="${a.link}" target="_blank" style="color: inherit; text-decoration: underline;">${a.text}</a>` : a.text}
                 </div>
-                <button onclick="document.getElementById('announcementBanner').remove()" style="background: rgba(0,0,0,0.2); border: none; color: ${a.textColor || '#000'}; padding: 5px 10px; border-radius: 5px; cursor: pointer; margin-left: 10px;">✕</button>
+                <button onclick="document.getElementById('announcementBanner').remove()" style="background: rgba(0,0,0,0.2); border: none; color: ${a.textColor || '#000'}; padding: 5px 10px; border-radius: 5px; cursor: pointer; margin-left: 10px;">âœ•</button>
             </div>
         `;
         
         document.body.insertAdjacentHTML('beforeend', bannerHtml);
     }
     
-    // Bakım ekranı göster
+    // BakÄ±m ekranÄ± gÃ¶ster
     function showMaintenanceScreen() {
         if (!appSettingsData?.maintenance?.enabled) return;
         
-        // Owner veya Admin ise bakım ekranını gösterme
+        // Owner veya Admin ise bakÄ±m ekranÄ±nÄ± gÃ¶sterme
         if (currentUser) {
             const userRole = currentUser.role || localStorage.getItem('userRole');
             if (userRole === 'owner' || userRole === 'admin') {
-                console.log('🔧 Bakım modu aktif ama admin/owner olarak devam ediyorsunuz');
-                showToast('🔧 Bakım modu aktif - Ekip erişimi ile devam ediyorsunuz');
+                console.log('ğŸ”§ BakÄ±m modu aktif ama admin/owner olarak devam ediyorsunuz');
+                showToast('ğŸ”§ BakÄ±m modu aktif - Ekip eriÅŸimi ile devam ediyorsunuz');
                 return;
             }
         }
         
         const m = appSettingsData.maintenance;
         
-        // Bakım ekranını göster - Ekip Girişi butonuyla
+        // BakÄ±m ekranÄ±nÄ± gÃ¶ster - Ekip GiriÅŸi butonuyla
         document.body.innerHTML = `
             <div id="maintenanceScreen" style="min-height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px;">
                 <div style="text-align: center; max-width: 400px; width: 100%;">
-                    <div style="font-size: 80px; margin-bottom: 20px;">🔧</div>
-                    <h1 style="color: #fff; margin-bottom: 15px;">${m.title || 'Bakım Modu'}</h1>
-                    <p style="color: #aaa; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${m.message || 'Uygulama şu anda bakımda. Kısa süre içinde tekrar açılacaktır.'}</p>
-                    ${m.estimatedTime ? `<div style="background: rgba(255,152,0,0.2); border: 1px solid #FF9800; border-radius: 10px; padding: 15px; color: #FF9800; margin-bottom: 20px;">⏰ ${m.estimatedTime}</div>` : ''}
+                    <div style="font-size: 80px; margin-bottom: 20px;">ğŸ”§</div>
+                    <h1 style="color: #fff; margin-bottom: 15px;">${m.title || 'BakÄ±m Modu'}</h1>
+                    <p style="color: #aaa; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">${m.message || 'Uygulama ÅŸu anda bakÄ±mda. KÄ±sa sÃ¼re iÃ§inde tekrar aÃ§Ä±lacaktÄ±r.'}</p>
+                    ${m.estimatedTime ? `<div style="background: rgba(255,152,0,0.2); border: 1px solid #FF9800; border-radius: 10px; padding: 15px; color: #FF9800; margin-bottom: 20px;">â° ${m.estimatedTime}</div>` : ''}
                     
-                    <!-- Ekip Girişi Bölümü -->
+                    <!-- Ekip GiriÅŸi BÃ¶lÃ¼mÃ¼ -->
                     <div id="teamLoginSection" style="margin-top: 30px;">
                         <button onclick="showTeamLoginForm()" style="background: rgba(103,58,183,0.2); border: 1px solid #673AB7; color: #673AB7; padding: 12px 25px; border-radius: 10px; font-size: 14px; cursor: pointer;">
-                            👥 Ekip Girişi
+                            ğŸ‘¥ Ekip GiriÅŸi
                         </button>
                     </div>
                     
-                    <!-- Ekip Giriş Formu (Gizli) -->
+                    <!-- Ekip GiriÅŸ Formu (Gizli) -->
                     <div id="teamLoginForm" style="display: none; margin-top: 20px; background: rgba(103,58,183,0.1); border: 1px solid rgba(103,58,183,0.3); border-radius: 15px; padding: 20px;">
-                        <div style="font-size: 16px; font-weight: bold; color: #673AB7; margin-bottom: 15px;">👑 Ekip Girişi</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #673AB7; margin-bottom: 15px;">ğŸ‘‘ Ekip GiriÅŸi</div>
                         <input type="email" id="teamLoginEmail" placeholder="E-posta" style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; margin-bottom: 10px; box-sizing: border-box;">
-                        <input type="password" id="teamLoginPassword" placeholder="Şifre" style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; margin-bottom: 15px; box-sizing: border-box;">
+                        <input type="password" id="teamLoginPassword" placeholder="Åifre" style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.05); color: #fff; margin-bottom: 15px; box-sizing: border-box;">
                         <button onclick="attemptTeamLogin()" style="width: 100%; background: linear-gradient(135deg, #673AB7, #512DA8); color: #fff; border: none; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; margin-bottom: 10px;">
-                            🔐 Giriş Yap
+                            ğŸ” GiriÅŸ Yap
                         </button>
                         <button onclick="hideTeamLoginForm()" style="width: 100%; background: rgba(255,255,255,0.1); color: #aaa; border: none; padding: 10px; border-radius: 8px; cursor: pointer;">
-                            ← Geri
+                            â† Geri
                         </button>
                         <div id="teamLoginError" style="display: none; color: #f44336; font-size: 13px; margin-top: 10px;"></div>
                     </div>
@@ -6823,53 +3864,53 @@
         `;
     }
     
-    // Ekip giriş formunu göster
+    // Ekip giriÅŸ formunu gÃ¶ster
     function showTeamLoginForm() {
         document.getElementById('teamLoginSection').style.display = 'none';
         document.getElementById('teamLoginForm').style.display = 'block';
     }
     
-    // Ekip giriş formunu gizle
+    // Ekip giriÅŸ formunu gizle
     function hideTeamLoginForm() {
         document.getElementById('teamLoginSection').style.display = 'block';
         document.getElementById('teamLoginForm').style.display = 'none';
         document.getElementById('teamLoginError').style.display = 'none';
     }
     
-    // Ekip girişi dene
+    // Ekip giriÅŸi dene
     async function attemptTeamLogin() {
         const email = document.getElementById('teamLoginEmail').value.trim().toLowerCase();
         const password = document.getElementById('teamLoginPassword').value;
         const errorEl = document.getElementById('teamLoginError');
         
         if (!email || !password) {
-            errorEl.textContent = '❌ E-posta ve şifre gerekli';
+            errorEl.textContent = 'âŒ E-posta ve ÅŸifre gerekli';
             errorEl.style.display = 'block';
             return;
         }
         
-        // Loading göster
-        errorEl.textContent = '⏳ Giriş yapılıyor...';
+        // Loading gÃ¶ster
+        errorEl.textContent = 'â³ GiriÅŸ yapÄ±lÄ±yor...';
         errorEl.style.display = 'block';
         errorEl.style.color = '#3b82f6';
         
         try {
-            // Firebase hazır mı kontrol et
+            // Firebase hazÄ±r mÄ± kontrol et
             if (!firebase || !firebase.auth) {
-                throw new Error('Firebase henüz yüklenmedi');
+                throw new Error('Firebase henÃ¼z yÃ¼klenmedi');
             }
             
-            // Firebase ile giriş yap
+            // Firebase ile giriÅŸ yap
             const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
             const user = userCredential.user;
             
-            console.log('Firebase giriş başarılı:', user.email);
+            console.log('Firebase giriÅŸ baÅŸarÄ±lÄ±:', user.email);
             
-            // Owner e-posta kontrolü (hardcoded)
+            // Owner e-posta kontrolÃ¼ (hardcoded)
             const ownerEmail = 'onurtenk0@gmail.com';
             const isUserOwner = email === ownerEmail;
             
-            // Admin listesini Firestore'dan yükle
+            // Admin listesini Firestore'dan yÃ¼kle
             let isUserAdmin = false;
             try {
                 const adminDoc = await db.collection('settings').doc('admins').get();
@@ -6878,50 +3919,50 @@
                     const admins = data.adminList || [];
                     const adminEmailList = admins.map(a => a.email.toLowerCase());
                     isUserAdmin = adminEmailList.includes(email);
-                    console.log('Admin listesi:', adminEmailList, 'Kullanıcı admin mi:', isUserAdmin);
+                    console.log('Admin listesi:', adminEmailList, 'KullanÄ±cÄ± admin mi:', isUserAdmin);
                 }
             } catch(adminErr) {
-                console.log('Admin listesi yüklenemedi:', adminErr);
+                console.log('Admin listesi yÃ¼klenemedi:', adminErr);
             }
             
             if (isUserOwner || isUserAdmin) {
-                // Başarılı - Ekip üyesi
+                // BaÅŸarÄ±lÄ± - Ekip Ã¼yesi
                 localStorage.setItem('userRole', isUserOwner ? 'owner' : 'admin');
-                errorEl.textContent = '✅ Ekip girişi başarılı! Yönlendiriliyor...';
+                errorEl.textContent = 'âœ… Ekip giriÅŸi baÅŸarÄ±lÄ±! YÃ¶nlendiriliyor...';
                 errorEl.style.color = '#22c55e';
                 
-                // Sayfayı yenile
+                // SayfayÄ± yenile
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 800);
             } else {
-                // Normal kullanıcı - Bakım ekranı kalsın
-                errorEl.textContent = '⚠️ Bu hesap ekip üyesi değil. Bakım bitene kadar bekleyin.';
+                // Normal kullanÄ±cÄ± - BakÄ±m ekranÄ± kalsÄ±n
+                errorEl.textContent = 'âš ï¸ Bu hesap ekip Ã¼yesi deÄŸil. BakÄ±m bitene kadar bekleyin.';
                 errorEl.style.color = '#f59e0b';
                 await firebase.auth().signOut();
             }
             
         } catch(e) {
-            console.error('Ekip giriş hatası:', e);
+            console.error('Ekip giriÅŸ hatasÄ±:', e);
             errorEl.style.color = '#ef4444';
             
-            let errorMsg = '❌ Giriş başarısız: ' + (e.message || e.code || 'Bilinmeyen hata');
+            let errorMsg = 'âŒ GiriÅŸ baÅŸarÄ±sÄ±z: ' + (e.message || e.code || 'Bilinmeyen hata');
             
-            if (e.code === 'auth/user-not-found') errorMsg = '❌ Bu e-posta ile kayıtlı kullanıcı yok';
-            else if (e.code === 'auth/wrong-password') errorMsg = '❌ Şifre yanlış';
-            else if (e.code === 'auth/invalid-email') errorMsg = '❌ Geçersiz e-posta formatı';
-            else if (e.code === 'auth/invalid-credential') errorMsg = '❌ E-posta veya şifre hatalı';
-            else if (e.code === 'auth/too-many-requests') errorMsg = '❌ Çok fazla deneme. Biraz bekleyin.';
-            else if (e.code === 'auth/network-request-failed') errorMsg = '❌ İnternet bağlantısı yok';
+            if (e.code === 'auth/user-not-found') errorMsg = 'âŒ Bu e-posta ile kayÄ±tlÄ± kullanÄ±cÄ± yok';
+            else if (e.code === 'auth/wrong-password') errorMsg = 'âŒ Åifre yanlÄ±ÅŸ';
+            else if (e.code === 'auth/invalid-email') errorMsg = 'âŒ GeÃ§ersiz e-posta formatÄ±';
+            else if (e.code === 'auth/invalid-credential') errorMsg = 'âŒ E-posta veya ÅŸifre hatalÄ±';
+            else if (e.code === 'auth/too-many-requests') errorMsg = 'âŒ Ã‡ok fazla deneme. Biraz bekleyin.';
+            else if (e.code === 'auth/network-request-failed') errorMsg = 'âŒ Ä°nternet baÄŸlantÄ±sÄ± yok';
             
             errorEl.textContent = errorMsg;
             errorEl.style.display = 'block';
         }
     }
     
-    // Ayarlar modalını aç
+    // Ayarlar modalÄ±nÄ± aÃ§
     function openAppSettingsModal(category) {
-        if (!requirePermission('app_settings', 'uygulama ayarlarını düzenlemek')) return;
+        if (!requirePermission('app_settings', 'uygulama ayarlarÄ±nÄ± dÃ¼zenlemek')) return;
         
         const modal = document.getElementById('appSettingsModal');
         const header = document.getElementById('appSettingsModalHeader');
@@ -6933,27 +3974,27 @@
         }
         
         let headerColor = '#607D8B';
-        let headerTitle = '⚙️ Ayarlar';
+        let headerTitle = 'âš™ï¸ Ayarlar';
         let bodyHtml = '';
         
         switch(category) {
             case 'popup':
                 headerColor = '#FF9800';
-                headerTitle = '📢 Popup & Duyuru';
+                headerTitle = 'ğŸ“¢ Popup & Duyuru';
                 const p = appSettingsData.popup || defaultAppSettings.popup;
                 const a = appSettingsData.announcement || defaultAppSettings.announcement;
                 bodyHtml = `
-                    <!-- Açılış Popup -->
+                    <!-- AÃ§Ä±lÄ±ÅŸ Popup -->
                     <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                            <div style="font-size: 14px; font-weight: bold; color: #FF9800;">🎯 Açılış Popup</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #FF9800;">ğŸ¯ AÃ§Ä±lÄ±ÅŸ Popup</div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="settingPopupEnabled" ${p.enabled ? 'checked' : ''} style="width: 18px; height: 18px;">
                                 <span style="color: #aaa; font-size: 12px;">Aktif</span>
                             </label>
                         </div>
-                        <input type="text" id="settingPopupTitle" class="auth-input" value="${p.title || ''}" placeholder="📢 Duyuru" style="margin-bottom: 8px;">
-                        <textarea id="settingPopupMessage" class="auth-input" placeholder="Popup mesajı..." style="height: 60px; resize: none; margin-bottom: 8px;">${p.message || ''}</textarea>
+                        <input type="text" id="settingPopupTitle" class="auth-input" value="${p.title || ''}" placeholder="ğŸ“¢ Duyuru" style="margin-bottom: 8px;">
+                        <textarea id="settingPopupMessage" class="auth-input" placeholder="Popup mesajÄ±..." style="height: 60px; resize: none; margin-bottom: 8px;">${p.message || ''}</textarea>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                             <input type="text" id="settingPopupButtonText" class="auth-input" value="${p.buttonText || ''}" placeholder="Buton metni">
                             <input type="url" id="settingPopupButtonUrl" class="auth-input" value="${p.buttonUrl || ''}" placeholder="Buton URL (opsiyonel)">
@@ -6964,20 +4005,20 @@
                                 <input type="color" id="settingPopupBgColor" value="${p.bgColor || '#1a1a2e'}" style="width: 100%; height: 30px; border: none; border-radius: 5px;">
                             </div>
                             <div>
-                                <label style="font-size: 10px; color: #888;">Kenarlık</label>
+                                <label style="font-size: 10px; color: #888;">KenarlÄ±k</label>
                                 <input type="color" id="settingPopupBorderColor" value="${p.borderColor || '#4CAF50'}" style="width: 100%; height: 30px; border: none; border-radius: 5px;">
                             </div>
                         </div>
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <input type="checkbox" id="settingPopupShowOnce" ${p.showOnce ? 'checked' : ''}>
-                            <span style="color: #aaa; font-size: 12px;">Sadece bir kez göster</span>
+                            <span style="color: #aaa; font-size: 12px;">Sadece bir kez gÃ¶ster</span>
                         </label>
                     </div>
                     
                     <!-- Duyuru Banner -->
                     <div style="background: rgba(0,188,212,0.1); border: 1px solid rgba(0,188,212,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                            <div style="font-size: 14px; font-weight: bold; color: #00BCD4;">📣 Duyuru Banner</div>
+                            <div style="font-size: 14px; font-weight: bold; color: #00BCD4;">ğŸ“£ Duyuru Banner</div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="settingAnnouncementEnabled" ${a.enabled ? 'checked' : ''} style="width: 18px; height: 18px;">
                                 <span style="color: #aaa; font-size: 12px;">Aktif</span>
@@ -6997,54 +4038,54 @@
                         </div>
                     </div>
                     
-                    <button onclick="saveAppSettings('popup')" class="btn btn-primary" style="width: 100%;">💾 Kaydet</button>
+                    <button onclick="saveAppSettings('popup')" class="btn btn-primary" style="width: 100%;">ğŸ’¾ Kaydet</button>
                 `;
                 break;
                 
             case 'maintenance':
                 headerColor = '#f44336';
-                headerTitle = '🔧 Bakım Modu';
+                headerTitle = 'ğŸ”§ BakÄ±m Modu';
                 const m = appSettingsData.maintenance || defaultAppSettings.maintenance;
                 bodyHtml = `
                     <div style="background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-                            <div style="font-size: 16px; font-weight: bold; color: #f44336;">⚠️ Bakım Modu</div>
+                            <div style="font-size: 16px; font-weight: bold; color: #f44336;">âš ï¸ BakÄ±m Modu</div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="settingMaintenanceEnabled" ${m.enabled ? 'checked' : ''} style="width: 22px; height: 22px;">
-                                <span style="color: ${m.enabled ? '#f44336' : '#aaa'}; font-size: 14px; font-weight: bold;">${m.enabled ? 'AKTİF' : 'Pasif'}</span>
+                                <span style="color: ${m.enabled ? '#f44336' : '#aaa'}; font-size: 14px; font-weight: bold;">${m.enabled ? 'AKTÄ°F' : 'Pasif'}</span>
                             </label>
                         </div>
                         
                         ${m.enabled ? `
                             <div style="background: #f44336; color: #fff; padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 15px; animation: pulse 2s infinite;">
-                                🚨 BAKIM MODU ŞU AN AKTİF! Kullanıcılar uygulamayı kullanamıyor.
+                                ğŸš¨ BAKIM MODU ÅU AN AKTÄ°F! KullanÄ±cÄ±lar uygulamayÄ± kullanamÄ±yor.
                             </div>
                         ` : ''}
                         
                         <div style="margin-bottom: 12px;">
-                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 5px;">Başlık</label>
-                            <input type="text" id="settingMaintenanceTitle" class="auth-input" value="${m.title || ''}" placeholder="🔧 Bakım Modu">
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 5px;">BaÅŸlÄ±k</label>
+                            <input type="text" id="settingMaintenanceTitle" class="auth-input" value="${m.title || ''}" placeholder="ğŸ”§ BakÄ±m Modu">
                         </div>
                         
                         <div style="margin-bottom: 12px;">
                             <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 5px;">Mesaj</label>
-                            <textarea id="settingMaintenanceMessage" class="auth-input" placeholder="Uygulama şu anda bakımda..." style="height: 80px; resize: none;">${m.message || ''}</textarea>
+                            <textarea id="settingMaintenanceMessage" class="auth-input" placeholder="Uygulama ÅŸu anda bakÄ±mda..." style="height: 80px; resize: none;">${m.message || ''}</textarea>
                         </div>
                         
                         <div style="margin-bottom: 12px;">
-                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 5px;">Tahmini Süre (Opsiyonel)</label>
-                            <input type="text" id="settingMaintenanceTime" class="auth-input" value="${m.estimatedTime || ''}" placeholder="Örn: 2 saat, 30 dakika">
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 5px;">Tahmini SÃ¼re (Opsiyonel)</label>
+                            <input type="text" id="settingMaintenanceTime" class="auth-input" value="${m.estimatedTime || ''}" placeholder="Ã–rn: 2 saat, 30 dakika">
                         </div>
                     </div>
                     
                     <button onclick="saveAppSettings('maintenance')" class="btn btn-danger" style="width: 100%;">
-                        ${m.enabled ? '🔓 Bakım Modunu Kapat' : '🔒 Bakım Modunu Aç'}
+                        ${m.enabled ? 'ğŸ”“ BakÄ±m Modunu Kapat' : 'ğŸ”’ BakÄ±m Modunu AÃ§'}
                     </button>
                     
                     <div style="margin-top: 15px; padding: 12px; background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 8px;">
-                        <div style="font-size: 12px; color: #FF9800; font-weight: bold; margin-bottom: 5px;">⚠️ Dikkat</div>
+                        <div style="font-size: 12px; color: #FF9800; font-weight: bold; margin-bottom: 5px;">âš ï¸ Dikkat</div>
                         <div style="font-size: 11px; color: #888; line-height: 1.5;">
-                            Bakım modu aktif olduğunda TÜM kullanıcılar (adminler dahil) uygulamayı kullanamazlar. Sadece bu ekranı görebilirler.
+                            BakÄ±m modu aktif olduÄŸunda TÃœM kullanÄ±cÄ±lar (adminler dahil) uygulamayÄ± kullanamazlar. Sadece bu ekranÄ± gÃ¶rebilirler.
                         </div>
                     </div>
                 `;
@@ -7052,43 +4093,43 @@
 
             case 'loyalty':
                 headerColor = '#4CAF50';
-                headerTitle = '🎁 Sadakat Ayarları';
+                headerTitle = 'ğŸ Sadakat AyarlarÄ±';
                 bodyHtml = `
                     <div style="background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                        <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">🧮 Puan Kazanımı</div>
+                        <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">ğŸ§® Puan KazanÄ±mÄ±</div>
                         <div style="font-size: 11px; color: #888; line-height: 1.5; margin-bottom: 12px;">
-                            Bu ayar, admin siparişi onayladığında kullanıcıya eklenecek sadakat puanını belirler.
+                            Bu ayar, admin sipariÅŸi onayladÄ±ÄŸÄ±nda kullanÄ±cÄ±ya eklenecek sadakat puanÄ±nÄ± belirler.
                         </div>
 
                         <div style="margin-bottom: 10px;">
-                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Kazanım Modu</label>
+                            <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">KazanÄ±m Modu</label>
                             <select id="settingLoyaltyEarnMode" class="auth-input" style="margin-bottom: 0;" onchange="updateLoyaltyEarnModeUI()">
-                                <option value="percent">% Oran (tutar bazlı)</option>
-                                <option value="fixed">Sabit Puan (sipariş başına)</option>
+                                <option value="percent">% Oran (tutar bazlÄ±)</option>
+                                <option value="fixed">Sabit Puan (sipariÅŸ baÅŸÄ±na)</option>
                             </select>
                         </div>
 
                         <div id="settingLoyaltyPercentBox" style="margin-bottom: 10px;">
                             <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Oran (%)</label>
-                            <input id="settingLoyaltyEarnPercent" type="number" min="0" max="100" step="1" class="auth-input" placeholder="Örn: 5" style="margin-bottom: 0;" />
-                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Örn: %5 → 500₺ siparişte 25 puan.</div>
+                            <input id="settingLoyaltyEarnPercent" type="number" min="0" max="100" step="1" class="auth-input" placeholder="Ã–rn: 5" style="margin-bottom: 0;" />
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Ã–rn: %5 â†’ 500â‚º sipariÅŸte 25 puan.</div>
                         </div>
 
                         <div id="settingLoyaltyFixedBox" style="margin-bottom: 10px; display: none;">
                             <label style="display: block; color: #aaa; font-size: 12px; margin-bottom: 6px;">Sabit Puan</label>
-                            <input id="settingLoyaltyFixedPoints" type="number" min="0" step="1" class="auth-input" placeholder="Örn: 10" style="margin-bottom: 0;" />
-                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Her onaylanan siparişe aynı puan eklenir.</div>
+                            <input id="settingLoyaltyFixedPoints" type="number" min="0" step="1" class="auth-input" placeholder="Ã–rn: 10" style="margin-bottom: 0;" />
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">Her onaylanan sipariÅŸe aynÄ± puan eklenir.</div>
                         </div>
                     </div>
 
-                    <button onclick="saveLoyaltySettingsAdmin()" class="btn btn-primary" style="width: 100%;">💾 Kaydet</button>
+                    <button onclick="saveLoyaltySettingsAdmin()" class="btn btn-primary" style="width: 100%;">ğŸ’¾ Kaydet</button>
 
                     <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 10px; font-size: 11px; color: #888; line-height: 1.5;">
-                        Not: Puan kullanımı şu an 1 puan = 1₺ indirim (havale).
+                        Not: Puan kullanÄ±mÄ± ÅŸu an 1 puan = 1â‚º indirim (havale).
                     </div>
                 `;
 
-                // Modal açıldıktan sonra Firestore'dan güncel ayarı yükle
+                // Modal aÃ§Ä±ldÄ±ktan sonra Firestore'dan gÃ¼ncel ayarÄ± yÃ¼kle
                 setTimeout(() => {
                     try { loadLoyaltySettingsAdminIntoModal(); } catch (e) {}
                 }, 0);
@@ -7102,7 +4143,7 @@
         openModal('appSettingsModal');
     }
     
-    // Renk ayarlama yardımcı fonksiyonu
+    // Renk ayarlama yardÄ±mcÄ± fonksiyonu
     function adjustColor(color, amount) {
         const hex = color.replace('#', '');
         const r = Math.max(0, Math.min(255, parseInt(hex.substr(0, 2), 16) + amount));
@@ -7111,16 +4152,16 @@
         return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     }
     
-    // ========== FABRİKA AYARLARI FONKSİYONLARI ==========
+    // ========== FABRÄ°KA AYARLARI FONKSÄ°YONLARI ==========
     
-    // Mevcut ayarları yedekle
+    // Mevcut ayarlarÄ± yedekle
     async function backupCurrentSettings() {
-        if (!requirePermission('app_settings', 'ayarları yedeklemek')) return;
+        if (!requirePermission('app_settings', 'ayarlarÄ± yedeklemek')) return;
         
         try {
-            showToast('⏳ Ayarlar yedekleniyor...');
+            showToast('â³ Ayarlar yedekleniyor...');
             
-            // Mevcut ayarları al
+            // Mevcut ayarlarÄ± al
             const currentSettings = { ...appSettingsData };
             currentSettings.backupDate = firebase.firestore.FieldValue.serverTimestamp();
             currentSettings.backupBy = currentUser ? currentUser.email : 'Bilinmiyor';
@@ -7128,17 +4169,17 @@
             // Yedek olarak kaydet
             await db.collection('settings').doc('appConfig_backup').set(currentSettings);
             
-            showToast('✅ Ayarlar yedeklendi!');
-            console.log('✅ Ayarlar yedeklendi:', currentSettings);
+            showToast('âœ… Ayarlar yedeklendi!');
+            console.log('âœ… Ayarlar yedeklendi:', currentSettings);
         } catch(e) {
-            console.error('❌ Yedekleme hatası:', e);
-            showToast('❌ Yedekleme başarısız: ' + e.message);
+            console.error('âŒ Yedekleme hatasÄ±:', e);
+            showToast('âŒ Yedekleme baÅŸarÄ±sÄ±z: ' + e.message);
         }
     }
     
-    // Fabrika ayarlarına dönüş onay ekranı
+    // Fabrika ayarlarÄ±na dÃ¶nÃ¼ÅŸ onay ekranÄ±
     function showFactoryResetConfirm() {
-        if (!requirePermission('app_settings', 'fabrika ayarlarına dönmek')) return;
+        if (!requirePermission('app_settings', 'fabrika ayarlarÄ±na dÃ¶nmek')) return;
         
         const modal = document.createElement('div');
         modal.id = 'factoryResetModal';
@@ -7147,18 +4188,18 @@
         modal.innerHTML = `
             <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
                 <div class="modal-header" style="background: linear-gradient(135deg, #f44336, #c62828);">
-                    <div class="modal-title">🏭 Fabrika Ayarlarına Dön</div>
-                    <button class="modal-close" onclick="closeFactoryResetModal()">✕</button>
+                    <div class="modal-title">ğŸ­ Fabrika AyarlarÄ±na DÃ¶n</div>
+                    <button class="modal-close" onclick="closeFactoryResetModal()">âœ•</button>
                 </div>
                 <div class="modal-body" style="padding: 20px;">
                     <div style="text-align: center; margin-bottom: 20px;">
-                        <span style="font-size: 60px;">⚠️</span>
+                        <span style="font-size: 60px;">âš ï¸</span>
                     </div>
                     
                     <div style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                        <strong style="color: #ff5252;">DİKKAT!</strong>
+                        <strong style="color: #ff5252;">DÄ°KKAT!</strong>
                         <p style="margin: 10px 0 0 0; font-size: 13px; color: #ffcdd2;">
-                            Bu işlem geri alınamaz! Tüm uygulama ayarları (tema, renkler, logo, metinler, popup) varsayılan değerlere dönecektir.
+                            Bu iÅŸlem geri alÄ±namaz! TÃ¼m uygulama ayarlarÄ± (tema, renkler, logo, metinler, popup) varsayÄ±lan deÄŸerlere dÃ¶necektir.
                         </p>
                     </div>
                     
@@ -7166,8 +4207,8 @@
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="radio" name="resetType" value="default" checked style="width: 18px; height: 18px;">
                             <div>
-                                <div style="font-weight: bold;">🔄 Varsayılan Ayarlara Dön</div>
-                                <div style="font-size: 11px; color: #aaa;">Kod içindeki varsayılan değerleri kullan</div>
+                                <div style="font-weight: bold;">ğŸ”„ VarsayÄ±lan Ayarlara DÃ¶n</div>
+                                <div style="font-size: 11px; color: #aaa;">Kod iÃ§indeki varsayÄ±lan deÄŸerleri kullan</div>
                             </div>
                         </label>
                     </div>
@@ -7176,19 +4217,19 @@
                         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
                             <input type="radio" name="resetType" value="backup" style="width: 18px; height: 18px;">
                             <div>
-                                <div style="font-weight: bold;">📦 Yedekten Geri Yükle</div>
-                                <div style="font-size: 11px; color: #aaa;">Son yedeklenen ayarları kullan</div>
+                                <div style="font-weight: bold;">ğŸ“¦ Yedekten Geri YÃ¼kle</div>
+                                <div style="font-size: 11px; color: #aaa;">Son yedeklenen ayarlarÄ± kullan</div>
                             </div>
                         </label>
                     </div>
                     
                     <div id="backupInfo" style="background: rgba(33,150,243,0.2); border-radius: 8px; padding: 10px; font-size: 12px; color: #90caf9; margin-bottom: 15px; display: none;">
-                        Yedek bilgisi yükleniyor...
+                        Yedek bilgisi yÃ¼kleniyor...
                     </div>
                     
                     <div style="display: flex; gap: 10px;">
-                        <button onclick="closeFactoryResetModal()" style="flex: 1; padding: 12px; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff; border-radius: 8px; cursor: pointer;">İptal</button>
-                        <button onclick="executeFactoryReset()" style="flex: 1; padding: 12px; border: none; background: linear-gradient(135deg, #f44336, #c62828); color: #fff; border-radius: 8px; cursor: pointer; font-weight: bold;">Sıfırla</button>
+                        <button onclick="closeFactoryResetModal()" style="flex: 1; padding: 12px; border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff; border-radius: 8px; cursor: pointer;">Ä°ptal</button>
+                        <button onclick="executeFactoryReset()" style="flex: 1; padding: 12px; border: none; background: linear-gradient(135deg, #f44336, #c62828); color: #fff; border-radius: 8px; cursor: pointer; font-weight: bold;">SÄ±fÄ±rla</button>
                     </div>
                 </div>
             </div>
@@ -7197,10 +4238,10 @@
         document.body.appendChild(modal);
         modal.onclick = (e) => { if (e.target === modal) closeFactoryResetModal(); };
         
-        // Yedek bilgisini yükle
+        // Yedek bilgisini yÃ¼kle
         loadBackupInfo();
         
-        // Radio değişikliğinde yedek bilgisini göster/gizle
+        // Radio deÄŸiÅŸikliÄŸinde yedek bilgisini gÃ¶ster/gizle
         document.querySelectorAll('input[name="resetType"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 document.getElementById('backupInfo').style.display = this.value === 'backup' ? 'block' : 'none';
@@ -7208,7 +4249,7 @@
         });
     }
     
-    // Yedek bilgisini yükle
+    // Yedek bilgisini yÃ¼kle
     async function loadBackupInfo() {
         try {
             const doc = await db.collection('settings').doc('appConfig_backup').get();
@@ -7218,46 +4259,46 @@
                 const data = doc.data();
                 const date = data.backupDate ? (data.backupDate.toDate ? data.backupDate.toDate() : new Date(data.backupDate)) : null;
                 infoEl.innerHTML = `
-                    <div>📅 Yedek Tarihi: ${date ? date.toLocaleString('tr-TR') : 'Bilinmiyor'}</div>
-                    <div>👤 Yedekleyen: ${data.backupBy || 'Bilinmiyor'}</div>
+                    <div>ğŸ“… Yedek Tarihi: ${date ? date.toLocaleString('tr-TR') : 'Bilinmiyor'}</div>
+                    <div>ğŸ‘¤ Yedekleyen: ${data.backupBy || 'Bilinmiyor'}</div>
                 `;
             } else {
-                infoEl.innerHTML = '⚠️ Henüz yedek alınmamış';
+                infoEl.innerHTML = 'âš ï¸ HenÃ¼z yedek alÄ±nmamÄ±ÅŸ';
                 infoEl.style.background = 'rgba(255,152,0,0.2)';
                 infoEl.style.color = '#ffcc80';
             }
         } catch(e) {
-            console.error('Yedek bilgisi yüklenemedi:', e);
+            console.error('Yedek bilgisi yÃ¼klenemedi:', e);
         }
     }
     
-    // Fabrika ayarlarına dönüş modalını kapat
+    // Fabrika ayarlarÄ±na dÃ¶nÃ¼ÅŸ modalÄ±nÄ± kapat
     function closeFactoryResetModal() {
         const modal = document.getElementById('factoryResetModal');
         if (modal) modal.remove();
     }
     
-    // Fabrika ayarlarına dönüşü uygula
+    // Fabrika ayarlarÄ±na dÃ¶nÃ¼ÅŸÃ¼ uygula
     async function executeFactoryReset() {
         const resetType = document.querySelector('input[name="resetType"]:checked').value;
         
         try {
-            showToast('⏳ Ayarlar sıfırlanıyor...');
+            showToast('â³ Ayarlar sÄ±fÄ±rlanÄ±yor...');
             
             let newSettings;
             
             if (resetType === 'backup') {
-                // Yedekten geri yükle
+                // Yedekten geri yÃ¼kle
                 const backupDoc = await db.collection('settings').doc('appConfig_backup').get();
                 if (!backupDoc.exists) {
-                    showToast('❌ Yedek bulunamadı!');
+                    showToast('âŒ Yedek bulunamadÄ±!');
                     return;
                 }
                 newSettings = backupDoc.data();
                 delete newSettings.backupDate;
                 delete newSettings.backupBy;
             } else {
-                // Varsayılan ayarlara dön
+                // VarsayÄ±lan ayarlara dÃ¶n
                 newSettings = JSON.parse(JSON.stringify(defaultAppSettings));
             }
             
@@ -7270,44 +4311,44 @@
             // Firestore'a kaydet
             await db.collection('settings').doc('appConfig').set(newSettings);
             
-            // Local değişkeni güncelle
+            // Local deÄŸiÅŸkeni gÃ¼ncelle
             appSettingsData = newSettings;
             
             // Tema CSS'ini temizle
             const dynamicStyle = document.getElementById('dynamic-theme-css');
             if (dynamicStyle) dynamicStyle.remove();
             
-            // Ayarları uygula
+            // AyarlarÄ± uygula
             applyAppSettings();
             updateAppSettingsUI();
             
             closeFactoryResetModal();
             
-            showToast('✅ Fabrika ayarlarına dönüldü!');
+            showToast('âœ… Fabrika ayarlarÄ±na dÃ¶nÃ¼ldÃ¼!');
             
-            // Sayfayı yenile
+            // SayfayÄ± yenile
             setTimeout(() => {
-                showToast('🔄 Sayfa yenileniyor...');
+                showToast('ğŸ”„ Sayfa yenileniyor...');
                 setTimeout(() => window.location.href = 'index.html', 500);
             }, 1000);
             
         } catch(e) {
-            console.error('❌ Sıfırlama hatası:', e);
-            showToast('❌ Sıfırlama başarısız: ' + e.message);
+            console.error('âŒ SÄ±fÄ±rlama hatasÄ±:', e);
+            showToast('âŒ SÄ±fÄ±rlama baÅŸarÄ±sÄ±z: ' + e.message);
         }
     }
     
-    // Orijinal varsayılan ayarları Firestore'a yükle (VS Code'daki defaultAppSettings)
+    // Orijinal varsayÄ±lan ayarlarÄ± Firestore'a yÃ¼kle (VS Code'daki defaultAppSettings)
     async function uploadOriginalDefaults() {
-        if (!requirePermission('app_settings', 'orijinal ayarları yüklemek')) return;
+        if (!requirePermission('app_settings', 'orijinal ayarlarÄ± yÃ¼klemek')) return;
         
         // Onay iste
-        if (!confirm('⚠️ DİKKAT!\n\nBu işlem kod içindeki varsayılan ayarları Firestore\'a "orijinal ayarlar" olarak kaydedecek.\n\nDevam etmek istiyor musunuz?')) {
+        if (!confirm('âš ï¸ DÄ°KKAT!\n\nBu iÅŸlem kod iÃ§indeki varsayÄ±lan ayarlarÄ± Firestore\'a "orijinal ayarlar" olarak kaydedecek.\n\nDevam etmek istiyor musunuz?')) {
             return;
         }
         
         try {
-            showToast('⏳ Orijinal ayarlar yükleniyor...');
+            showToast('â³ Orijinal ayarlar yÃ¼kleniyor...');
             
             // defaultAppSettings'i kopyala
             const originalSettings = JSON.parse(JSON.stringify(defaultAppSettings));
@@ -7316,44 +4357,44 @@
             originalSettings.uploadedAt = firebase.firestore.FieldValue.serverTimestamp();
             originalSettings.uploadedBy = currentUser ? currentUser.email : 'Sistem';
             originalSettings.appVersion = APP_VERSION;
-            originalSettings.description = 'VS Code varsayılan ayarları - Orijinal fabrika ayarları';
+            originalSettings.description = 'VS Code varsayÄ±lan ayarlarÄ± - Orijinal fabrika ayarlarÄ±';
             
             // Firestore'a kaydet
             await db.collection('settings').doc('original_defaults').set(originalSettings);
             
-            showToast('✅ Orijinal ayarlar Firestore\'a yüklendi!');
-            console.log('✅ Orijinal ayarlar kaydedildi:', originalSettings);
+            showToast('âœ… Orijinal ayarlar Firestore\'a yÃ¼klendi!');
+            console.log('âœ… Orijinal ayarlar kaydedildi:', originalSettings);
             
-            // Bilgi panelini güncelle
+            // Bilgi panelini gÃ¼ncelle
             loadOriginalDefaultsInfo();
             
         } catch(e) {
-            console.error('❌ Yükleme hatası:', e);
-            showToast('❌ Yükleme başarısız: ' + e.message);
+            console.error('âŒ YÃ¼kleme hatasÄ±:', e);
+            showToast('âŒ YÃ¼kleme baÅŸarÄ±sÄ±z: ' + e.message);
         }
     }
     
-    // Firestore'daki orijinal ayarları geri yükle
+    // Firestore'daki orijinal ayarlarÄ± geri yÃ¼kle
     async function loadOriginalDefaults() {
-        if (!requirePermission('app_settings', 'orijinal ayarları geri yüklemek')) return;
+        if (!requirePermission('app_settings', 'orijinal ayarlarÄ± geri yÃ¼klemek')) return;
         
         try {
-            // Önce orijinal ayarların var olup olmadığını kontrol et
+            // Ã–nce orijinal ayarlarÄ±n var olup olmadÄ±ÄŸÄ±nÄ± kontrol et
             const doc = await db.collection('settings').doc('original_defaults').get();
             
             if (!doc.exists) {
-                showToast('⚠️ Firestore\'da orijinal ayarlar bulunamadı!\n\nÖnce "Orijinal Ayarları Firestore\'a Yükle" butonunu kullanın.');
+                showToast('âš ï¸ Firestore\'da orijinal ayarlar bulunamadÄ±!\n\nÃ–nce "Orijinal AyarlarÄ± Firestore\'a YÃ¼kle" butonunu kullanÄ±n.');
                 return;
             }
             
             // Onay iste
-            if (!confirm('⚠️ DİKKAT!\n\nBu işlem tüm mevcut ayarları Firestore\'daki orijinal ayarlarla değiştirecek.\n\nTema, renkler, metinler ve tüm özelleştirmeler sıfırlanacak!\n\nDevam etmek istiyor musunuz?')) {
+            if (!confirm('âš ï¸ DÄ°KKAT!\n\nBu iÅŸlem tÃ¼m mevcut ayarlarÄ± Firestore\'daki orijinal ayarlarla deÄŸiÅŸtirecek.\n\nTema, renkler, metinler ve tÃ¼m Ã¶zelleÅŸtirmeler sÄ±fÄ±rlanacak!\n\nDevam etmek istiyor musunuz?')) {
                 return;
             }
             
-            showToast('⏳ Orijinal ayarlar geri yükleniyor...');
+            showToast('â³ Orijinal ayarlar geri yÃ¼kleniyor...');
             
-            // Orijinal ayarları al
+            // Orijinal ayarlarÄ± al
             const originalData = doc.data();
             
             // Meta bilgileri temizle
@@ -7371,32 +4412,32 @@
             // Firestore'a kaydet
             await db.collection('settings').doc('appConfig').set(originalData);
             
-            // Local değişkeni güncelle
+            // Local deÄŸiÅŸkeni gÃ¼ncelle
             appSettingsData = originalData;
             
             // Tema CSS'ini temizle
             const dynamicStyle = document.getElementById('dynamic-theme-css');
             if (dynamicStyle) dynamicStyle.remove();
             
-            // Ayarları uygula
+            // AyarlarÄ± uygula
             applyAppSettings();
             updateAppSettingsUI();
             
-            showToast('✅ Orijinal ayarlar geri yüklendi!');
+            showToast('âœ… Orijinal ayarlar geri yÃ¼klendi!');
             
-            // Sayfayı yenile
+            // SayfayÄ± yenile
             setTimeout(() => {
-                showToast('🔄 Sayfa yenileniyor...');
+                showToast('ğŸ”„ Sayfa yenileniyor...');
                 setTimeout(() => window.location.href = 'index.html', 500);
             }, 1000);
             
         } catch(e) {
-            console.error('❌ Geri yükleme hatası:', e);
-            showToast('❌ Geri yükleme başarısız: ' + e.message);
+            console.error('âŒ Geri yÃ¼kleme hatasÄ±:', e);
+            showToast('âŒ Geri yÃ¼kleme baÅŸarÄ±sÄ±z: ' + e.message);
         }
     }
     
-    // Orijinal ayarlar bilgisini yükle ve göster
+    // Orijinal ayarlar bilgisini yÃ¼kle ve gÃ¶ster
     async function loadOriginalDefaultsInfo() {
         const infoEl = document.getElementById('originalDefaultsInfo');
         if (!infoEl) return;
@@ -7410,27 +4451,27 @@
                 
                 infoEl.style.display = 'block';
                 infoEl.innerHTML = `
-                    <div style="font-weight: bold; margin-bottom: 5px;">📦 Firestore'daki Orijinal Ayarlar:</div>
-                    <div>📅 Yüklenme: ${date ? date.toLocaleString('tr-TR') : 'Bilinmiyor'}</div>
-                    <div>👤 Yükleyen: ${data.uploadedBy || 'Bilinmiyor'}</div>
-                    <div>📱 Versiyon: ${data.appVersion || 'Bilinmiyor'}</div>
+                    <div style="font-weight: bold; margin-bottom: 5px;">ğŸ“¦ Firestore'daki Orijinal Ayarlar:</div>
+                    <div>ğŸ“… YÃ¼klenme: ${date ? date.toLocaleString('tr-TR') : 'Bilinmiyor'}</div>
+                    <div>ğŸ‘¤ YÃ¼kleyen: ${data.uploadedBy || 'Bilinmiyor'}</div>
+                    <div>ğŸ“± Versiyon: ${data.appVersion || 'Bilinmiyor'}</div>
                 `;
             } else {
                 infoEl.style.display = 'block';
                 infoEl.style.background = 'rgba(255,152,0,0.2)';
                 infoEl.style.color = '#ffcc80';
-                infoEl.innerHTML = '⚠️ Henüz orijinal ayarlar Firestore\'a yüklenmemiş. Önce "Orijinal Ayarları Firestore\'a Yükle" butonunu kullanın.';
+                infoEl.innerHTML = 'âš ï¸ HenÃ¼z orijinal ayarlar Firestore\'a yÃ¼klenmemiÅŸ. Ã–nce "Orijinal AyarlarÄ± Firestore\'a YÃ¼kle" butonunu kullanÄ±n.';
             }
         } catch(e) {
-            console.error('Orijinal ayarlar bilgisi yüklenemedi:', e);
+            console.error('Orijinal ayarlar bilgisi yÃ¼klenemedi:', e);
         }
     }
     
-    // ========== FABRİKA AYARLARI SONU ==========
+    // ========== FABRÄ°KA AYARLARI SONU ==========
     
-    // ========== GITHUB API FONKSİYONLARI ==========
+    // ========== GITHUB API FONKSÄ°YONLARI ==========
     
-    // GitHub token input'unu göster/gizle
+    // GitHub token input'unu gÃ¶ster/gizle
     function toggleGithubTokenInput() {
         const section = document.getElementById('githubTokenSection');
         if (section) {
@@ -7438,11 +4479,11 @@
         }
     }
     
-    // GitHub token'ı kaydet (Firestore'a)
+    // GitHub token'Ä± kaydet (Firestore'a)
     async function saveGithubToken() {
         const token = document.getElementById('githubTokenInput').value.trim();
         if (!token) {
-            showToast('❌ Token boş olamaz');
+            showToast('âŒ Token boÅŸ olamaz');
             return;
         }
         
@@ -7455,12 +4496,12 @@
             });
             
             GITHUB_CONFIG.token = token;
-            showToast('✅ GitHub token Firestore\'a kaydedildi');
+            showToast('âœ… GitHub token Firestore\'a kaydedildi');
             closeModal('appSettingsModal');
             setTimeout(() => openAppSettingsModal('update'), 300);
         } catch(e) {
-            console.error('Token kaydetme hatası:', e);
-            showToast('❌ Token kaydedilemedi: ' + e.message);
+            console.error('Token kaydetme hatasÄ±:', e);
+            showToast('âŒ Token kaydedilemedi: ' + e.message);
         }
     }
     
@@ -7476,13 +4517,13 @@
                 versionDisplay.textContent = manifest.version || 'Bilinmiyor';
             }
             
-            // Build number otomatik artır
+            // Build number otomatik artÄ±r
             const buildInput = document.getElementById('settingBuildNumber');
             if (buildInput) {
                 buildInput.value = (manifest.buildNumber || 0) + 1;
             }
             
-            // Versiyon otomatik artır
+            // Versiyon otomatik artÄ±r
             const versionInput = document.getElementById('settingNewVersion');
             if (versionInput && !versionInput.value) {
                 versionInput.value = incrementVersion(manifest.version || APP_VERSION);
@@ -7490,16 +4531,16 @@
             
             return manifest;
         } catch(e) {
-            console.error('Manifest yüklenemedi:', e);
+            console.error('Manifest yÃ¼klenemedi:', e);
             const versionDisplay = document.getElementById('publishedVersionDisplay');
             if (versionDisplay) {
-                versionDisplay.textContent = 'Yüklenemedi';
+                versionDisplay.textContent = 'YÃ¼klenemedi';
             }
             return null;
         }
     }
     
-    // GitHub dosyasının SHA'sını al
+    // GitHub dosyasÄ±nÄ±n SHA'sÄ±nÄ± al
     async function getGithubFileSha(filePath) {
         try {
             const url = `https://api.github.com/repos/${GITHUB_CONFIG.owner}/${GITHUB_CONFIG.repo}/contents/${filePath}?ref=${GITHUB_CONFIG.branch}`;
@@ -7515,12 +4556,12 @@
             }
             return null;
         } catch(e) {
-            console.error('SHA alınamadı:', e);
+            console.error('SHA alÄ±namadÄ±:', e);
             return null;
         }
     }
     
-    // GitHub'a dosya yükle/güncelle
+    // GitHub'a dosya yÃ¼kle/gÃ¼ncelle
     async function updateGithubFile(filePath, content, commitMessage) {
         try {
             const sha = await getGithubFileSha(filePath);
@@ -7549,23 +4590,23 @@
             
             if (!res.ok) {
                 const error = await res.json();
-                throw new Error(error.message || 'GitHub API hatası');
+                throw new Error(error.message || 'GitHub API hatasÄ±');
             }
             
             return await res.json();
         } catch(e) {
-            console.error('GitHub dosya güncelleme hatası:', e);
+            console.error('GitHub dosya gÃ¼ncelleme hatasÄ±:', e);
             throw e;
         }
     }
     
-    // GitHub'a güncelleme yayınla
+    // GitHub'a gÃ¼ncelleme yayÄ±nla
     async function publishUpdateToGithub() {
-        if (!requirePermission('app_settings', 'güncelleme yayınlamak')) return;
+        if (!requirePermission('app_settings', 'gÃ¼ncelleme yayÄ±nlamak')) return;
         
-        // Token kontrolü
+        // Token kontrolÃ¼
         if (!GITHUB_CONFIG.token) {
-            showToast('❌ Önce GitHub token girmelisiniz!');
+            showToast('âŒ Ã–nce GitHub token girmelisiniz!');
             toggleGithubTokenInput();
             return;
         }
@@ -7576,11 +4617,11 @@
         const forceUpdate = document.getElementById('settingForceUpdate').checked;
         
         if (!newVersion) {
-            showToast('❌ Versiyon numarası girilmeli');
+            showToast('âŒ Versiyon numarasÄ± girilmeli');
             return;
         }
         
-        // Build number yoksa manifest'ten al ve artır
+        // Build number yoksa manifest'ten al ve artÄ±r
         if (!buildNumber) {
             try {
                 const manifest = await fetchCurrentManifest();
@@ -7591,14 +4632,14 @@
         }
         
         // Onay iste
-        if (!confirm(`🚀 GÜNCELLEME YAYINLA\n\nVersiyon: ${newVersion}\nBuild: ${buildNumber}\n\nBu güncelleme TÜM kullanıcılara gönderilecek.\n\nDevam etmek istiyor musunuz?`)) {
+        if (!confirm(`ğŸš€ GÃœNCELLEME YAYINLA\n\nVersiyon: ${newVersion}\nBuild: ${buildNumber}\n\nBu gÃ¼ncelleme TÃœM kullanÄ±cÄ±lara gÃ¶nderilecek.\n\nDevam etmek istiyor musunuz?`)) {
             return;
         }
         
         try {
-            showToast('⏳ GitHub\'a yükleniyor...');
+            showToast('â³ GitHub\'a yÃ¼kleniyor...');
             
-            // manifest.json içeriği
+            // manifest.json iÃ§eriÄŸi
             const manifestContent = JSON.stringify({
                 version: newVersion,
                 buildNumber: buildNumber,
@@ -7608,34 +4649,34 @@
                 required: forceUpdate
             }, null, 4);
             
-            // manifest.json'u güncelle
-            await updateGithubFile('manifest.json', manifestContent, `v${newVersion}: Güncelleme yayınlandı`);
+            // manifest.json'u gÃ¼ncelle
+            await updateGithubFile('manifest.json', manifestContent, `v${newVersion}: GÃ¼ncelleme yayÄ±nlandÄ±`);
             
-            showToast('🎉 Güncelleme başarıyla yayınlandı: v' + newVersion);
+            showToast('ğŸ‰ GÃ¼ncelleme baÅŸarÄ±yla yayÄ±nlandÄ±: v' + newVersion);
             
-            // NOT: Artık Firestore'a yazmıyoruz - sadece GitHub manifest kullanılıyor
-            // Bu sayede versiyon karmaşası önleniyor
+            // NOT: ArtÄ±k Firestore'a yazmÄ±yoruz - sadece GitHub manifest kullanÄ±lÄ±yor
+            // Bu sayede versiyon karmaÅŸasÄ± Ã¶nleniyor
             
-            // Versiyonu güncelle
+            // Versiyonu gÃ¼ncelle
             const versionDisplay = document.getElementById('publishedVersionDisplay');
             if (versionDisplay) {
                 versionDisplay.textContent = newVersion;
             }
             
-            // Modalı kapat
+            // ModalÄ± kapat
             setTimeout(() => closeModal('appSettingsModal'), 1500);
             
         } catch(e) {
-            console.error('❌ Güncelleme yayınlama hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('âŒ GÃ¼ncelleme yayÄ±nlama hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
     // ========== GITHUB API SONU ==========
     
-    // Ayarları kaydet
+    // AyarlarÄ± kaydet
     async function saveAppSettings(category) {
-        if (!requirePermission('app_settings', 'uygulama ayarlarını kaydetmek')) return;
+        if (!requirePermission('app_settings', 'uygulama ayarlarÄ±nÄ± kaydetmek')) return;
         
         try {
             if (!appSettingsData) appSettingsData = { ...defaultAppSettings };
@@ -7673,37 +4714,37 @@
                     };
                     
                     if (isEnabled && !wasEnabled) {
-                        showToast('🔒 Bakım modu AKTİF edildi!');
+                        showToast('ğŸ”’ BakÄ±m modu AKTÄ°F edildi!');
                     } else if (!isEnabled && wasEnabled) {
-                        showToast('🔓 Bakım modu kapatıldı');
+                        showToast('ğŸ”“ BakÄ±m modu kapatÄ±ldÄ±');
                     }
                     break;
             }
             
-            // Güncelleme bilgisi ekle
+            // GÃ¼ncelleme bilgisi ekle
             appSettingsData.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
             appSettingsData.updatedBy = currentUser?.email || 'Unknown';
             
             // Firestore'a kaydet
             await db.collection('settings').doc('appConfig').set(appSettingsData, { merge: true });
             
-            // Ayarları uygula
+            // AyarlarÄ± uygula
             applyAppSettings();
             updateAppSettingsUI();
             
             if (category !== 'update' && category !== 'maintenance') {
-                showToast('✅ Ayarlar kaydedildi!');
+                showToast('âœ… Ayarlar kaydedildi!');
             }
             
             closeModal('appSettingsModal');
             
         } catch(e) {
-            console.error('Ayar kaydetme hatası:', e);
-            showToast('❌ Kaydetme hatası: ' + e.message);
+            console.error('Ayar kaydetme hatasÄ±:', e);
+            showToast('âŒ Kaydetme hatasÄ±: ' + e.message);
         }
     }
     
-    // Versiyon numarasını artır
+    // Versiyon numarasÄ±nÄ± artÄ±r
     function incrementVersion(version) {
         const parts = version.split('.');
         if (parts.length >= 3) {
@@ -7712,7 +4753,7 @@
         return parts.join('.');
     }
     
-    // Güncelleme bildirimini test et (önizleme)
+    // GÃ¼ncelleme bildirimini test et (Ã¶nizleme)
     function testUpdateNotification() {
         const version = document.getElementById('settingNewVersion').value.trim() || incrementVersion(APP_VERSION);
         const changelog = document.getElementById('settingChangelog').value.trim().split('\n').filter(l => l.trim());
@@ -7723,18 +4764,18 @@
         });
         
         closeModal('appSettingsModal');
-        showToast('👁️ Güncelleme bildirimi önizlemesi gösterildi');
+        showToast('ğŸ‘ï¸ GÃ¼ncelleme bildirimi Ã¶nizlemesi gÃ¶sterildi');
     }
     
-    // Güncelleme bildirimini kaldır
+    // GÃ¼ncelleme bildirimini kaldÄ±r
     async function clearUpdateNotification() {
-        // NOT: Güncelleme sistemi artık sadece GitHub manifest kullanıyor
-        // Bildirimi kaldırmak için GitHub'daki manifest.json'u güncellemeniz gerekiyor
-        showToast('ℹ️ Güncelleme bildirimi GitHub manifest.json üzerinden yönetiliyor', 4000);
+        // NOT: GÃ¼ncelleme sistemi artÄ±k sadece GitHub manifest kullanÄ±yor
+        // Bildirimi kaldÄ±rmak iÃ§in GitHub'daki manifest.json'u gÃ¼ncellemeniz gerekiyor
+        showToast('â„¹ï¸ GÃ¼ncelleme bildirimi GitHub manifest.json Ã¼zerinden yÃ¶netiliyor', 4000);
         closeModal('appSettingsModal');
     }
     
-    // Kurulum modalları listesini göster
+    // Kurulum modallarÄ± listesini gÃ¶ster
     async function loadSetupModalsList() {
         await loadSetupModals();
         
@@ -7744,9 +4785,9 @@
         if (Object.keys(setupModals).length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: #888;">
-                    <div style="font-size: 30px; margin-bottom: 10px;">📖</div>
-                    <div>Henüz kurulum modalı oluşturulmadı</div>
-                    <div style="font-size: 11px; margin-top: 5px;">➕ Yeni Modal butonuna tıklayarak oluşturun</div>
+                    <div style="font-size: 30px; margin-bottom: 10px;">ğŸ“–</div>
+                    <div>HenÃ¼z kurulum modalÄ± oluÅŸturulmadÄ±</div>
+                    <div style="font-size: 11px; margin-top: 5px;">â• Yeni Modal butonuna tÄ±klayarak oluÅŸturun</div>
                 </div>
             `;
             return;
@@ -7762,13 +4803,13 @@
                             <div style="font-size: 14px; font-weight: bold; color: #fff;">${modal.title || id}</div>
                             <div style="font-size: 11px; color: #888; margin-top: 3px;">
                                 <span style="background: rgba(103,58,183,0.3); padding: 2px 6px; border-radius: 4px; margin-right: 5px;">${id}</span>
-                                <span>${stepCount} adım</span>
+                                <span>${stepCount} adÄ±m</span>
                             </div>
                         </div>
                         <div style="display: flex; gap: 5px;">
-                            <button onclick="previewSavedModal('${id}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">👁️</button>
-                            <button onclick="editSetupModal('${id}')" style="background: #FF9800; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">✏️</button>
-                            <button onclick="deleteSetupModal('${id}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">🗑️</button>
+                            <button onclick="previewSavedModal('${id}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">ğŸ‘ï¸</button>
+                            <button onclick="editSetupModal('${id}')" style="background: #FF9800; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">âœï¸</button>
+                            <button onclick="deleteSetupModal('${id}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">ğŸ—‘ï¸</button>
                         </div>
                     </div>
                 </div>
@@ -7778,12 +4819,12 @@
         container.innerHTML = html;
     }
     
-    // Kurulum modal editörünü aç
+    // Kurulum modal editÃ¶rÃ¼nÃ¼ aÃ§
     function openSetupModalEditor(modalId = null) {
         editingModalId = modalId;
         editingModalSteps = [];
         
-        // Form alanlarını temizle
+        // Form alanlarÄ±nÄ± temizle
         document.getElementById('setupModalId').value = '';
         document.getElementById('setupModalTitle').value = '';
         document.getElementById('setupModalIntroVideo').value = '';
@@ -7794,13 +4835,13 @@
         document.getElementById('setupModalGuideVideo').value = '';
         document.getElementById('setupModalGuideDesc').value = '';
         document.getElementById('setupModalWarnings').value = '';
-        document.getElementById('setupModalSuccessTitle').value = 'Kurulum Tamamlandı!';
-        document.getElementById('setupModalSuccessDesc').value = 'Artık hileyi kullanabilirsiniz.';
+        document.getElementById('setupModalSuccessTitle').value = 'Kurulum TamamlandÄ±!';
+        document.getElementById('setupModalSuccessDesc').value = 'ArtÄ±k hileyi kullanabilirsiniz.';
         
         if (modalId && setupModals[modalId]) {
-            // Düzenleme modu
+            // DÃ¼zenleme modu
             const modal = setupModals[modalId];
-            document.getElementById('setupModalEditorTitle').textContent = '✏️ Modal Düzenle: ' + modalId;
+            document.getElementById('setupModalEditorTitle').textContent = 'âœï¸ Modal DÃ¼zenle: ' + modalId;
             document.getElementById('setupModalId').value = modalId;
             document.getElementById('setupModalId').disabled = true;
             document.getElementById('setupModalTitle').value = modal.title || '';
@@ -7812,12 +4853,12 @@
             document.getElementById('setupModalGuideVideo').value = modal.guideSection?.video || '';
             document.getElementById('setupModalGuideDesc').value = modal.guideSection?.description || '';
             document.getElementById('setupModalWarnings').value = (modal.warnings || []).join('\\n');
-            document.getElementById('setupModalSuccessTitle').value = modal.successMessage?.title || 'Kurulum Tamamlandı!';
+            document.getElementById('setupModalSuccessTitle').value = modal.successMessage?.title || 'Kurulum TamamlandÄ±!';
             document.getElementById('setupModalSuccessDesc').value = modal.successMessage?.description || '';
             editingModalSteps = [...(modal.steps || [])];
         } else {
             // Yeni modal
-            document.getElementById('setupModalEditorTitle').textContent = '📖 Yeni Kurulum Modalı';
+            document.getElementById('setupModalEditorTitle').textContent = 'ğŸ“– Yeni Kurulum ModalÄ±';
             document.getElementById('setupModalId').disabled = false;
         }
         
@@ -7825,18 +4866,18 @@
         openModal('setupModalEditorModal');
     }
     
-    // Modal düzenleme
+    // Modal dÃ¼zenleme
     function editSetupModal(modalId) {
         openSetupModalEditor(modalId);
     }
     
-    // Adımları render et
+    // AdÄ±mlarÄ± render et
     function renderSetupModalSteps() {
         const container = document.getElementById('setupModalStepsList');
         if (!container) return;
         
         if (editingModalSteps.length === 0) {
-            container.innerHTML = `<div style="text-align: center; padding: 15px; color: #888; font-size: 12px;">Henüz adım eklenmedi</div>`;
+            container.innerHTML = `<div style="text-align: center; padding: 15px; color: #888; font-size: 12px;">HenÃ¼z adÄ±m eklenmedi</div>`;
             return;
         }
         
@@ -7849,13 +4890,13 @@
                 <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                         <div style="background: ${color}; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; flex-shrink: 0;">${index + 1}</div>
-                        <input type="text" value="${step.title || ''}" onchange="updateModalStep(${index}, 'title', this.value)" class="auth-input" placeholder="Adım başlığı" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 12px;">
-                        <button onclick="removeModalStep(${index})" style="background: #f44336; border: none; color: #fff; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 10px;">✕</button>
+                        <input type="text" value="${step.title || ''}" onchange="updateModalStep(${index}, 'title', this.value)" class="auth-input" placeholder="AdÄ±m baÅŸlÄ±ÄŸÄ±" style="flex: 1; margin: 0; padding: 6px 10px; font-size: 12px;">
+                        <button onclick="removeModalStep(${index})" style="background: #f44336; border: none; color: #fff; width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 10px;">âœ•</button>
                     </div>
-                    <textarea onchange="updateModalStep(${index}, 'description', this.value)" class="auth-input" placeholder="Adım açıklaması" style="margin: 0; padding: 6px 10px; font-size: 11px; height: 50px; resize: none;">${step.description || ''}</textarea>
+                    <textarea onchange="updateModalStep(${index}, 'description', this.value)" class="auth-input" placeholder="AdÄ±m aÃ§Ä±klamasÄ±" style="margin: 0; padding: 6px 10px; font-size: 11px; height: 50px; resize: none;">${step.description || ''}</textarea>
                     <div style="display: flex; gap: 5px; margin-top: 5px;">
-                        <button onclick="moveModalStep(${index}, -1)" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;" ${index === 0 ? 'disabled' : ''}>⬆️</button>
-                        <button onclick="moveModalStep(${index}, 1)" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;" ${index === editingModalSteps.length - 1 ? 'disabled' : ''}>⬇️</button>
+                        <button onclick="moveModalStep(${index}, -1)" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;" ${index === 0 ? 'disabled' : ''}>â¬†ï¸</button>
+                        <button onclick="moveModalStep(${index}, 1)" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 3px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;" ${index === editingModalSteps.length - 1 ? 'disabled' : ''}>â¬‡ï¸</button>
                     </div>
                 </div>
             `;
@@ -7864,7 +4905,7 @@
         container.innerHTML = html;
     }
     
-    // Adım ekle
+    // AdÄ±m ekle
     function addSetupModalStep() {
         editingModalSteps.push({
             title: '',
@@ -7873,20 +4914,20 @@
         renderSetupModalSteps();
     }
     
-    // Modal Adım güncelle
+    // Modal AdÄ±m gÃ¼ncelle
     function updateModalStep(index, field, value) {
         if (editingModalSteps[index]) {
             editingModalSteps[index][field] = value;
         }
     }
     
-    // Modal Adım sil
+    // Modal AdÄ±m sil
     function removeModalStep(index) {
         editingModalSteps.splice(index, 1);
         renderSetupModalSteps();
     }
     
-    // Modal Adım taşı
+    // Modal AdÄ±m taÅŸÄ±
     function moveModalStep(index, direction) {
         const newIndex = index + direction;
         if (newIndex < 0 || newIndex >= editingModalSteps.length) return;
@@ -7899,28 +4940,28 @@
     
     // Modal kaydet
     async function saveSetupModal() {
-        if (!requirePermission('modals', 'kurulum modalı kaydetmek')) return;
+        if (!requirePermission('modals', 'kurulum modalÄ± kaydetmek')) return;
         
         const id = document.getElementById('setupModalId').value.trim();
         const title = document.getElementById('setupModalTitle').value.trim();
         
         if (!id) {
-            showToast('❌ Modal ID girilmeli');
+            showToast('âŒ Modal ID girilmeli');
             return;
         }
         
         if (!title) {
-            showToast('❌ Modal başlığı girilmeli');
+            showToast('âŒ Modal baÅŸlÄ±ÄŸÄ± girilmeli');
             return;
         }
         
-        // ID formatı kontrol
+        // ID formatÄ± kontrol
         if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
-            showToast('❌ Modal ID sadece harf, rakam, - ve _ içerebilir');
+            showToast('âŒ Modal ID sadece harf, rakam, - ve _ iÃ§erebilir');
             return;
         }
         
-        // Modal verisini hazırla
+        // Modal verisini hazÄ±rla
         const modalData = {
             title: title,
             introVideo: document.getElementById('setupModalIntroVideo').value.trim() || null,
@@ -7937,7 +4978,7 @@
             steps: editingModalSteps.filter(s => s.title?.trim()),
             warnings: document.getElementById('setupModalWarnings').value.trim().split('\\n').filter(s => s.trim()),
             successMessage: {
-                title: document.getElementById('setupModalSuccessTitle').value.trim() || 'Kurulum Tamamlandı!',
+                title: document.getElementById('setupModalSuccessTitle').value.trim() || 'Kurulum TamamlandÄ±!',
                 description: document.getElementById('setupModalSuccessDesc').value.trim() || ''
             },
             updatedAt: new Date().toISOString(),
@@ -7952,20 +4993,20 @@
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            showToast('✅ Kurulum modalı kaydedildi!');
+            showToast('âœ… Kurulum modalÄ± kaydedildi!');
             closeModal('setupModalEditorModal');
             loadSetupModalsList();
         } catch(e) {
-            console.error('Modal kaydetme hatası:', e);
-            showToast('❌ Kaydetme hatası: ' + e.message);
+            console.error('Modal kaydetme hatasÄ±:', e);
+            showToast('âŒ Kaydetme hatasÄ±: ' + e.message);
         }
     }
     
     // Modal sil
     async function deleteSetupModal(modalId) {
-        if (!requirePermission('modals', 'kurulum modalı silmek')) return;
+        if (!requirePermission('modals', 'kurulum modalÄ± silmek')) return;
         
-        if (!confirm('Bu kurulum modalını silmek istediğinize emin misiniz?\\n\\nModal ID: ' + modalId)) {
+        if (!confirm('Bu kurulum modalÄ±nÄ± silmek istediÄŸinize emin misiniz?\\n\\nModal ID: ' + modalId)) {
             return;
         }
         
@@ -7976,17 +5017,17 @@
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             
-            showToast('✅ Modal silindi');
+            showToast('âœ… Modal silindi');
             loadSetupModalsList();
         } catch(e) {
-            console.error('Modal silme hatası:', e);
-            showToast('❌ Silme hatası: ' + e.message);
+            console.error('Modal silme hatasÄ±:', e);
+            showToast('âŒ Silme hatasÄ±: ' + e.message);
         }
     }
     
-    // Modal önizle (editor'dan)
+    // Modal Ã¶nizle (editor'dan)
     function previewSetupModal() {
-        const title = document.getElementById('setupModalTitle').value.trim() || 'Önizleme';
+        const title = document.getElementById('setupModalTitle').value.trim() || 'Ã–nizleme';
         
         const modalData = {
             title: title,
@@ -8004,7 +5045,7 @@
             steps: editingModalSteps.filter(s => s.title?.trim()),
             warnings: document.getElementById('setupModalWarnings').value.trim().split('\\n').filter(s => s.trim()),
             successMessage: {
-                title: document.getElementById('setupModalSuccessTitle').value.trim() || 'Kurulum Tamamlandı!',
+                title: document.getElementById('setupModalSuccessTitle').value.trim() || 'Kurulum TamamlandÄ±!',
                 description: document.getElementById('setupModalSuccessDesc').value.trim() || ''
             }
         };
@@ -8012,16 +5053,16 @@
         renderDynamicSetupModal(modalData);
     }
     
-    // Kaydedilmiş modal önizle
+    // KaydedilmiÅŸ modal Ã¶nizle
     function previewSavedModal(modalId) {
         if (setupModals[modalId]) {
             renderDynamicSetupModal(setupModals[modalId]);
         } else {
-            showToast('❌ Modal bulunamadı');
+            showToast('âŒ Modal bulunamadÄ±');
         }
     }
     
-    // Dinamik modal aç (kurulum adımlarından)
+    // Dinamik modal aÃ§ (kurulum adÄ±mlarÄ±ndan)
     function openDynamicSetupModal(modalId) {
         if (setupModals[modalId]) {
             renderDynamicSetupModal(setupModals[modalId]);
@@ -8035,7 +5076,7 @@
             }
             openModal('imguiModal');
         } else {
-            showToast('❌ Kurulum rehberi bulunamadı');
+            showToast('âŒ Kurulum rehberi bulunamadÄ±');
         }
     }
     
@@ -8044,11 +5085,11 @@
         const titleEl = document.getElementById('dynamicSetupModalTitle');
         const contentEl = document.getElementById('dynamicSetupModalContent');
         
-        titleEl.textContent = modalData.title || '📖 Kurulum Rehberi';
+        titleEl.textContent = modalData.title || 'ğŸ“– Kurulum Rehberi';
         
         let html = '';
         
-        // Tanıtım videosu (YouTube URL desteği eklenmiştir)
+        // TanÄ±tÄ±m videosu (YouTube URL desteÄŸi eklenmiÅŸtir)
         if (modalData.introVideo) {
             const introUrl = modalData.introVideo;
             const ytId = typeof extractYouTubeId === 'function' ? extractYouTubeId(introUrl) : null;
@@ -8056,20 +5097,20 @@
             if (ytId) {
                 html += `
                     <div style="background: linear-gradient(135deg, rgba(156,39,176,0.2), rgba(103,58,183,0.2)); border: 1px solid rgba(156,39,176,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">🎬 Tanıtım Videosu</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">ğŸ¬ TanÄ±tÄ±m Videosu</div>
                         <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 12px;">
                             <iframe src="https://www.youtube.com/embed/${ytId}?rel=0&autoplay=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="position: absolute; top:0; left:0; width:100%; height:100%;"></iframe>
                         </div>
                     </div>
                 `;
             } else {
-                // Varsayılan: doğrudan video dosyası (mp4 vb.)
+                // VarsayÄ±lan: doÄŸrudan video dosyasÄ± (mp4 vb.)
                 html += `
                     <div style="background: linear-gradient(135deg, rgba(156,39,176,0.2), rgba(103,58,183,0.2)); border: 1px solid rgba(156,39,176,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
-                        <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">🎬 Tanıtım Videosu</div>
+                        <div style="font-size: 16px; font-weight: bold; color: #E040FB; margin-bottom: 10px;">ğŸ¬ TanÄ±tÄ±m Videosu</div>
                         <video controls style="width: 100%; border-radius: 12px; max-height: 200px;">
                             <source src="${introUrl}" type="video/mp4">
-                            Tarayıcınız video oynatmayı desteklemiyor.
+                            TarayÄ±cÄ±nÄ±z video oynatmayÄ± desteklemiyor.
                         </video>
                     </div>
                 `;
@@ -8080,7 +5121,7 @@
         if (modalData.apkButton?.label && modalData.apkButton?.url) {
             html += `
                 <button onclick="window.open('${modalData.apkButton.url}', '_blank')" class="btn btn-primary" style="margin-bottom: 20px; width: 100%;">
-                    📥 ${modalData.apkButton.label}
+                    ğŸ“¥ ${modalData.apkButton.label}
                 </button>
             `;
         }
@@ -8089,15 +5130,15 @@
         if (modalData.compatibility?.length > 0) {
             html += `
                 <div style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.4); border-radius: 12px; padding: 12px; margin-bottom: 20px;">
-                    <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 8px;">✅ Uyumluluk</div>
+                    <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 8px;">âœ… Uyumluluk</div>
                     <div style="font-size: 12px; color: #aaa;">
-                        ${modalData.compatibility.map(c => '• ' + c).join('<br>')}
+                        ${modalData.compatibility.map(c => 'â€¢ ' + c).join('<br>')}
                     </div>
                 </div>
             `;
         }
         
-        // Rehber video bölümü (YouTube URL desteği eklenmiştir)
+        // Rehber video bÃ¶lÃ¼mÃ¼ (YouTube URL desteÄŸi eklenmiÅŸtir)
         if (modalData.guideSection?.title && modalData.guideSection?.video) {
             const guideVideoUrl = modalData.guideSection.video;
             const guideYtId = typeof extractYouTubeId === 'function' ? extractYouTubeId(guideVideoUrl) : null;
@@ -8111,27 +5152,27 @@
                     </div>
                 `;
             } else {
-                // Normal video dosyası (mp4 vb.)
+                // Normal video dosyasÄ± (mp4 vb.)
                 guideVideoHtml = `
                     <video controls style="width: 100%; border-radius: 12px; max-height: 200px;">
                         <source src="${guideVideoUrl}" type="video/mp4">
-                        Tarayıcınız video oynatmayı desteklemiyor.
+                        TarayÄ±cÄ±nÄ±z video oynatmayÄ± desteklemiyor.
                     </video>
                 `;
             }
             
             html += `
                 <div style="background: linear-gradient(135deg, rgba(255,152,0,0.2), rgba(244,67,54,0.2)); border: 1px solid rgba(255,152,0,0.4); border-radius: 15px; padding: 15px; margin-bottom: 20px;">
-                    <div style="font-size: 16px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">🔐 ${modalData.guideSection.title}</div>
+                    <div style="font-size: 16px; font-weight: bold; color: #FF9800; margin-bottom: 10px;">ğŸ” ${modalData.guideSection.title}</div>
                     ${modalData.guideSection.description ? `<div style="font-size: 12px; color: #ffcc80; margin-bottom: 10px;">${modalData.guideSection.description}</div>` : ''}
                     ${guideVideoHtml}
                 </div>
             `;
         }
         
-        // Kurulum adımları
+        // Kurulum adÄ±mlarÄ±
         if (modalData.steps?.length > 0) {
-            html += `<div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 15px;">📋 Kurulum Adımları</div>`;
+            html += `<div style="font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 15px;">ğŸ“‹ Kurulum AdÄ±mlarÄ±</div>`;
             
             const colors = [
                 { bg: 'rgba(33,150,243,0.1)', border: 'rgba(33,150,243,0.3)', text: '#2196F3', gradient: 'linear-gradient(135deg, #2196F3, #1976D2)' },
@@ -8158,23 +5199,23 @@
             });
         }
         
-        // Uyarılar
+        // UyarÄ±lar
         if (modalData.warnings?.length > 0) {
             html += `
                 <div style="background: rgba(244,67,54,0.15); border: 1px solid rgba(244,67,54,0.4); border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                    <div style="font-size: 14px; font-weight: bold; color: #f44336; margin-bottom: 8px;">⚠️ Önemli Uyarılar</div>
+                    <div style="font-size: 14px; font-weight: bold; color: #f44336; margin-bottom: 8px;">âš ï¸ Ã–nemli UyarÄ±lar</div>
                     <div style="font-size: 12px; color: #ffcdd2;">
-                        ${modalData.warnings.map(w => '• ' + w).join('<br>')}
+                        ${modalData.warnings.map(w => 'â€¢ ' + w).join('<br>')}
                     </div>
                 </div>
             `;
         }
         
-        // Başarı mesajı
+        // BaÅŸarÄ± mesajÄ±
         if (modalData.successMessage) {
             html += `
                 <div style="background: linear-gradient(135deg, rgba(76,175,80,0.2), rgba(139,195,74,0.2)); border: 1px solid rgba(76,175,80,0.5); border-radius: 12px; padding: 15px; text-align: center;">
-                    <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                    <div style="font-size: 32px; margin-bottom: 8px;">âœ…</div>
                     <div style="font-size: 16px; font-weight: bold; color: #4CAF50; margin-bottom: 5px;">${modalData.successMessage.title}</div>
                     <div style="font-size: 12px; color: #aaa;">${modalData.successMessage.description || ''}</div>
                 </div>
@@ -8186,7 +5227,7 @@
     }
     // ============ KURULUM MODALLARI SONU ============
     
-    // Admin: Ödeme ayarlarını yükle
+    // Admin: Ã–deme ayarlarÄ±nÄ± yÃ¼kle
     async function loadPaymentSettingsAdmin() {
         if (!isAdmin()) return;
         
@@ -8205,29 +5246,29 @@
                 if (data.pushServer) {
                     document.getElementById('pushServerUrl').value = data.pushServer.url || 'https://push-server-psi.vercel.app';
                     document.getElementById('pushServerApiKey').value = data.pushServer.apiKey || 'thebestml_push_secret_2024';
-                    // Global değişkenleri güncelle - SADECE geçerli URL varsa
+                    // Global deÄŸiÅŸkenleri gÃ¼ncelle - SADECE geÃ§erli URL varsa
                     if (data.pushServer.url && data.pushServer.url.includes('push-server-psi')) {
                         PUSH_SERVER.url = data.pushServer.url;
                         PUSH_SERVER.apiKey = data.pushServer.apiKey || PUSH_SERVER.apiKey;
                     }
                 }
             } else {
-                // Varsayılan değerlerle doldur
+                // VarsayÄ±lan deÄŸerlerle doldur
                 document.getElementById('paymentBankName').value = paymentSettings.bankInfo.name;
                 document.getElementById('paymentBankBank').value = paymentSettings.bankInfo.bank;
                 document.getElementById('paymentBankIban').value = paymentSettings.bankInfo.iban;
                 document.getElementById('paymentShopierUrl').value = paymentSettings.shopier?.storeUrl || 'https://www.shopier.com/CheatsStore';
             }
-            showToast('✅ Ayarlar yüklendi');
+            showToast('âœ… Ayarlar yÃ¼klendi');
         } catch(e) {
-            console.error('Ayarlar yüklenemedi:', e);
-            showToast('❌ Yüklenemedi: ' + e.message);
+            console.error('Ayarlar yÃ¼klenemedi:', e);
+            showToast('âŒ YÃ¼klenemedi: ' + e.message);
         }
     }
     
-    // Admin: Ödeme ayarlarını kaydet (SADECE KURUCU)
+    // Admin: Ã–deme ayarlarÄ±nÄ± kaydet (SADECE KURUCU)
     async function savePaymentSettings() {
-        if (!requirePermission('payments', 'ödeme ayarlarını değiştirmek')) return;
+        if (!requirePermission('payments', 'Ã¶deme ayarlarÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         const name = document.getElementById('paymentBankName').value.trim();
         const bank = document.getElementById('paymentBankBank').value.trim();
@@ -8237,7 +5278,7 @@
         const pushApiKey = document.getElementById('pushServerApiKey').value.trim();
         
         if (!name || !bank || !iban) {
-            showToast('❌ Banka bilgilerini doldurun');
+            showToast('âŒ Banka bilgilerini doldurun');
             return;
         }
         
@@ -8264,22 +5305,22 @@
                 updatedBy: currentUser.email
             }, { merge: true });
             
-            // Local değişkenleri güncelle
+            // Local deÄŸiÅŸkenleri gÃ¼ncelle
             paymentSettings.bankInfo = { name, bank, iban, ibanClean };
             paymentSettings.shopier.storeUrl = shopierUrl || 'https://www.shopier.com/CheatsStore';
             
-            // Push server ayarlarını güncelle
+            // Push server ayarlarÄ±nÄ± gÃ¼ncelle
             PUSH_SERVER.url = pushUrl;
             PUSH_SERVER.apiKey = pushApiKey;
             
-            showToast('✅ Ayarlar kaydedildi!');
+            showToast('âœ… Ayarlar kaydedildi!');
         } catch(e) {
-            console.error('Ödeme ayarları kaydedilemedi:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Ã–deme ayarlarÄ± kaydedilemedi:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Admin: Bildirim gönder
+    // Admin: Bildirim gÃ¶nder
     function updateNotifTarget() {
         const targetType = document.getElementById('notifTargetType').value;
         const emailDiv = document.getElementById('notifUserEmailDiv');
@@ -8287,7 +5328,7 @@
     }
     
     async function sendNotification() {
-        if (!requirePermission('notifications', 'bildirim göndermek')) return;
+        if (!requirePermission('notifications', 'bildirim gÃ¶ndermek')) return;
         
         const targetType = document.getElementById('notifTargetType').value;
         const userEmail = document.getElementById('notifUserEmail').value.trim().toLowerCase();
@@ -8295,31 +5336,31 @@
         const message = document.getElementById('notifMessage').value.trim();
         const type = document.getElementById('notifType').value;
         
-        if (!title) { showToast('❌ Başlık girin'); return; }
-        if (!message) { showToast('❌ Mesaj girin'); return; }
-        if (targetType === 'user' && !userEmail) { showToast('❌ E-posta girin'); return; }
+        if (!title) { showToast('âŒ BaÅŸlÄ±k girin'); return; }
+        if (!message) { showToast('âŒ Mesaj girin'); return; }
+        if (targetType === 'user' && !userEmail) { showToast('âŒ E-posta girin'); return; }
 
-        // FCM ONLY: sadece push gönder, Firestore/app-içi/native bildirim üretme
+        // FCM ONLY: sadece push gÃ¶nder, Firestore/app-iÃ§i/native bildirim Ã¼retme
         if (type === 'fcm') {
             try {
                 if (targetType === 'all') {
                     await sendPushToAll(title, message, { type: 'info' });
-                    showToast('✅ FCM push tüm kullanıcılara gönderildi!');
+                    showToast('âœ… FCM push tÃ¼m kullanÄ±cÄ±lara gÃ¶nderildi!');
                 } else {
                     const userDocs = await db.collection('users').where('email', '==', userEmail).get();
                     if (userDocs.empty) {
-                        showToast('❌ Kullanıcı bulunamadı');
+                        showToast('âŒ KullanÄ±cÄ± bulunamadÄ±');
                         return;
                     }
 
                     const userData = userDocs.docs[0].data();
                     if (!userData || !userData.fcmToken) {
-                        showToast('❌ Kullanıcının FCM token\'ı yok');
+                        showToast('âŒ KullanÄ±cÄ±nÄ±n FCM token\'Ä± yok');
                         return;
                     }
 
                     await sendPushNotification(userData.fcmToken, title, message, { type: 'info' });
-                    showToast('✅ FCM push kullanıcıya gönderildi!');
+                    showToast('âœ… FCM push kullanÄ±cÄ±ya gÃ¶nderildi!');
                 }
 
                 // Formu temizle
@@ -8328,18 +5369,18 @@
                 document.getElementById('notifUserEmail').value = '';
                 return;
             } catch (e) {
-                console.error('❌ FCM push gönderme hatası:', e);
-                showToast('❌ Hata: ' + e.message);
+                console.error('âŒ FCM push gÃ¶nderme hatasÄ±:', e);
+                showToast('âŒ Hata: ' + e.message);
                 return;
             }
         }
         
         try {
-            // Target değerini belirle (email normalize edildi)
+            // Target deÄŸerini belirle (email normalize edildi)
             const targetValue = targetType === 'all' ? 'all' : userEmail;
-            console.log('📤 Bildirim gönderiliyor...', { targetType, targetValue, title, message, type });
+            console.log('ğŸ“¤ Bildirim gÃ¶nderiliyor...', { targetType, targetValue, title, message, type });
             
-            // notifiedAt ekleyerek realtime dinleyicinin yakalamasını sağla
+            // notifiedAt ekleyerek realtime dinleyicinin yakalamasÄ±nÄ± saÄŸla
             const docRef = await db.collection('notifications').add({
                 targetType: targetValue,
                 targetEmail: targetType === 'user' ? userEmail : null,
@@ -8349,33 +5390,33 @@
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: currentUser.email,
                 read: false,
-                notifiedAt: new Date().toISOString() // Realtime bildirim için
+                notifiedAt: new Date().toISOString() // Realtime bildirim iÃ§in
             });
             
-            console.log('✅ Bildirim Firestore\'a kaydedildi:', docRef.id, 'Hedef:', targetValue);
+            console.log('âœ… Bildirim Firestore\'a kaydedildi:', docRef.id, 'Hedef:', targetValue);
             
-            // GERÇEK PUSH NOTIFICATION GÖNDER
+            // GERÃ‡EK PUSH NOTIFICATION GÃ–NDER
             if (targetType === 'all') {
-                // Tüm kullanıcılara push bildirim (topic)
+                // TÃ¼m kullanÄ±cÄ±lara push bildirim (topic)
                 await sendPushToAll(title, message, { type: type });
-                showToast('✅ Bildirim tüm kullanıcılara gönderildi!');
+                showToast('âœ… Bildirim tÃ¼m kullanÄ±cÄ±lara gÃ¶nderildi!');
             } else {
-                // Belirli kullanıcıya push bildirim
+                // Belirli kullanÄ±cÄ±ya push bildirim
                 const userDocs = await db.collection('users').where('email', '==', userEmail).get();
                 if (!userDocs.empty) {
                     const userData = userDocs.docs[0].data();
                     if (userData.fcmToken) {
                         await sendPushNotification(userData.fcmToken, title, message, { type: type });
-                        showToast('✅ Push bildirim gönderildi!');
+                        showToast('âœ… Push bildirim gÃ¶nderildi!');
                     } else {
-                        showToast('⚠️ Kullanıcının FCM token\'ı yok, sadece uygulama içi bildirim gönderildi');
+                        showToast('âš ï¸ KullanÄ±cÄ±nÄ±n FCM token\'Ä± yok, sadece uygulama iÃ§i bildirim gÃ¶nderildi');
                     }
                 } else {
-                    showToast('⚠️ Kullanıcı bulunamadı, sadece Firestore\'a kaydedildi');
+                    showToast('âš ï¸ KullanÄ±cÄ± bulunamadÄ±, sadece Firestore\'a kaydedildi');
                 }
             }
             
-            // Admin kendisi için de MERKEZİ BİLDİRİM göster
+            // Admin kendisi iÃ§in de MERKEZÄ° BÄ°LDÄ°RÄ°M gÃ¶ster
             await showFullNotification({
                 title: title,
                 message: message,
@@ -8392,26 +5433,26 @@
             document.getElementById('notifUserEmail').value = '';
             
         } catch(e) {
-            console.error('❌ Bildirim gönderme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('âŒ Bildirim gÃ¶nderme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Sipariş onaylandığında otomatik bildirim gönder (MERKEZİ SİSTEM KULLANIR)
+    // SipariÅŸ onaylandÄ±ÄŸÄ±nda otomatik bildirim gÃ¶nder (MERKEZÄ° SÄ°STEM KULLANIR)
     async function sendOrderApprovalNotification(userEmail, keyCode, packageName) {
         try {
-            console.log('📩 ========== SİPARİŞ ONAY BİLDİRİMİ ==========');
-            console.log('📩 Hedef email:', userEmail);
-            console.log('📩 Paket:', packageName);
-            console.log('📩 Key:', keyCode);
+            console.log('ğŸ“© ========== SÄ°PARÄ°Å ONAY BÄ°LDÄ°RÄ°MÄ° ==========');
+            console.log('ğŸ“© Hedef email:', userEmail);
+            console.log('ğŸ“© Paket:', packageName);
+            console.log('ğŸ“© Key:', keyCode);
             
-            // Email'i küçük harfe çevir (eşleşme sorunu önleme)
+            // Email'i kÃ¼Ã§Ã¼k harfe Ã§evir (eÅŸleÅŸme sorunu Ã¶nleme)
             const normalizedEmail = userEmail.toLowerCase().trim();
             
             const notifData = {
                 targetType: normalizedEmail,
                 targetEmail: normalizedEmail,  // Yedek alan
-                title: '🎉 Siparişiniz Onaylandı!',
+                title: 'ğŸ‰ SipariÅŸiniz OnaylandÄ±!',
                 message: `${packageName} paketiniz aktif edildi. Key kodunuz: ${keyCode}`,
                 type: 'order',
                 keyCode: keyCode,
@@ -8419,50 +5460,50 @@
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                 createdBy: currentUser?.email || 'system',
                 read: false,
-                notifiedAt: new Date().toISOString() // Realtime bildirim için zaman damgası
+                notifiedAt: new Date().toISOString() // Realtime bildirim iÃ§in zaman damgasÄ±
             };
             
             const notifRef = await db.collection('notifications').add(notifData);
-            console.log('✅ Firestore bildirimi kaydedildi! ID:', notifRef.id);
+            console.log('âœ… Firestore bildirimi kaydedildi! ID:', notifRef.id);
             
-            // GERÇEK PUSH NOTIFICATION GÖNDER (Vercel sunucu üzerinden)
+            // GERÃ‡EK PUSH NOTIFICATION GÃ–NDER (Vercel sunucu Ã¼zerinden)
             try {
-                console.log('🔍 Kullanıcı FCM token aranıyor:', normalizedEmail);
+                console.log('ğŸ” KullanÄ±cÄ± FCM token aranÄ±yor:', normalizedEmail);
                 const userDocs = await db.collection('users').where('email', '==', normalizedEmail).get();
-                console.log('🔍 Bulunan kullanıcı sayısı:', userDocs.size);
+                console.log('ğŸ” Bulunan kullanÄ±cÄ± sayÄ±sÄ±:', userDocs.size);
                 
                 if (!userDocs.empty) {
                     const userData = userDocs.docs[0].data();
-                    console.log('🔍 Kullanıcı FCM token:', userData.fcmToken ? 'VAR' : 'YOK');
+                    console.log('ğŸ” KullanÄ±cÄ± FCM token:', userData.fcmToken ? 'VAR' : 'YOK');
                     
                     if (userData.fcmToken) {
-                        console.log('📤 Push server\'a istek gönderiliyor...');
-                        console.log('📤 URL:', PUSH_SERVER.url);
+                        console.log('ğŸ“¤ Push server\'a istek gÃ¶nderiliyor...');
+                        console.log('ğŸ“¤ URL:', PUSH_SERVER.url);
                         
                         const pushResult = await sendPushNotification(
                             userData.fcmToken,
-                            '🎉 Siparişiniz Onaylandı!',
+                            'ğŸ‰ SipariÅŸiniz OnaylandÄ±!',
                             `${packageName} paketiniz aktif edildi. Key: ${keyCode}`,
                             { type: 'order_approved', keyCode: keyCode }
                         );
-                        console.log('📱 Push notification sonucu:', pushResult);
+                        console.log('ğŸ“± Push notification sonucu:', pushResult);
                     } else {
-                        console.log('⚠️ Kullanıcının FCM token\'ı yok!');
-                        showToast('⚠️ Kullanıcının bildirim token\'ı yok, uygulama içi bildirim gönderildi');
+                        console.log('âš ï¸ KullanÄ±cÄ±nÄ±n FCM token\'Ä± yok!');
+                        showToast('âš ï¸ KullanÄ±cÄ±nÄ±n bildirim token\'Ä± yok, uygulama iÃ§i bildirim gÃ¶nderildi');
                     }
                 } else {
-                    console.log('⚠️ Kullanıcı Firestore\'da bulunamadı:', normalizedEmail);
+                    console.log('âš ï¸ KullanÄ±cÄ± Firestore\'da bulunamadÄ±:', normalizedEmail);
                 }
             } catch(pushErr) {
-                console.error('❌ Push bildirim hatası:', pushErr);
+                console.error('âŒ Push bildirim hatasÄ±:', pushErr);
             }
             
-            // Bu kullanıcı şu an online mı kontrol et - Online ise MERKEZİ BİLDİRİM gönder
+            // Bu kullanÄ±cÄ± ÅŸu an online mÄ± kontrol et - Online ise MERKEZÄ° BÄ°LDÄ°RÄ°M gÃ¶nder
             if (currentUser && currentUser.email.toLowerCase() === normalizedEmail) {
-                console.log('📢 Kullanıcı online, MERKEZİ BİLDİRİM gönderiliyor...');
+                console.log('ğŸ“¢ KullanÄ±cÄ± online, MERKEZÄ° BÄ°LDÄ°RÄ°M gÃ¶nderiliyor...');
                 
                 await showFullNotification({
-                    title: '🎉 Siparişiniz Onaylandı!',
+                    title: 'ğŸ‰ SipariÅŸiniz OnaylandÄ±!',
                     message: `${packageName} paketiniz aktif edildi!`,
                     type: 'order',
                     keyCode: keyCode,
@@ -8474,14 +5515,14 @@
                 });
             }
             
-            showToast('✅ Kullanıcıya bildirim gönderildi');
+            showToast('âœ… KullanÄ±cÄ±ya bildirim gÃ¶nderildi');
         } catch(e) {
-            console.error('❌ Bildirim gönderme hatası:', e);
-            showToast('⚠️ Bildirim gönderilemedi: ' + e.message);
+            console.error('âŒ Bildirim gÃ¶nderme hatasÄ±:', e);
+            showToast('âš ï¸ Bildirim gÃ¶nderilemedi: ' + e.message);
         }
     }
     
-    // Sipariş dinleyiciyi durdur
+    // SipariÅŸ dinleyiciyi durdur
     function stopOrderListener() {
         if (orderListener) {
             orderListener();
@@ -8492,7 +5533,7 @@
         stopChatListener();
     }
     
-    // ==================== CHAT SİSTEMİ ====================
+    // ==================== CHAT SÄ°STEMÄ° ====================
     let chatListener = null;
     let userChatMessages = [];
     let currentAdminChatId = null;
@@ -8502,7 +5543,7 @@
     let supportUserPollInterval = null;
     let supportAdminPollInterval = null;
 
-    // Destek: durum (açık/kapalı) + görüldü
+    // Destek: durum (aÃ§Ä±k/kapalÄ±) + gÃ¶rÃ¼ldÃ¼
     let supportPresenceInterval = null;
     let lastUserSupportSeenUpdateAt = 0;
     let lastAdminSupportSeenUpdateAt = 0;
@@ -8568,8 +5609,8 @@
     }
 
     function startSupportPresenceInterval() {
-        // Firestore kota tüketimini azaltmak için periyodik presence yazımı kapalı.
-        // Presence sadece aç/kapat ve gerçek aktivite anlarında güncellenir.
+        // Firestore kota tÃ¼ketimini azaltmak iÃ§in periyodik presence yazÄ±mÄ± kapalÄ±.
+        // Presence sadece aÃ§/kapat ve gerÃ§ek aktivite anlarÄ±nda gÃ¼ncellenir.
         stopSupportPresenceInterval();
     }
 
@@ -8634,14 +5675,14 @@
     }
 
     async function claimSupportChat(chatId) {
-        if (!requirePermission('support', 'destek mesajını devralmak')) return;
+        if (!requirePermission('support', 'destek mesajÄ±nÄ± devralmak')) return;
         if (!currentUser) return;
 
         try {
             if (isSupportWorkerEnabled()) {
                 const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/claim', { method: 'POST', body: {} });
                 const didClaim = !!(res && res.claimed);
-                showToast(didClaim ? '✅ Sohbet devralındı' : '⚠️ Sohbet zaten devralınmış');
+                showToast(didClaim ? 'âœ… Sohbet devralÄ±ndÄ±' : 'âš ï¸ Sohbet zaten devralÄ±nmÄ±ÅŸ');
                 if (didClaim) {
                     try { await incrementAdminStatField('claimedChatsCount', 1); } catch (e) {}
                 }
@@ -8654,7 +5695,7 @@
 
             await db.runTransaction(async (tx) => {
                 const snap = await tx.get(ref);
-                if (!snap.exists) throw new Error('Sohbet bulunamadı');
+                if (!snap.exists) throw new Error('Sohbet bulunamadÄ±');
                 const data = snap.data() || {};
 
                 // Already claimed
@@ -8671,22 +5712,22 @@
                 didClaim = true;
             });
 
-            showToast(didClaim ? '✅ Sohbet devralındı' : '⚠️ Sohbet zaten devralınmış');
+            showToast(didClaim ? 'âœ… Sohbet devralÄ±ndÄ±' : 'âš ï¸ Sohbet zaten devralÄ±nmÄ±ÅŸ');
             if (didClaim) {
                 try { await incrementAdminStatField('claimedChatsCount', 1); } catch (e) {}
             }
             loadAdminChats();
         } catch (e) {
-            showToast('❌ Devralma hatası: ' + (e?.message || e));
+            showToast('âŒ Devralma hatasÄ±: ' + (e?.message || e));
         }
     }
     
-    // Kullanıcı: Chat dinleyici başlat
+    // KullanÄ±cÄ±: Chat dinleyici baÅŸlat
     function startChatListener() {
         if (!currentUser) return;
         stopChatListener();
         
-        console.log('💬 Chat dinleyici başlatılıyor... UID:', currentUser.uid);
+        console.log('ğŸ’¬ Chat dinleyici baÅŸlatÄ±lÄ±yor... UID:', currentUser.uid);
 
         if (isSupportWorkerEnabled()) {
             const poll = async () => {
@@ -8719,12 +5760,12 @@
                     if (userChatMessages.length > oldCount && ticket && (ticket.unreadUser || 0) > 0) {
                         const lastMsg = userChatMessages[userChatMessages.length - 1];
                         if (lastMsg && lastMsg.sender === 'admin' && !isModalOpen) {
-                            showToast('💬 Yeni destek mesajı!');
-                            sendNativeNotification('💬 Yeni Destek Mesajı', lastMsg.message || 'Destek ekibinden yeni mesaj');
+                            showToast('ğŸ’¬ Yeni destek mesajÄ±!');
+                            sendNativeNotification('ğŸ’¬ Yeni Destek MesajÄ±', lastMsg.message || 'Destek ekibinden yeni mesaj');
                         }
                     }
                 } catch (e) {
-                    console.error('Chat polling hatası:', e);
+                    console.error('Chat polling hatasÄ±:', e);
                 }
             };
 
@@ -8735,7 +5776,7 @@
         
         chatListener = db.collection('chats').doc(currentUser.uid)
             .onSnapshot((doc) => {
-                console.log('💬 Chat güncelleme alındı:', doc.exists, 'Zaman:', new Date().toLocaleTimeString());
+                console.log('ğŸ’¬ Chat gÃ¼ncelleme alÄ±ndÄ±:', doc.exists, 'Zaman:', new Date().toLocaleTimeString());
                 if (doc.exists) {
                     const data = doc.data();
                     const oldCount = userChatMessages.length;
@@ -8745,25 +5786,25 @@
                     
                     updateChatBadge(data.unreadUser || 0);
 
-                    // Görüldü timestamps
+                    // GÃ¶rÃ¼ldÃ¼ timestamps
                     userChatLastAdminSeenAtMs = getFirestoreTimeMs(data.lastAdminSeenAt);
                     userChatLastUserSeenAtMs = getFirestoreTimeMs(data.lastUserSeenAt);
                     
-                    console.log('💬 Mesaj sayısı:', oldCount, '->', userChatMessages.length);
-                    console.log('💬 Değişiklik var mı:', oldMessages !== newMessages);
+                    console.log('ğŸ’¬ Mesaj sayÄ±sÄ±:', oldCount, '->', userChatMessages.length);
+                    console.log('ğŸ’¬ DeÄŸiÅŸiklik var mÄ±:', oldMessages !== newMessages);
                     
-                    // Modal açıksa MUTLAKA güncelle
+                    // Modal aÃ§Ä±ksa MUTLAKA gÃ¼ncelle
                     const modal = document.getElementById('userChatModal');
                     const isModalOpen = modal && modal.classList.contains('show');
                     
-                    console.log('💬 Modal açık mı:', isModalOpen);
+                    console.log('ğŸ’¬ Modal aÃ§Ä±k mÄ±:', isModalOpen);
                     
                     if (isModalOpen) {
-                        console.log('💬 Modal açık, mesajlar yenileniyor...');
+                        console.log('ğŸ’¬ Modal aÃ§Ä±k, mesajlar yenileniyor...');
                         renderUserChatMessages();
                         scrollChatToBottom();
 
-                        // Modal açıkken: gelen admin mesajlarını görüldü olarak işaretle
+                        // Modal aÃ§Ä±kken: gelen admin mesajlarÄ±nÄ± gÃ¶rÃ¼ldÃ¼ olarak iÅŸaretle
                         const lastMsg = userChatMessages[userChatMessages.length - 1];
                         if ((data.unreadUser || 0) > 0 || (lastMsg && lastMsg.sender === 'admin')) {
                             markUserSupportSeen();
@@ -8771,16 +5812,16 @@
                         }
                     }
                     
-                    // Sidebar badge'ı de güncelle
+                    // Sidebar badge'Ä± de gÃ¼ncelle
                     updateSidebarBadges();
                     
-                    // Yeni mesaj geldiğinde ve modal kapalıysa toast göster
+                    // Yeni mesaj geldiÄŸinde ve modal kapalÄ±ysa toast gÃ¶ster
                     if (userChatMessages.length > oldCount && data.unreadUser > 0) {
                         const lastMsg = userChatMessages[userChatMessages.length - 1];
                         if (lastMsg && lastMsg.sender === 'admin' && !isModalOpen) {
-                            showToast('💬 Yeni destek mesajı!');
-                            // Native bildirim de gönder
-                            sendNativeNotification('💬 Yeni Destek Mesajı', lastMsg.message || 'Destek ekibinden yeni mesaj');
+                            showToast('ğŸ’¬ Yeni destek mesajÄ±!');
+                            // Native bildirim de gÃ¶nder
+                            sendNativeNotification('ğŸ’¬ Yeni Destek MesajÄ±', lastMsg.message || 'Destek ekibinden yeni mesaj');
                         }
                     }
                 } else {
@@ -8788,16 +5829,16 @@
                     updateChatBadge(0);
                 }
             }, (error) => {
-                console.error('Chat dinleyici hatası:', error);
+                console.error('Chat dinleyici hatasÄ±:', error);
                 // Hata durumunda 5 saniye sonra tekrar dene
                 setTimeout(() => {
-                    console.log('💬 Chat dinleyici yeniden başlatılıyor...');
+                    console.log('ğŸ’¬ Chat dinleyici yeniden baÅŸlatÄ±lÄ±yor...');
                     startChatListener();
                 }, 5000);
             });
     }
     
-    // Chat'i en alta kaydır
+    // Chat'i en alta kaydÄ±r
     function scrollChatToBottom() {
         setTimeout(() => {
             const container = document.getElementById('userChatMessages');
@@ -8827,7 +5868,7 @@
         }
     }
     
-    // Chat badge güncelle
+    // Chat badge gÃ¼ncelle
     function updateChatBadge(count) {
         const badge = document.getElementById('chatBadge');
         if (!badge) return;
@@ -8840,28 +5881,28 @@
         }
     }
     
-    // Kullanıcı: Chat modalını aç
+    // KullanÄ±cÄ±: Chat modalÄ±nÄ± aÃ§
     let chatRefreshInterval = null;
     
     async function openUserChatModal() {
         if (!currentUser) {
-            showToast('⚠️ Giriş yapmanız gerekiyor');
+            showToast('âš ï¸ GiriÅŸ yapmanÄ±z gerekiyor');
             return;
         }
 
-        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Desteğe yazmadan önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'DesteÄŸe yazmadan Ã¶nce lÃ¼tfen ban riski bilgilendirmesini onaylayÄ±n.' });
         if (!canProceed) return;
         
-        // Modalı aç
+        // ModalÄ± aÃ§
         openModal('userChatModal');
 
-        // Destek açık: presence + heartbeat
+        // Destek aÃ§Ä±k: presence + heartbeat
         setUserSupportPresence(true);
         
-        // Mesajları Firestore'dan taze olarak çek
+        // MesajlarÄ± Firestore'dan taze olarak Ã§ek
         await refreshUserChatMessages();
         
-        // Okunmamış mesajları sıfırla + görüldü
+        // OkunmamÄ±ÅŸ mesajlarÄ± sÄ±fÄ±rla + gÃ¶rÃ¼ldÃ¼
         try {
             await markUserSupportSeen(true);
             updateChatBadge(0);
@@ -8873,35 +5914,35 @@
             document.getElementById('userChatInput').focus();
         }, 300);
         
-        // En alta kaydır
+        // En alta kaydÄ±r
         scrollChatToBottom('userChatMessages');
     }
 
     // Destek FAQ (S.S.S)
     const SUPPORT_FAQ_ITEMS = [
         {
-            q: 'Key kodu nasıl girilir?',
-            a: 'Profil menüsünden “Key Kodu Gir” alanına girin ve size verilen key kodunu yazıp onaylayın. Key aktif olunca “Key Durumu” kartında görünür.'
+            q: 'Key kodu nasÄ±l girilir?',
+            a: 'Profil menÃ¼sÃ¼nden â€œKey Kodu Girâ€ alanÄ±na girin ve size verilen key kodunu yazÄ±p onaylayÄ±n. Key aktif olunca â€œKey Durumuâ€ kartÄ±nda gÃ¶rÃ¼nÃ¼r.'
         },
         {
-            q: 'Siparişim ne zaman onaylanır?',
-            a: 'Siparişler “Siparişlerim” ekranında bekleyen/onaylanan olarak görünür. Ödeme kontrolü sonrası onaylanır; yoğunluk durumuna göre süre değişebilir.'
+            q: 'SipariÅŸim ne zaman onaylanÄ±r?',
+            a: 'SipariÅŸler â€œSipariÅŸlerimâ€ ekranÄ±nda bekleyen/onaylanan olarak gÃ¶rÃ¼nÃ¼r. Ã–deme kontrolÃ¼ sonrasÄ± onaylanÄ±r; yoÄŸunluk durumuna gÃ¶re sÃ¼re deÄŸiÅŸebilir.'
         },
         {
-            q: 'Bildirim gelmiyor, ne yapmalıyım?',
-            a: 'Telefonunuzda uygulama bildirim izninin açık olduğundan emin olun. Bazı cihazlarda pil tasarrufu/arka plan kısıtlamaları bildirimleri engelleyebilir.'
+            q: 'Bildirim gelmiyor, ne yapmalÄ±yÄ±m?',
+            a: 'Telefonunuzda uygulama bildirim izninin aÃ§Ä±k olduÄŸundan emin olun. BazÄ± cihazlarda pil tasarrufu/arka plan kÄ±sÄ±tlamalarÄ± bildirimleri engelleyebilir.'
         },
         {
             q: 'Kurulum rehberlerini nereden bulurum?',
-            a: 'Oyun/hile detay sayfasında “Kurulum Rehberi” bölümünden ilgili rehberi açabilirsiniz.'
+            a: 'Oyun/hile detay sayfasÄ±nda â€œKurulum Rehberiâ€ bÃ¶lÃ¼mÃ¼nden ilgili rehberi aÃ§abilirsiniz.'
         },
         {
-            q: 'Destek ekibine hızlı bilgi nasıl gönderebilirim?',
-            a: 'Destek mesaj alanındaki “ℹ️ Otomatik Bilgi” butonuna basın. Cihaz/sürüm/key ve hesap bilgileri otomatik olarak mesaj alanına eklenir; ardından mesajı gönderin.'
+            q: 'Destek ekibine hÄ±zlÄ± bilgi nasÄ±l gÃ¶nderebilirim?',
+            a: 'Destek mesaj alanÄ±ndaki â€œâ„¹ï¸ Otomatik Bilgiâ€ butonuna basÄ±n. Cihaz/sÃ¼rÃ¼m/key ve hesap bilgileri otomatik olarak mesaj alanÄ±na eklenir; ardÄ±ndan mesajÄ± gÃ¶nderin.'
         },
         {
             q: 'Ban riski nedir?',
-            a: 'Uygulama içinde gösterilen “Ban Riski Bilgilendirme” metnini okuyup onayladıktan sonra satın alma/destek işlemlerine devam edebilirsiniz.'
+            a: 'Uygulama iÃ§inde gÃ¶sterilen â€œBan Riski Bilgilendirmeâ€ metnini okuyup onayladÄ±ktan sonra satÄ±n alma/destek iÅŸlemlerine devam edebilirsiniz.'
         }
     ];
 
@@ -8911,7 +5952,7 @@
 
         const items = Array.isArray(SUPPORT_FAQ_ITEMS) ? SUPPORT_FAQ_ITEMS : [];
         if (!items.length) {
-            el.innerHTML = '<div style="color:#aaa; font-size:13px;">Henüz FAQ eklenmedi.</div>';
+            el.innerHTML = '<div style="color:#aaa; font-size:13px;">HenÃ¼z FAQ eklenmedi.</div>';
             return;
         }
 
@@ -8932,24 +5973,24 @@
             renderSupportFaq();
             openModal('supportFaqModal');
         } catch (e) {
-            console.log('FAQ modal açma hatası:', e?.message || e);
+            console.log('FAQ modal aÃ§ma hatasÄ±:', e?.message || e);
         }
     }
 
-    // Destek: Otomatik Bilgi (teşhis metni)
+    // Destek: Otomatik Bilgi (teÅŸhis metni)
     async function buildSupportAutoInfoText() {
         const lines = [];
         const now = new Date();
 
-        lines.push('📌 Otomatik Bilgi');
+        lines.push('ğŸ“Œ Otomatik Bilgi');
         lines.push('Tarih: ' + now.toLocaleString());
         try {
-            lines.push('Sürüm: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
+            lines.push('SÃ¼rÃ¼m: ' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown'));
         } catch (e) {
-            lines.push('Sürüm: unknown');
+            lines.push('SÃ¼rÃ¼m: unknown');
         }
 
-        // Kullanıcı
+        // KullanÄ±cÄ±
         try {
             if (currentUser) {
                 lines.push('UID: ' + (currentUser.uid || '-'));
@@ -9016,7 +6057,7 @@
             lines.push('FCM: -');
         }
 
-        // Key durumu (Firestore üzerinden kısa özet)
+        // Key durumu (Firestore Ã¼zerinden kÄ±sa Ã¶zet)
         try {
             if (db && currentUser && currentUser.uid) {
                 const doc = await db.collection('users').doc(currentUser.uid).get();
@@ -9042,10 +6083,10 @@
                         const nearest = active
                             .slice()
                             .sort((a, b) => a.expiresAt.getTime() - b.expiresAt.getTime())[0];
-                        lines.push('Key Bitiş: ' + nearest.expiresAt.toLocaleString());
+                        lines.push('Key BitiÅŸ: ' + nearest.expiresAt.toLocaleString());
                     }
                 } else {
-                    lines.push('Key: kullanıcı dokümanı yok');
+                    lines.push('Key: kullanÄ±cÄ± dokÃ¼manÄ± yok');
                 }
             }
         } catch (e) {
@@ -9054,7 +6095,7 @@
 
         lines.push('---');
         lines.push('Sorun:');
-        lines.push('- (kısaca yazınız)');
+        lines.push('- (kÄ±saca yazÄ±nÄ±z)');
 
         return lines.join('\n');
     }
@@ -9069,12 +6110,12 @@
             input.value = current ? (input.value + '\n\n' + infoText) : infoText;
             input.focus();
         } catch (e) {
-            showToast('❌ Otomatik bilgi alınamadı');
-            console.log('insertSupportAutoInfo hatası:', e?.message || e);
+            showToast('âŒ Otomatik bilgi alÄ±namadÄ±');
+            console.log('insertSupportAutoInfo hatasÄ±:', e?.message || e);
         }
     }
     
-    // Chat mesajlarını yenile
+    // Chat mesajlarÄ±nÄ± yenile
     async function refreshUserChatMessages(silent = false) {
         try {
             if (isSupportWorkerEnabled()) {
@@ -9093,9 +6134,9 @@
                 updateSidebarBadges();
 
                 if (!silent) {
-                    console.log('💬 Modal açıldı, mesajlar yüklendi:', userChatMessages.length);
+                    console.log('ğŸ’¬ Modal aÃ§Ä±ldÄ±, mesajlar yÃ¼klendi:', userChatMessages.length);
                 } else if (hasNewMessages) {
-                    console.log('💬 Yeni mesaj algılandı, güncelleniyor...');
+                    console.log('ğŸ’¬ Yeni mesaj algÄ±landÄ±, gÃ¼ncelleniyor...');
                 }
 
                 renderUserChatMessages();
@@ -9116,9 +6157,9 @@
                 userChatLastUserSeenAtMs = getFirestoreTimeMs(chatData.lastUserSeenAt);
                 
                 if (!silent) {
-                    console.log('💬 Modal açıldı, mesajlar yüklendi:', userChatMessages.length);
+                    console.log('ğŸ’¬ Modal aÃ§Ä±ldÄ±, mesajlar yÃ¼klendi:', userChatMessages.length);
                 } else if (hasNewMessages) {
-                    console.log('💬 Yeni mesaj algılandı, güncelleniyor...');
+                    console.log('ğŸ’¬ Yeni mesaj algÄ±landÄ±, gÃ¼ncelleniyor...');
                 }
                 
                 renderUserChatMessages();
@@ -9132,12 +6173,12 @@
             }
         } catch(e) {
             if (!silent) {
-                console.error('Mesaj yükleme hatası:', e);
+                console.error('Mesaj yÃ¼kleme hatasÄ±:', e);
             }
         }
     }
     
-    // Chat refresh interval'ı durdur
+    // Chat refresh interval'Ä± durdur
     function stopChatRefreshInterval() {
         if (chatRefreshInterval) {
             clearInterval(chatRefreshInterval);
@@ -9197,11 +6238,11 @@
         }
         const fontSize = Math.max(10, Math.round(size * 0.45));
         return `
-            <div style="width:${size}px; height:${size}px; border-radius:${radius}px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; font-weight: 700; color:#fff; font-size:${fontSize}px; flex-shrink: 0;">👤</div>
+            <div style="width:${size}px; height:${size}px; border-radius:${radius}px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); display:flex; align-items:center; justify-content:center; font-weight: 700; color:#fff; font-size:${fontSize}px; flex-shrink: 0;">ğŸ‘¤</div>
         `;
     }
 
-    // Destek sohbeti: kullanıcı profil fotoğrafını (varsa) al
+    // Destek sohbeti: kullanÄ±cÄ± profil fotoÄŸrafÄ±nÄ± (varsa) al
     function getCurrentUserSupportAvatarUrl() {
         const img = document.getElementById('toggleBtnAvatar') || document.getElementById('profileAvatarImg');
         if (!img) return '';
@@ -9210,7 +6251,7 @@
         return (src && src !== 'null' && src !== 'undefined') ? src : '';
     }
 
-    // Admin tarafı: açık olan sohbet kullanıcısının profil fotoğrafını cache'le
+    // Admin tarafÄ±: aÃ§Ä±k olan sohbet kullanÄ±cÄ±sÄ±nÄ±n profil fotoÄŸrafÄ±nÄ± cache'le
     let supportProfilePhotoCache = {};
     let supportProfilePhotoLoading = {};
     let currentAdminChatUserId = '';
@@ -9255,21 +6296,21 @@
         return currentAdminChatUserPhoto || '';
     }
     
-    // Kullanıcı: Mesajları render et
+    // KullanÄ±cÄ±: MesajlarÄ± render et
     function renderUserChatMessages() {
         const container = document.getElementById('userChatMessages');
         const agentInfo = document.getElementById('supportAgentInfo');
         
         if (userChatMessages.length === 0) {
-            // Bilgilendirme mesajı göster
+            // Bilgilendirme mesajÄ± gÃ¶ster
             container.innerHTML = `
                 <div style="text-align: center; padding: 30px;">
-                    <div style="font-size: 60px; margin-bottom: 20px;">🎧</div>
+                    <div style="font-size: 60px; margin-bottom: 20px;">ğŸ§</div>
                     <div style="background: linear-gradient(135deg, rgba(0,188,212,0.15), rgba(0,151,167,0.1)); border: 1px solid rgba(0,188,212,0.3); border-radius: 15px; padding: 20px; margin-bottom: 15px;">
-                        <div style="color: #00BCD4; font-weight: bold; font-size: 15px; margin-bottom: 10px;">🕐 En kısa zamanda bir yöneticimiz sizinle iletişime geçecek</div>
-                        <div style="color: #aaa; font-size: 13px; line-height: 1.6;">Lütfen destek almak istediğiniz konuyu detaylı bir şekilde iletin. Ortalama yanıt süresi: <strong style="color: #4CAF50;">5-15 dakika</strong></div>
+                        <div style="color: #00BCD4; font-weight: bold; font-size: 15px; margin-bottom: 10px;">ğŸ• En kÄ±sa zamanda bir yÃ¶neticimiz sizinle iletiÅŸime geÃ§ecek</div>
+                        <div style="color: #aaa; font-size: 13px; line-height: 1.6;">LÃ¼tfen destek almak istediÄŸiniz konuyu detaylÄ± bir ÅŸekilde iletin. Ortalama yanÄ±t sÃ¼resi: <strong style="color: #4CAF50;">5-15 dakika</strong></div>
                     </div>
-                    <div style="color: #666; font-size: 12px;">💡 Mesajınızı yazıp gönderin</div>
+                    <div style="color: #666; font-size: 12px;">ğŸ’¡ MesajÄ±nÄ±zÄ± yazÄ±p gÃ¶nderin</div>
                 </div>
             `;
             // Agent bilgisini gizle
@@ -9277,7 +6318,7 @@
             return;
         }
         
-        // Admin mesajı var mı kontrol et ve son admin bilgisini al
+        // Admin mesajÄ± var mÄ± kontrol et ve son admin bilgisini al
         let lastAdminMsg = null;
         userChatMessages.forEach(msg => {
             if (msg.sender === 'admin') {
@@ -9285,7 +6326,7 @@
             }
         });
         
-        // Eğer admin cevap verdiyse, rolünü göster
+        // EÄŸer admin cevap verdiyse, rolÃ¼nÃ¼ gÃ¶ster
         if (lastAdminMsg && agentInfo) {
             const role = lastAdminMsg.adminRole || 'Admin';
             const adminName = lastAdminMsg.adminName || 'Destek Ekibi';
@@ -9296,7 +6337,7 @@
                 'Support': '#4CAF50'
             };
             const roleColor = roleColors[role] || '#FFD700';
-            agentInfo.innerHTML = `<span style="color: ${roleColor};">👤 ${role}</span> • ${adminName}`;
+            agentInfo.innerHTML = `<span style="color: ${roleColor};">ğŸ‘¤ ${role}</span> â€¢ ${adminName}`;
             agentInfo.style.display = 'block';
         } else if (agentInfo) {
             agentInfo.style.display = 'none';
@@ -9323,12 +6364,12 @@
             };
             const roleColor = roleColors[role] || '#FFD700';
             const roleIcons = {
-                'Admin': '👑',
-                'Developer': '💻',
-                'Moderator': '🛡️',
-                'Support': '🎧'
+                'Admin': 'ğŸ‘‘',
+                'Developer': 'ğŸ’»',
+                'Moderator': 'ğŸ›¡ï¸',
+                'Support': 'ğŸ§'
             };
-            const roleIcon = roleIcons[role] || '👑';
+            const roleIcon = roleIcons[role] || 'ğŸ‘‘';
 
             const avatarHtml = isUser ? getSupportUserAvatarHtml(28, currentUserPhoto) : getSupportAppLogoAvatarHtml(28);
             const bubbleStyle = isUser
@@ -9341,7 +6382,7 @@
 
             const createdMs = getFirestoreTimeMs(msg.createdAt);
             const isSeen = isUser && idx === lastUserMsgIndex && userChatLastAdminSeenAtMs > 0 && createdMs > 0 && userChatLastAdminSeenAtMs >= createdMs;
-            const seenSuffix = isSeen ? ' • Görüldü' : '';
+            const seenSuffix = isSeen ? ' â€¢ GÃ¶rÃ¼ldÃ¼' : '';
 
             html += `
                 <div style="display: flex; justify-content: ${isUser ? 'flex-end' : 'flex-start'}; margin-bottom: 12px;">
@@ -9364,26 +6405,26 @@
         scrollChatToBottom('userChatMessages');
     }
     
-    // Görsel tam ekran aç
+    // GÃ¶rsel tam ekran aÃ§
     function openImageFullscreen(src) {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 20px;';
         overlay.onclick = () => overlay.remove();
         overlay.innerHTML = `
             <img src="${src}" style="max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px;">
-            <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 20px; cursor: pointer;">✕</button>
+            <button style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.2); border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%; font-size: 20px; cursor: pointer;">âœ•</button>
         `;
         document.body.appendChild(overlay);
     }
     
-    // Kullanıcı dosya önizleme
+    // KullanÄ±cÄ± dosya Ã¶nizleme
     let userPendingFile = null;
     function previewUserFile(input) {
         const file = input.files[0];
         if (!file) return;
         
         if (file.size > 5 * 1024 * 1024) {
-            showToast('❌ Dosya boyutu 5MB\'dan küçük olmalı');
+            showToast('âŒ Dosya boyutu 5MB\'dan kÃ¼Ã§Ã¼k olmalÄ±');
             input.value = '';
             return;
         }
@@ -9405,11 +6446,11 @@
         document.getElementById('userFilePreview').style.display = 'none';
     }
     
-    // Kullanıcı sohbeti temizle
+    // KullanÄ±cÄ± sohbeti temizle
     async function clearUserChat() {
         if (!currentUser) return;
         
-        if (!confirm('Tüm mesajlar silinecek. Emin misiniz?')) return;
+        if (!confirm('TÃ¼m mesajlar silinecek. Emin misiniz?')) return;
         
         try {
             if (isSupportWorkerEnabled()) {
@@ -9419,25 +6460,25 @@
             }
             userChatMessages = [];
             renderUserChatMessages();
-            showToast('✅ Sohbet temizlendi');
+            showToast('âœ… Sohbet temizlendi');
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Kullanıcı: Mesaj gönder
+    // KullanÄ±cÄ±: Mesaj gÃ¶nder
     async function sendUserMessage() {
         if (!currentUser) {
-            showToast('⚠️ Giriş yapmanız gerekiyor');
+            showToast('âš ï¸ GiriÅŸ yapmanÄ±z gerekiyor');
             return;
         }
         
         const input = document.getElementById('userChatInput');
         const message = input.value.trim();
         
-        // Mesaj veya dosya olmalı
+        // Mesaj veya dosya olmalÄ±
         if (!message && !userPendingFile) {
-            showToast('⚠️ Mesaj yazın veya dosya seçin');
+            showToast('âš ï¸ Mesaj yazÄ±n veya dosya seÃ§in');
             return;
         }
         
@@ -9445,24 +6486,24 @@
         input.value = '';
         input.disabled = true;
         
-        // Dosya varsa base64'e çevir
+        // Dosya varsa base64'e Ã§evir
         let imageData = null;
         if (userPendingFile) {
             try {
                 imageData = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = () => reject(new Error('Dosya okunamadı'));
+                    reader.onerror = () => reject(new Error('Dosya okunamadÄ±'));
                     reader.readAsDataURL(userPendingFile);
                 });
             } catch(e) {
-                showToast('❌ Dosya yüklenemedi');
+                showToast('âŒ Dosya yÃ¼klenemedi');
                 input.disabled = false;
                 return;
             }
         }
         
-        // Önce UI'da göster (optimistic update)
+        // Ã–nce UI'da gÃ¶ster (optimistic update)
         const now = new Date();
         const newMessage = {
             sender: 'user',
@@ -9474,10 +6515,10 @@
         
         userChatMessages.push(newMessage);
         renderUserChatMessages();
-        clearUserFile(); // Dosya önizlemeyi temizle
+        clearUserFile(); // Dosya Ã¶nizlemeyi temizle
         
         try {
-            const lastMsgPreview = msgText || '📷 Görsel';
+            const lastMsgPreview = msgText || 'ğŸ“· GÃ¶rsel';
 
             if (isSupportWorkerEnabled()) {
                 await workerApiFetch(getSupportApiBase(), '/v1/support/messages', {
@@ -9512,7 +6553,7 @@
                     unreadAdmin: firebase.firestore.FieldValue.increment(1)
                 });
             } else {
-                // Yeni sohbet oluştur
+                // Yeni sohbet oluÅŸtur
                 await chatRef.set({
                     userEmail: currentUser.email,
                     userId: currentUser.uid,
@@ -9525,21 +6566,21 @@
                 });
             }
 
-            // Admin'lere yeni destek mesajı bildirimi gönder
+            // Admin'lere yeni destek mesajÄ± bildirimi gÃ¶nder
             try {
                 await sendNewSupportMessageNotificationToAdmins(currentUser.uid, currentUser.email, lastMsgPreview);
             } catch (e) {}
             
         } catch(e) {
-            console.error('Mesaj gönderme hatası:', e);
-            showToast('❌ Mesaj gönderilemedi: ' + e.message);
+            console.error('Mesaj gÃ¶nderme hatasÄ±:', e);
+            showToast('âŒ Mesaj gÃ¶nderilemedi: ' + e.message);
         }
         
         input.disabled = false;
         input.focus();
     }
 
-    // Admin: sohbet listesinde email yoksa users/{uid} üzerinden çöz
+    // Admin: sohbet listesinde email yoksa users/{uid} Ã¼zerinden Ã§Ã¶z
     const supportEmailCache = {};
     async function resolveSupportUserEmail(chatId, chatData) {
         const direct = (chatData && chatData.userEmail) ? String(chatData.userEmail) : '';
@@ -9555,7 +6596,7 @@
                 const email = data.email || data.userEmail || '';
                 if (email) {
                     supportEmailCache[chatId] = email;
-                    // Kalıcı düzeltme: sohbet dokümanına da yaz
+                    // KalÄ±cÄ± dÃ¼zeltme: sohbet dokÃ¼manÄ±na da yaz
                     try {
                         await db.collection('chats').doc(chatId).set({ userEmail: email, userId: chatId }, { merge: true });
                     } catch (e) {}
@@ -9567,10 +6608,10 @@
         return '';
     }
     
-    // Admin: Tüm sohbetleri yükle
+    // Admin: TÃ¼m sohbetleri yÃ¼kle
     async function loadAdminChats() {
         if (!hasPermission('support')) {
-            document.getElementById('adminChatsList').innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Bu özellik için yetkiniz yok</div>';
+            document.getElementById('adminChatsList').innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Bu Ã¶zellik iÃ§in yetkiniz yok</div>';
             return;
         }
         
@@ -9586,7 +6627,7 @@
                 let html = '';
 
                 if (!tickets.length) {
-                    html = '<div style="text-align: center; padding: 20px; color: #666;">Henüz mesaj yok</div>';
+                    html = '<div style="text-align: center; padding: 20px; color: #666;">HenÃ¼z mesaj yok</div>';
                 } else {
                     for (const t of tickets) {
                         if (!canCurrentAdminSeeChat(t)) continue;
@@ -9600,11 +6641,11 @@
                         const isClaimedByMe = isClaimed && (claimedByEmail === normalizeEmail(currentUser?.email));
 
                         const claimInfo = isClaimed
-                            ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">🤝 Devralındı${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
+                            ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">ğŸ¤ DevralÄ±ndÄ±${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
                             : '';
 
                         const claimButton = (!isClaimed)
-                            ? `<button onclick="event.stopPropagation(); claimSupportChat('${t.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🤝 Devral</button>`
+                            ? `<button onclick="event.stopPropagation(); claimSupportChat('${t.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">ğŸ¤ Devral</button>`
                             : '';
 
                         const displayEmail = t.userEmail || t.id;
@@ -9612,7 +6653,7 @@
                         html += `
                             <div onclick="openAdminChat('${t.id}')" style="background: ${unread > 0 ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid ${unread > 0 ? '#00BCD4' : 'transparent'};">
                                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                                    <div style="font-weight: bold; color: #fff;">👤 ${escapeHtml(displayEmail)}</div>
+                                    <div style="font-weight: bold; color: #fff;">ğŸ‘¤ ${escapeHtml(displayEmail)}</div>
                                     <div style="display:flex; align-items:center; gap: 6px;">
                                         ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
                                         ${claimButton}
@@ -9640,7 +6681,7 @@
             let html = '';
             
             if (snapshot.empty) {
-                html = '<div style="text-align: center; padding: 20px; color: #666;">Henüz mesaj yok</div>';
+                html = '<div style="text-align: center; padding: 20px; color: #666;">HenÃ¼z mesaj yok</div>';
             } else {
                 for (const doc of snapshot.docs) {
                     const chat = doc.data() || {};
@@ -9659,11 +6700,11 @@
                     const isClaimedByMe = isClaimed && (chat.claimedBy === currentUser?.uid || claimedByEmail === normalizeEmail(currentUser?.email));
 
                     const claimInfo = isClaimed
-                        ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">🤝 Devralındı${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
+                        ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">ğŸ¤ DevralÄ±ndÄ±${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
                         : '';
 
                     const claimButton = (!isClaimed)
-                        ? `<button onclick="event.stopPropagation(); claimSupportChat('${doc.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🤝 Devral</button>`
+                        ? `<button onclick="event.stopPropagation(); claimSupportChat('${doc.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">ğŸ¤ Devral</button>`
                         : '';
 
                     const resolvedEmail = chat.userEmail || (await resolveSupportUserEmail(doc.id, chat)) || '';
@@ -9672,7 +6713,7 @@
                     html += `
                         <div onclick="openAdminChat('${doc.id}')" style="background: ${unread > 0 ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid ${unread > 0 ? '#00BCD4' : 'transparent'};">
                             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                                <div style="font-weight: bold; color: #fff;">👤 ${escapeHtml(displayEmail)}</div>
+                                <div style="font-weight: bold; color: #fff;">ğŸ‘¤ ${escapeHtml(displayEmail)}</div>
                                 <div style="display:flex; align-items:center; gap: 6px;">
                                     ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
                                     ${claimButton}
@@ -9695,7 +6736,7 @@
         }
     }
     
-    // Admin: Sohbet aç
+    // Admin: Sohbet aÃ§
     async function openAdminChat(chatId) {
         if (!hasPermission('support')) return;
         
@@ -9709,20 +6750,20 @@
                     const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(chatId));
                     const ticket = res && res.ticket ? res.ticket : null;
                     if (!ticket) {
-                        showToast('❌ Sohbet bulunamadı');
+                        showToast('âŒ Sohbet bulunamadÄ±');
                         return null;
                     }
 
                     if (!canCurrentAdminSeeChat(ticket)) {
-                        showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
+                        showToast('ğŸ”’ Bu sohbet baÅŸka bir admin tarafÄ±ndan devralÄ±ndÄ±');
                         currentAdminChatId = null;
                         loadAdminChats();
                         return null;
                     }
 
                     const displayEmail = ticket.userEmail || chatId;
-                    document.getElementById('adminChatTitle').textContent = '💬 ' + displayEmail;
-                    document.getElementById('adminChatUserInfo').textContent = 'Kullanıcı ID: ' + chatId;
+                    document.getElementById('adminChatTitle').textContent = 'ğŸ’¬ ' + displayEmail;
+                    document.getElementById('adminChatUserInfo').textContent = 'KullanÄ±cÄ± ID: ' + chatId;
 
                     currentAdminChatLastUserSeenAtMs = ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
                     currentAdminChatLastAdminSeenAtMs = ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
@@ -9756,7 +6797,7 @@
                             markAdminSupportSeen(chatId);
                         }
                     } catch (e) {
-                        console.log('Admin chat polling hatası:', e?.message || e);
+                        console.log('Admin chat polling hatasÄ±:', e?.message || e);
                     }
                 }, 8000);
 
@@ -9770,7 +6811,7 @@
 
             const chatDoc = await db.collection('chats').doc(chatId).get();
             if (!chatDoc.exists) {
-                showToast('❌ Sohbet bulunamadı');
+                showToast('âŒ Sohbet bulunamadÄ±');
                 return;
             }
             
@@ -9781,35 +6822,35 @@
 
             // Visibility guard: if another admin claimed it, non-owner admins cannot open
             if (!canCurrentAdminSeeChat(chat)) {
-                showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
+                showToast('ğŸ”’ Bu sohbet baÅŸka bir admin tarafÄ±ndan devralÄ±ndÄ±');
                 currentAdminChatId = null;
                 loadAdminChats();
                 return;
             }
             
-            // Header güncelle
-            document.getElementById('adminChatTitle').textContent = '💬 ' + displayEmail;
-            document.getElementById('adminChatUserInfo').textContent = 'Kullanıcı ID: ' + chatId;
+            // Header gÃ¼ncelle
+            document.getElementById('adminChatTitle').textContent = 'ğŸ’¬ ' + displayEmail;
+            document.getElementById('adminChatUserInfo').textContent = 'KullanÄ±cÄ± ID: ' + chatId;
 
             currentAdminChatLastUserSeenAtMs = getFirestoreTimeMs(chat.lastUserSeenAt);
             currentAdminChatLastAdminSeenAtMs = getFirestoreTimeMs(chat.lastAdminSeenAt);
             
-            // Mesajları render et
+            // MesajlarÄ± render et
             renderAdminChatMessages(chat.messages || []);
             
-            // Okunmamış mesajları sıfırla + görüldü
+            // OkunmamÄ±ÅŸ mesajlarÄ± sÄ±fÄ±rla + gÃ¶rÃ¼ldÃ¼
             await markAdminSupportSeen(chatId, true);
             
-            // Real-time listener başlat
+            // Real-time listener baÅŸlat
             if (adminChatListener) adminChatListener();
             adminChatListener = db.collection('chats').doc(chatId)
                 .onSnapshot((doc) => {
                     if (doc.exists) {
                         const data = doc.data() || {};
                         if (!canCurrentAdminSeeChat(data)) {
-                            // Devralma değiştiyse modalı kapat
+                            // Devralma deÄŸiÅŸtiyse modalÄ± kapat
                             try { closeModal('adminChatModal'); } catch(e) {}
-                            showToast('🔒 Sohbet devralındı');
+                            showToast('ğŸ”’ Sohbet devralÄ±ndÄ±');
                             if (adminChatListener) { adminChatListener(); adminChatListener = null; }
                             currentAdminChatId = null;
                             loadAdminChats();
@@ -9820,7 +6861,7 @@
                         currentAdminChatLastAdminSeenAtMs = getFirestoreTimeMs(data.lastAdminSeenAt);
                         renderAdminChatMessages(data.messages || []);
 
-                        // Admin sohbet ekranı açıkken: yeni kullanıcı mesajlarını görüldü olarak işaretle
+                        // Admin sohbet ekranÄ± aÃ§Ä±kken: yeni kullanÄ±cÄ± mesajlarÄ±nÄ± gÃ¶rÃ¼ldÃ¼ olarak iÅŸaretle
                         const msgs = data.messages || [];
                         const lastMsg = msgs[msgs.length - 1];
                         if (lastMsg && lastMsg.sender === 'user') {
@@ -9840,11 +6881,11 @@
             loadAdminChats();
             
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Admin: Mesajları render et
+    // Admin: MesajlarÄ± render et
     function renderAdminChatMessages(messages) {
         const container = document.getElementById('adminChatMessages');
 
@@ -9852,7 +6893,7 @@
         ensureAdminChatUserProfilePhotoLoaded();
         
         if (messages.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">Henüz mesaj yok</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #888;">HenÃ¼z mesaj yok</div>';
             return;
         }
         
@@ -9877,12 +6918,12 @@
             };
             const roleColor = roleColors[role] || '#FFD700';
             const roleIcons = {
-                'Admin': '👑',
-                'Developer': '💻',
-                'Moderator': '🛡️',
-                'Support': '🎧'
+                'Admin': 'ğŸ‘‘',
+                'Developer': 'ğŸ’»',
+                'Moderator': 'ğŸ›¡ï¸',
+                'Support': 'ğŸ§'
             };
-            const roleIcon = roleIcons[role] || '👑';
+            const roleIcon = roleIcons[role] || 'ğŸ‘‘';
 
             const avatarHtml = isAdmin ? getSupportAppLogoAvatarHtml(28) : getSupportUserAvatarHtml(28, getAdminChatUserSupportAvatarUrl());
             const bubbleStyle = isAdmin
@@ -9891,11 +6932,11 @@
 
             const senderLine = isAdmin
                 ? `<div style="display:flex; align-items:center; gap:6px; font-size: 11px; color: ${roleColor}; margin-bottom: 6px; font-weight: bold;">${roleIcon} ${role}</div>`
-                : `<div style="font-size: 11px; color: #00BCD4; margin-bottom: 6px; font-weight: bold;">👤 Kullanıcı</div>`;
+                : `<div style="font-size: 11px; color: #00BCD4; margin-bottom: 6px; font-weight: bold;">ğŸ‘¤ KullanÄ±cÄ±</div>`;
 
             const createdMs = getFirestoreTimeMs(msg.createdAt);
             const isSeen = isAdmin && idx === lastAdminMsgIndex && currentAdminChatLastUserSeenAtMs > 0 && createdMs > 0 && currentAdminChatLastUserSeenAtMs >= createdMs;
-            const seenSuffix = isSeen ? ' • Görüldü' : '';
+            const seenSuffix = isSeen ? ' â€¢ GÃ¶rÃ¼ldÃ¼' : '';
 
             html += `
                 <div style="display: flex; justify-content: ${isAdmin ? 'flex-end' : 'flex-start'}; margin-bottom: 12px;">
@@ -9918,14 +6959,14 @@
         scrollChatToBottom('adminChatMessages');
     }
     
-    // Admin dosya önizleme
+    // Admin dosya Ã¶nizleme
     let adminPendingFile = null;
     function previewAdminFile(input) {
         const file = input.files[0];
         if (!file) return;
         
         if (file.size > 5 * 1024 * 1024) {
-            showToast('❌ Dosya boyutu 5MB\'dan küçük olmalı');
+            showToast('âŒ Dosya boyutu 5MB\'dan kÃ¼Ã§Ã¼k olmalÄ±');
             input.value = '';
             return;
         }
@@ -9951,7 +6992,7 @@
     async function clearAdminChat() {
         if (!isAdmin() || !currentAdminChatId) return;
         
-        if (!confirm('Bu kullanıcının tüm mesajları silinecek. Emin misiniz?')) return;
+        if (!confirm('Bu kullanÄ±cÄ±nÄ±n tÃ¼m mesajlarÄ± silinecek. Emin misiniz?')) return;
         
         try {
             if (isSupportWorkerEnabled()) {
@@ -9961,26 +7002,26 @@
             }
             closeModal('adminChatModal');
             loadAdminChats();
-            showToast('✅ Sohbet temizlendi');
+            showToast('âœ… Sohbet temizlendi');
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Admin: Mesaj gönder
+    // Admin: Mesaj gÃ¶nder
     async function sendAdminMessage() {
-        if (!requirePermission('support', 'destek mesajı göndermek')) return;
+        if (!requirePermission('support', 'destek mesajÄ± gÃ¶ndermek')) return;
         if (!currentAdminChatId) {
-            showToast('⚠️ Sohbet seçilmedi');
+            showToast('âš ï¸ Sohbet seÃ§ilmedi');
             return;
         }
         
         const input = document.getElementById('adminChatInput');
         const message = input.value.trim();
         
-        // Mesaj veya dosya olmalı
+        // Mesaj veya dosya olmalÄ±
         if (!message && !adminPendingFile) {
-            showToast('⚠️ Mesaj yazın veya dosya seçin');
+            showToast('âš ï¸ Mesaj yazÄ±n veya dosya seÃ§in');
             return;
         }
         
@@ -9988,33 +7029,33 @@
         input.value = '';
         input.disabled = true;
         
-        // Dosya varsa base64'e çevir
+        // Dosya varsa base64'e Ã§evir
         let imageData = null;
         if (adminPendingFile) {
             try {
                 imageData = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => resolve(e.target.result);
-                    reader.onerror = () => reject(new Error('Dosya okunamadı'));
+                    reader.onerror = () => reject(new Error('Dosya okunamadÄ±'));
                     reader.readAsDataURL(adminPendingFile);
                 });
             } catch(e) {
-                showToast('❌ Dosya yüklenemedi');
+                showToast('âŒ Dosya yÃ¼klenemedi');
                 input.disabled = false;
                 return;
             }
         }
         
-        clearAdminFile(); // Dosya önizlemeyi temizle
+        clearAdminFile(); // Dosya Ã¶nizlemeyi temizle
         
         try {
-            // Admin rolünü belirle
+            // Admin rolÃ¼nÃ¼ belirle
             const adminRoles = {
                 'onurtenk0@gmail.com': { role: 'Kurucu', name: 'Onur' },
                 'developer@cheatstore.com': { role: 'Developer', name: 'Developer' },
                 'support@cheatstore.com': { role: 'Support', name: 'Destek' }
             };
-            const adminInfo = adminRoles[currentUser.email] || { role: 'Admin', name: 'Yönetici' };
+            const adminInfo = adminRoles[currentUser.email] || { role: 'Admin', name: 'YÃ¶netici' };
 
             if (isSupportWorkerEnabled()) {
                 await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(currentAdminChatId) + '/messages', {
@@ -10027,7 +7068,7 @@
                     }
                 });
 
-                showToast('✅ Mesaj gönderildi');
+                showToast('âœ… Mesaj gÃ¶nderildi');
                 try {
                     const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(currentAdminChatId));
                     renderAdminChatMessages(normalizeSupportMessages(res && res.messages ? res.messages : []));
@@ -10042,14 +7083,14 @@
             const chatDoc = await chatRef.get();
             
             if (!chatDoc.exists) {
-                showToast('❌ Sohbet bulunamadı');
+                showToast('âŒ Sohbet bulunamadÄ±');
                 input.disabled = false;
                 return;
             }
             
             const now = new Date();
             
-            // Admin rolünü belirle (Firestore fallback)
+            // Admin rolÃ¼nÃ¼ belirle (Firestore fallback)
             const adminInfoFb = adminInfo;
             
             const newMessage = {
@@ -10066,7 +7107,7 @@
             const existingMessages = chatDoc.data().messages || [];
             existingMessages.push(newMessage);
             
-            const lastMsgPreview = msgText || '📷 Görsel';
+            const lastMsgPreview = msgText || 'ğŸ“· GÃ¶rsel';
             
             await chatRef.update({
                 messages: existingMessages,
@@ -10075,7 +7116,7 @@
                 unreadUser: firebase.firestore.FieldValue.increment(1)
             });
 
-            // Kullanıcıya tek seferlik bildirim (FCM + uygulama içi)
+            // KullanÄ±cÄ±ya tek seferlik bildirim (FCM + uygulama iÃ§i)
             try {
                 const chatData = chatDoc.data() || {};
                 const targetEmail = chatData.userEmail || '';
@@ -10083,11 +7124,11 @@
                 await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfoFb);
             } catch (e) {}
             
-            showToast('✅ Mesaj gönderildi');
+            showToast('âœ… Mesaj gÃ¶nderildi');
             
         } catch(e) {
-            console.error('Admin mesaj hatası:', e);
-            showToast('❌ Mesaj gönderilemedi: ' + e.message);
+            console.error('Admin mesaj hatasÄ±:', e);
+            showToast('âŒ Mesaj gÃ¶nderilemedi: ' + e.message);
         }
         
         input.disabled = false;
@@ -10112,13 +7153,13 @@
         return div.innerHTML;
     }
     
-    // ==================== CHAT SİSTEMİ SON ====================
+    // ==================== CHAT SÄ°STEMÄ° SON ====================
     
-    // ==================== SÜRE UZATMA SİSTEMİ ====================
+    // ==================== SÃœRE UZATMA SÄ°STEMÄ° ====================
     let currentExtendData = null;
     let selectedExtendOption = null;
     
-    // Süre uzatma modalını aç
+    // SÃ¼re uzatma modalÄ±nÄ± aÃ§
     function openExtendModal(keyId, gameName, cheatName, keyCode, expiryDate) {
         currentExtendData = {
             keyId: keyId,
@@ -10135,7 +7176,7 @@
         document.getElementById('extendKeyCode').textContent = keyCode;
         document.getElementById('extendCurrentExpiry').textContent = currentExtendData.currentExpiry.toLocaleDateString('tr-TR');
         
-        // Seçimleri sıfırla
+        // SeÃ§imleri sÄ±fÄ±rla
         document.querySelectorAll('.extend-option').forEach(opt => {
             opt.style.borderColor = 'rgba(255,255,255,0.1)';
             opt.style.background = 'rgba(255,255,255,0.05)';
@@ -10143,16 +7184,16 @@
         document.getElementById('extendSummary').style.display = 'none';
         document.getElementById('extendPayBtn').disabled = true;
         document.getElementById('extendPayBtn').style.opacity = '0.5';
-        document.getElementById('extendPayBtn').textContent = 'Süre seçin';
+        document.getElementById('extendPayBtn').textContent = 'SÃ¼re seÃ§in';
         
         openModal('extendModal');
     }
     
-    // Süre seçeneği seç
+    // SÃ¼re seÃ§eneÄŸi seÃ§
     function selectExtendOption(days, label, price) {
         selectedExtendOption = { days, label, price };
         
-        // Görsel seçim
+        // GÃ¶rsel seÃ§im
         document.querySelectorAll('.extend-option').forEach(opt => {
             opt.style.borderColor = 'rgba(255,255,255,0.1)';
             opt.style.background = 'rgba(255,255,255,0.05)';
@@ -10160,15 +7201,15 @@
         event.currentTarget.style.borderColor = '#FF9800';
         event.currentTarget.style.background = 'rgba(255,152,0,0.15)';
         
-        // Yeni bitiş tarihi hesapla
+        // Yeni bitiÅŸ tarihi hesapla
         const newExpiry = new Date(currentExtendData.currentExpiry);
         if (days >= 365) {
-            newExpiry.setFullYear(newExpiry.getFullYear() + 10); // Sınırsız = 10 yıl
+            newExpiry.setFullYear(newExpiry.getFullYear() + 10); // SÄ±nÄ±rsÄ±z = 10 yÄ±l
         } else {
             newExpiry.setDate(newExpiry.getDate() + days);
         }
         
-        // Özet bilgileri güncelle
+        // Ã–zet bilgileri gÃ¼ncelle
         document.getElementById('extendSelectedDays').textContent = label;
         document.getElementById('extendNewExpiry').textContent = newExpiry.toLocaleDateString('tr-TR');
         document.getElementById('extendTotalPrice').textContent = price;
@@ -10177,20 +7218,20 @@
         // Butonu aktif et
         document.getElementById('extendPayBtn').disabled = false;
         document.getElementById('extendPayBtn').style.opacity = '1';
-        document.getElementById('extendPayBtn').textContent = '💳 Ödemeye Geç - ' + price;
+        document.getElementById('extendPayBtn').textContent = 'ğŸ’³ Ã–demeye GeÃ§ - ' + price;
     }
     
-    // Ödeme sayfasına geç
-    // Ödeme sayfasına geç (Merkezi sistemi kullan)
+    // Ã–deme sayfasÄ±na geÃ§
+    // Ã–deme sayfasÄ±na geÃ§ (Merkezi sistemi kullan)
     function proceedExtendPayment() {
         if (!selectedExtendOption || !currentExtendData) {
-            showToast('⚠️ Önce süre seçin');
+            showToast('âš ï¸ Ã–nce sÃ¼re seÃ§in');
             return;
         }
         
         closeModal('extendModal');
         
-        // Yeni bitiş tarihi hesapla
+        // Yeni bitiÅŸ tarihi hesapla
         const newExpiry = new Date(currentExtendData.currentExpiry);
         if (selectedExtendOption.days >= 365) {
             newExpiry.setFullYear(newExpiry.getFullYear() + 10);
@@ -10198,7 +7239,7 @@
             newExpiry.setDate(newExpiry.getDate() + selectedExtendOption.days);
         }
         
-        // Merkezi ödeme sistemini kullan
+        // Merkezi Ã¶deme sistemini kullan
         openUnifiedPaymentModal({
             type: 'extension',
             game: currentExtendData.gameName,
@@ -10214,7 +7255,7 @@
         });
     }
     
-    // Eski havale fonksiyonları - geriye uyumluluk için tutuldu
+    // Eski havale fonksiyonlarÄ± - geriye uyumluluk iÃ§in tutuldu
     function previewExtendDekont(input) {
         const file = input.files[0];
         if (file) {
@@ -10227,42 +7268,42 @@
         }
     }
     
-    // Süre uzatma siparişi gönder (eski modal için - artık merkezi sistem kullanılıyor)
+    // SÃ¼re uzatma sipariÅŸi gÃ¶nder (eski modal iÃ§in - artÄ±k merkezi sistem kullanÄ±lÄ±yor)
     async function submitExtendOrder() {
         if (!currentUser) {
-            showToast('❌ Giriş yapmanız gerekiyor');
+            showToast('âŒ GiriÅŸ yapmanÄ±z gerekiyor');
             return;
         }
         
         if (!currentExtendData || !selectedExtendOption) {
-            showToast('❌ Süre seçimi yapılmadı');
+            showToast('âŒ SÃ¼re seÃ§imi yapÄ±lmadÄ±');
             return;
         }
         
         const fileInput = document.getElementById('extendDekontFile');
         if (!fileInput.files[0]) {
-            showToast('❌ Dekont fotoğrafı seçin');
+            showToast('âŒ Dekont fotoÄŸrafÄ± seÃ§in');
             return;
         }
 
         const dekontFile = fileInput.files[0];
         if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
-            showToast('❌ Sadece resim dosyası seçin');
+            showToast('âŒ Sadece resim dosyasÄ± seÃ§in');
             return;
         }
         if (dekontFile.size > 10 * 1024 * 1024) {
-            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            showToast('âŒ Dekont dosyasÄ± Ã§ok bÃ¼yÃ¼k (max 10MB)');
             return;
         }
         
-        showToast('⏳ Sipariş gönderiliyor...');
+        showToast('â³ SipariÅŸ gÃ¶nderiliyor...');
         
         try {
-            // Sipariş için id üret (Storage path için)
+            // SipariÅŸ iÃ§in id Ã¼ret (Storage path iÃ§in)
             const orderRef = db.collection('orders').doc();
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
             
-            // Yeni bitiş tarihi hesapla
+            // Yeni bitiÅŸ tarihi hesapla
             const newExpiry = new Date(currentExtendData.currentExpiry);
             if (selectedExtendOption.days >= 365) {
                 newExpiry.setFullYear(newExpiry.getFullYear() + 10);
@@ -10270,12 +7311,12 @@
                 newExpiry.setDate(newExpiry.getDate() + selectedExtendOption.days);
             }
             
-            // Siparişi kaydet
+            // SipariÅŸi kaydet
             await orderRef.set({
                 userId: currentUser.uid,
                 email: currentUser.email,
                 userEmail: currentUser.email,
-                type: 'extension', // Süre uzatma tipi
+                type: 'extension', // SÃ¼re uzatma tipi
                 game: currentExtendData.gameName,
                 cheat: currentExtendData.cheatName,
                 keyCode: currentExtendData.keyCode,
@@ -10284,7 +7325,7 @@
                 extensionDays: selectedExtendOption.days,
                 newExpiry: newExpiry,
                 package: selectedExtendOption.label,
-                packageName: `Süre Uzatma - ${selectedExtendOption.label}`,
+                packageName: `SÃ¼re Uzatma - ${selectedExtendOption.label}`,
                 price: selectedExtendOption.price,
                 dekontUrl: receipt.dekontUrl || null,
                 dekontStoragePath: receipt.dekontStoragePath || null,
@@ -10294,33 +7335,33 @@
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
 
-            // Admin'lere yeni sipariş bildirimi gönder
+            // Admin'lere yeni sipariÅŸ bildirimi gÃ¶nder
             try {
                 await sendNewOrderNotificationToAdmins(
                     currentUser.email,
-                    `Süre Uzatma - ${selectedExtendOption.label}`,
+                    `SÃ¼re Uzatma - ${selectedExtendOption.label}`,
                     selectedExtendOption.price
                 );
             } catch (e) {}
             
-            // Modalları kapat
+            // ModallarÄ± kapat
             closeModal('extendHavaleModal');
             
-            // Başarı mesajı
+            // BaÅŸarÄ± mesajÄ±
             showOrderSuccessModal();
-            showToast('✅ Süre uzatma talebiniz alındı!');
+            showToast('âœ… SÃ¼re uzatma talebiniz alÄ±ndÄ±!');
             
         } catch(e) {
-            console.error('Süre uzatma hatası:', e);
+            console.error('SÃ¼re uzatma hatasÄ±:', e);
             const friendly = getFriendlyOrderErrorMessage(e);
             const detail = (typeof isAdmin === 'function' && isAdmin()) ? ` (Kod: ${e && e.code ? e.code : 'yok'})` : '';
-            showToast('❌ Hata: ' + friendly + detail);
+            showToast('âŒ Hata: ' + friendly + detail);
         }
     }
     
-    // ==================== SÜRE UZATMA SİSTEMİ SON ====================
+    // ==================== SÃœRE UZATMA SÄ°STEMÄ° SON ====================
 
-    // Sipariş badge güncelle
+    // SipariÅŸ badge gÃ¼ncelle
     async function updateOrderBadge() {
         if (!currentUser) return;
         try {
@@ -10340,7 +7381,7 @@
         } catch(e) {}
     }
     
-    // Siparişlerimi yükle
+    // SipariÅŸlerimi yÃ¼kle
     async function loadMyOrders() {
         if (!currentUser) return;
         const container = document.getElementById('myOrdersList');
@@ -10353,15 +7394,15 @@
             if (orders.empty) {
                 container.innerHTML = `
                     <div style="text-align: center; padding: 40px;">
-                        <div style="font-size: 60px; margin-bottom: 15px;">📭</div>
-                        <div style="color: #aaa;">Henüz sipariş vermediniz</div>
-                        <button class="btn btn-primary btn-small" onclick="openGameSelectModal()" style="margin-top: 15px;">🛒 Satın Al</button>
+                        <div style="font-size: 60px; margin-bottom: 15px;">ğŸ“­</div>
+                        <div style="color: #aaa;">HenÃ¼z sipariÅŸ vermediniz</div>
+                        <button class="btn btn-primary btn-small" onclick="openGameSelectModal()" style="margin-top: 15px;">ğŸ›’ SatÄ±n Al</button>
                     </div>
                 `;
                 return;
             }
             
-            // Client-side sıralama
+            // Client-side sÄ±ralama
             let orderList = [];
             orders.forEach(doc => {
                 orderList.push({ id: doc.id, ...doc.data() });
@@ -10374,13 +7415,13 @@
                 let statusText = '', statusClass = '';
                 
                 if (o.status === 'pending') {
-                    statusText = '⏳ Beklemede';
+                    statusText = 'â³ Beklemede';
                     statusClass = 'pending';
                 } else if (o.status === 'approved') {
-                    statusText = '✅ Onaylandı';
+                    statusText = 'âœ… OnaylandÄ±';
                     statusClass = 'approved';
                 } else if (o.status === 'rejected') {
-                    statusText = '❌ Reddedildi';
+                    statusText = 'âŒ Reddedildi';
                     statusClass = 'rejected';
                 }
                 
@@ -10393,26 +7434,26 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span class="order-status ${statusClass}">${statusText}</span>
-                                <button onclick="deleteOrder('${o.id}', '${o.packageName}', '${o.status}')" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🗑️</button>
+                                <button onclick="deleteOrder('${o.id}', '${o.packageName}', '${o.status}')" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">ğŸ—‘ï¸</button>
                             </div>
                         </div>
-                        <div style="font-size: 12px; color: #888; margin-bottom: 10px;">📅 ${date}</div>
+                        <div style="font-size: 12px; color: #888; margin-bottom: 10px;">ğŸ“… ${date}</div>
                         ${o.status === 'approved' && o.keyCode ? `
                             <div style="background: rgba(76,175,80,0.2); border: 1px solid #4CAF50; border-radius: 10px; padding: 12px; margin-top: 10px;">
-                                <div style="font-size: 11px; color: #aaa; margin-bottom: 5px;">🔑 Key Kodunuz</div>
+                                <div style="font-size: 11px; color: #aaa; margin-bottom: 5px;">ğŸ”‘ Key Kodunuz</div>
                                 <div style="font-family: monospace; font-size: 14px; color: #4CAF50; word-break: break-all;">${o.keyCode}</div>
-                                <button onclick="copyToClipboard('${o.keyCode}')" style="margin-top: 10px; background: #4CAF50; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; width: 100%;">📋 Kopyala</button>
+                                <button onclick="copyToClipboard('${o.keyCode}')" style="margin-top: 10px; background: #4CAF50; border: none; color: #fff; padding: 8px 15px; border-radius: 8px; font-size: 12px; cursor: pointer; width: 100%;">ğŸ“‹ Kopyala</button>
                             </div>
                         ` : ''}
                         ${o.status === 'rejected' && o.rejectReason ? `
                             <div style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; border-radius: 10px; padding: 12px; margin-top: 10px;">
-                                <div style="font-size: 11px; color: #aaa; margin-bottom: 5px;">❌ Red Sebebi</div>
+                                <div style="font-size: 11px; color: #aaa; margin-bottom: 5px;">âŒ Red Sebebi</div>
                                 <div style="font-size: 13px; color: #f44336;">${o.rejectReason}</div>
                             </div>
                         ` : ''}
                         ${o.status === 'pending' ? `
                             <div style="background: rgba(255,152,0,0.2); border: 1px solid #FF9800; border-radius: 10px; padding: 12px; margin-top: 10px;">
-                                <div style="font-size: 12px; color: #FF9800;">⏳ Dekontunuz inceleniyor. Onaylandığında bildirim alacaksınız.</div>
+                                <div style="font-size: 12px; color: #FF9800;">â³ Dekontunuz inceleniyor. OnaylandÄ±ÄŸÄ±nda bildirim alacaksÄ±nÄ±z.</div>
                             </div>
                         ` : ''}
                     </div>
@@ -10425,38 +7466,38 @@
         }
     }
     
-    // Sipariş silme fonksiyonu
+    // SipariÅŸ silme fonksiyonu
     async function deleteOrder(orderId, packageName, status) {
-        let confirmMsg = `⚠️ "${packageName}" siparişini silmek istediğinize emin misiniz?`;
+        let confirmMsg = `âš ï¸ "${packageName}" sipariÅŸini silmek istediÄŸinize emin misiniz?`;
         
         if (status === 'pending') {
-            confirmMsg += '\n\n⚠️ Bu sipariş henüz beklemede! Silmek isterseniz dekontunuz işleme alınmayacak.';
+            confirmMsg += '\n\nâš ï¸ Bu sipariÅŸ henÃ¼z beklemede! Silmek isterseniz dekontunuz iÅŸleme alÄ±nmayacak.';
         } else if (status === 'approved') {
-            confirmMsg += '\n\n✅ Bu sipariş onaylanmış. Sadece kayıt silinecek, key\'iniz aktif kalacak.';
+            confirmMsg += '\n\nâœ… Bu sipariÅŸ onaylanmÄ±ÅŸ. Sadece kayÄ±t silinecek, key\'iniz aktif kalacak.';
         }
         
-        confirmMsg += '\n\nBu işlem geri alınamaz!';
+        confirmMsg += '\n\nBu iÅŸlem geri alÄ±namaz!';
         
         if (!confirm(confirmMsg)) return;
         
         try {
-            showToast('⏳ Siliniyor...');
+            showToast('â³ Siliniyor...');
 
-            // Worker/D1 varsa öncelik ver
+            // Worker/D1 varsa Ã¶ncelik ver
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = (typeof getOrdersApiBase === 'function') ? getOrdersApiBase() : '';
             if (ordersApiBase) {
                 try { await workerApiFetch(ordersApiBase, '/v1/admin/orders/' + encodeURIComponent(id), { method: 'DELETE' }); } catch (e) {}
                 try { await db.collection('approvedOrdersArchive').doc(id).delete(); } catch (e) {}
-                showToast('✅ Sipariş silindi');
+                showToast('âœ… SipariÅŸ silindi');
                 try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
                 return;
             }
             
-            // Firebase'den siparişi sil
+            // Firebase'den sipariÅŸi sil
             await db.collection('orders').doc(orderId).delete();
             
-            // Kartı animasyonlu kaldır
+            // KartÄ± animasyonlu kaldÄ±r
             const card = document.getElementById(`order-${orderId}`);
             if (card) {
                 card.style.transition = 'all 0.3s ease';
@@ -10465,31 +7506,31 @@
                 setTimeout(() => {
                     card.remove();
                     
-                    // Eğer hiç sipariş kalmadıysa boş mesaj göster
+                    // EÄŸer hiÃ§ sipariÅŸ kalmadÄ±ysa boÅŸ mesaj gÃ¶ster
                     const container = document.getElementById('myOrdersList');
                     if (container && container.children.length === 0) {
                         container.innerHTML = `
                             <div style="text-align: center; padding: 40px;">
-                                <div style="font-size: 60px; margin-bottom: 15px;">📭</div>
-                                <div style="color: #aaa;">Henüz sipariş vermediniz</div>
-                                <button class="btn btn-primary btn-small" onclick="openGameSelectModal()" style="margin-top: 15px;">🛒 Satın Al</button>
+                                <div style="font-size: 60px; margin-bottom: 15px;">ğŸ“­</div>
+                                <div style="color: #aaa;">HenÃ¼z sipariÅŸ vermediniz</div>
+                                <button class="btn btn-primary btn-small" onclick="openGameSelectModal()" style="margin-top: 15px;">ğŸ›’ SatÄ±n Al</button>
                             </div>
                         `;
                     }
                 }, 300);
             }
             
-            showToast('✅ Sipariş silindi!');
+            showToast('âœ… SipariÅŸ silindi!');
             
-            // Badge'i güncelle
+            // Badge'i gÃ¼ncelle
             updateOrderBadge();
         } catch(e) {
-            console.error('Sipariş silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('SipariÅŸ silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Sipariş badge'ini güncelle
+    // SipariÅŸ badge'ini gÃ¼ncelle
     async function updateOrderBadge() {
         if (!currentUser) return;
         try {
@@ -10508,36 +7549,36 @@
                 }
             }
         } catch(e) {
-            console.error('Badge güncelleme hatası:', e);
+            console.error('Badge gÃ¼ncelleme hatasÄ±:', e);
         }
     }
     
     // Clipboard copy
     function copyToClipboard(text) {
         navigator.clipboard.writeText(text).then(() => {
-            showToast('📋 Kopyalandı!');
+            showToast('ğŸ“‹ KopyalandÄ±!');
         }).catch(() => {
-            showToast('❌ Kopyalama başarısız');
+            showToast('âŒ Kopyalama baÅŸarÄ±sÄ±z');
         });
     }
     
-    // Admin - Üyenin key'ini sil (keys_delete yetkisi gerekli)
+    // Admin - Ãœyenin key'ini sil (keys_delete yetkisi gerekli)
     async function adminDeleteUserKey(userId, keyIndex, keyCode, keyType) {
         if (!requirePermission('keys_delete', 'key silmek')) return;
         
         const confirmMsg = keyType === 'expired' 
-            ? `Süresi dolmuş key'i silmek istiyor musunuz?\n${keyCode}`
-            : `⚠️ DİKKAT: Aktif key'i silmek istiyor musunuz?\n${keyCode}`;
+            ? `SÃ¼resi dolmuÅŸ key'i silmek istiyor musunuz?\n${keyCode}`
+            : `âš ï¸ DÄ°KKAT: Aktif key'i silmek istiyor musunuz?\n${keyCode}`;
             
         if (!confirm(confirmMsg)) return;
         
         try {
-            showToast('⏳ Key siliniyor...');
+            showToast('â³ Key siliniyor...');
             
-            // Kullanıcının verilerini al
+            // KullanÄ±cÄ±nÄ±n verilerini al
             const userDoc = await db.collection('users').doc(userId).get();
             if (!userDoc.exists) {
-                showToast('❌ Kullanıcı bulunamadı');
+                showToast('âŒ KullanÄ±cÄ± bulunamadÄ±');
                 return;
             }
             
@@ -10548,7 +7589,7 @@
             // Silinecek key'i bul
             const deletedKey = keys[keyIndex];
             if (!deletedKey) {
-                showToast('❌ Key bulunamadı');
+                showToast('âŒ Key bulunamadÄ±');
                 return;
             }
             
@@ -10562,30 +7603,30 @@
                 expiresAt: deletedKey.expiresAt,
                 deletedAt: new Date(),
                 deletedBy: 'admin',
-                reason: keyType === 'expired' ? 'Admin tarafından süresi dolmuş key silindi' : 'Admin tarafından aktif key silindi'
+                reason: keyType === 'expired' ? 'Admin tarafÄ±ndan sÃ¼resi dolmuÅŸ key silindi' : 'Admin tarafÄ±ndan aktif key silindi'
             });
             
-            // Key'i listeden çıkar
+            // Key'i listeden Ã§Ä±kar
             keys.splice(keyIndex, 1);
             
-            // Veritabanını güncelle
+            // VeritabanÄ±nÄ± gÃ¼ncelle
             await db.collection('users').doc(userId).update({
                 keys: keys,
                 activityLog: activityLog
             });
             
-            showToast('✅ Key silindi!');
+            showToast('âœ… Key silindi!');
             
-            // Modal'ı yeniden yükle
+            // Modal'Ä± yeniden yÃ¼kle
             openUserDetail(userId);
             
         } catch(e) {
-            console.error('Admin key silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Admin key silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Şifre görünürlüğünü değiştir
+    // Åifre gÃ¶rÃ¼nÃ¼rlÃ¼ÄŸÃ¼nÃ¼ deÄŸiÅŸtir
     let passwordVisible = false;
     function togglePasswordVisibility(password) {
         const field = document.getElementById('userPasswordField');
@@ -10596,23 +7637,23 @@
             field.textContent = password;
             field.style.color = '#4CAF50';
         } else {
-            field.textContent = '••••••••';
+            field.textContent = 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢';
             field.style.color = '#FF9800';
         }
     }
     
-    // Admin - Üyenin tüm süresi dolmuş keylerini sil
+    // Admin - Ãœyenin tÃ¼m sÃ¼resi dolmuÅŸ keylerini sil
     async function adminDeleteAllExpiredKeys(userId) {
-        if (!isAdmin()) { showToast('❌ Yetkiniz yok'); return; }
+        if (!isAdmin()) { showToast('âŒ Yetkiniz yok'); return; }
         
-        if (!confirm('Tüm süresi dolmuş keyleri silmek istiyor musunuz?')) return;
+        if (!confirm('TÃ¼m sÃ¼resi dolmuÅŸ keyleri silmek istiyor musunuz?')) return;
         
         try {
-            showToast('⏳ Keyler siliniyor...');
+            showToast('â³ Keyler siliniyor...');
             
             const userDoc = await db.collection('users').doc(userId).get();
             if (!userDoc.exists) {
-                showToast('❌ Kullanıcı bulunamadı');
+                showToast('âŒ KullanÄ±cÄ± bulunamadÄ±');
                 return;
             }
             
@@ -10634,7 +7675,7 @@
                     expiresAt: key.expiresAt,
                     deletedAt: new Date(),
                     deletedBy: 'admin',
-                    reason: 'Admin tarafından süresi dolmuş keyler toplu silindi'
+                    reason: 'Admin tarafÄ±ndan sÃ¼resi dolmuÅŸ keyler toplu silindi'
                 });
             });
             
@@ -10646,34 +7687,34 @@
                 activityLog: activityLog
             });
             
-            showToast(`✅ ${expiredKeys.length} key silindi!`);
+            showToast(`âœ… ${expiredKeys.length} key silindi!`);
             openUserDetail(userId);
             
         } catch(e) {
-            console.error('Admin toplu key silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Admin toplu key silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Admin - Üyeyi tamamen sil
+    // Admin - Ãœyeyi tamamen sil
     async function deleteUser(userId, email) {
-        if (!requirePermission('members_edit', 'üye silmek')) return;
+        if (!requirePermission('members_edit', 'Ã¼ye silmek')) return;
         
         // Kurucu kendini silemez
         if (isOwnerEmail(email)) {
-            showToast('❌ Kurucu hesabı silinemez!');
+            showToast('âŒ Kurucu hesabÄ± silinemez!');
             return;
         }
         
-        // Çift onay iste
-        if (!confirm(`⚠️ DİKKAT!\n\n"${email}" kullanıcısını silmek üzeresiniz.\n\nBu işlem geri alınamaz!\n\nDevam etmek istiyor musunuz?`)) return;
+        // Ã‡ift onay iste
+        if (!confirm(`âš ï¸ DÄ°KKAT!\n\n"${email}" kullanÄ±cÄ±sÄ±nÄ± silmek Ã¼zeresiniz.\n\nBu iÅŸlem geri alÄ±namaz!\n\nDevam etmek istiyor musunuz?`)) return;
         
-        if (!confirm(`🔴 SON UYARI!\n\nBu üyenin TÜM verileri silinecek:\n- Tüm keyler\n- Tüm siparişler\n- Aktivite geçmişi\n\nEmin misiniz?`)) return;
+        if (!confirm(`ğŸ”´ SON UYARI!\n\nBu Ã¼yenin TÃœM verileri silinecek:\n- TÃ¼m keyler\n- TÃ¼m sipariÅŸler\n- Aktivite geÃ§miÅŸi\n\nEmin misiniz?`)) return;
         
         try {
-            showToast('⏳ Üye siliniyor...');
+            showToast('â³ Ãœye siliniyor...');
             
-            // 1. Üyenin siparişlerini sil
+            // 1. Ãœyenin sipariÅŸlerini sil
             const ordersSnapshot = await db.collection('orders').where('userId', '==', userId).get();
             const batch = db.batch();
             
@@ -10681,21 +7722,21 @@
                 batch.delete(doc.ref);
             });
             
-            // 2. Üyeyi sil
+            // 2. Ãœyeyi sil
             batch.delete(db.collection('users').doc(userId));
             
-            // Batch işlemini uygula
+            // Batch iÅŸlemini uygula
             await batch.commit();
             
-            showToast(`✅ "${email}" silindi!`);
+            showToast(`âœ… "${email}" silindi!`);
             
-            // Modal'ı kapat ve listeyi yenile
+            // Modal'Ä± kapat ve listeyi yenile
             closeModal('userDetailModal');
             loadAllUsers();
             
         } catch(e) {
-            console.error('Üye silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Ãœye silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
 
@@ -10717,7 +7758,7 @@
             loggedIn.style.display = 'none';
         }
         
-        // Profil sidebar UI'ını da güncelle
+        // Profil sidebar UI'Ä±nÄ± da gÃ¼ncelle
         updateProfilePanelUI();
     }
     
@@ -10725,15 +7766,15 @@
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         const rememberMe = document.getElementById('rememberMe').checked;
-        if (!email || !password) { showToast('❌ Tüm alanları doldurun'); return; }
+        if (!email || !password) { showToast('âŒ TÃ¼m alanlarÄ± doldurun'); return; }
         try {
-            showToast('⏳ Giriş yapılıyor...');
+            showToast('â³ GiriÅŸ yapÄ±lÄ±yor...');
             await auth.signInWithEmailAndPassword(email, password);
             
-            // Beni hatırla
+            // Beni hatÄ±rla
             if (rememberMe) {
                 localStorage.setItem('remembered_email', email);
-                localStorage.setItem('remembered_password', btoa(password)); // Basit şifreleme
+                localStorage.setItem('remembered_password', btoa(password)); // Basit ÅŸifreleme
                 localStorage.setItem('remember_me', 'true');
             } else {
                 localStorage.removeItem('remembered_email');
@@ -10741,14 +7782,14 @@
                 localStorage.removeItem('remember_me');
             }
             
-            showToast('✅ Giriş başarılı!');
+            showToast('âœ… GiriÅŸ baÅŸarÄ±lÄ±!');
             navigateTo('homePage');
         } catch (e) {
-            showToast('❌ ' + (e.code === 'auth/invalid-credential' ? 'Hatalı e-posta veya şifre' : e.message));
+            showToast('âŒ ' + (e.code === 'auth/invalid-credential' ? 'HatalÄ± e-posta veya ÅŸifre' : e.message));
         }
     }
     
-    // Sayfa yüklendiğinde hatırlanan bilgileri doldur
+    // Sayfa yÃ¼klendiÄŸinde hatÄ±rlanan bilgileri doldur
     function loadRememberedCredentials() {
         const remembered = localStorage.getItem('remember_me');
         if (remembered === 'true') {
@@ -10762,60 +7803,60 @@
         }
     }
     
-    // Şifre sıfırlama fonksiyonu
+    // Åifre sÄ±fÄ±rlama fonksiyonu
     async function sendPasswordReset() {
         const email = document.getElementById('forgotEmail').value.trim();
         const resetBtn = document.getElementById('resetBtn');
         const successMsg = document.getElementById('resetSuccessMsg');
         
         if (!email) {
-            showToast('❌ E-posta adresinizi girin');
+            showToast('âŒ E-posta adresinizi girin');
             return;
         }
         
-        // Email formatı kontrolü
+        // Email formatÄ± kontrolÃ¼
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            showToast('❌ Geçerli bir e-posta adresi girin');
+            showToast('âŒ GeÃ§erli bir e-posta adresi girin');
             return;
         }
         
         try {
             resetBtn.disabled = true;
-            resetBtn.innerHTML = '⏳ Gönderiliyor...';
+            resetBtn.innerHTML = 'â³ GÃ¶nderiliyor...';
             
-            // Firebase şifre sıfırlama e-postası gönder
+            // Firebase ÅŸifre sÄ±fÄ±rlama e-postasÄ± gÃ¶nder
             await auth.sendPasswordResetEmail(email);
             
-            // Başarı mesajını göster
+            // BaÅŸarÄ± mesajÄ±nÄ± gÃ¶ster
             successMsg.style.display = 'block';
-            resetBtn.innerHTML = '✅ E-posta Gönderildi';
+            resetBtn.innerHTML = 'âœ… E-posta GÃ¶nderildi';
             resetBtn.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
             
-            showToast('✅ Şifre sıfırlama e-postası gönderildi!');
+            showToast('âœ… Åifre sÄ±fÄ±rlama e-postasÄ± gÃ¶nderildi!');
             
-            // 3 saniye sonra butonu sıfırla
+            // 3 saniye sonra butonu sÄ±fÄ±rla
             setTimeout(() => {
                 resetBtn.disabled = false;
-                resetBtn.innerHTML = '📤 Sıfırlama Bağlantısı Gönder';
+                resetBtn.innerHTML = 'ğŸ“¤ SÄ±fÄ±rlama BaÄŸlantÄ±sÄ± GÃ¶nder';
                 resetBtn.style.background = 'linear-gradient(135deg, #FF9800, #F57C00)';
             }, 5000);
             
         } catch (e) {
             resetBtn.disabled = false;
-            resetBtn.innerHTML = '📤 Sıfırlama Bağlantısı Gönder';
+            resetBtn.innerHTML = 'ğŸ“¤ SÄ±fÄ±rlama BaÄŸlantÄ±sÄ± GÃ¶nder';
             
-            // Hata mesajlarını Türkçeleştir
-            let errorMsg = 'Bir hata oluştu';
+            // Hata mesajlarÄ±nÄ± TÃ¼rkÃ§eleÅŸtir
+            let errorMsg = 'Bir hata oluÅŸtu';
             if (e.code === 'auth/user-not-found') {
-                errorMsg = 'Bu e-posta ile kayıtlı kullanıcı bulunamadı';
+                errorMsg = 'Bu e-posta ile kayÄ±tlÄ± kullanÄ±cÄ± bulunamadÄ±';
             } else if (e.code === 'auth/invalid-email') {
-                errorMsg = 'Geçersiz e-posta adresi';
+                errorMsg = 'GeÃ§ersiz e-posta adresi';
             } else if (e.code === 'auth/too-many-requests') {
-                errorMsg = 'Çok fazla deneme yaptınız. Lütfen bekleyin.';
+                errorMsg = 'Ã‡ok fazla deneme yaptÄ±nÄ±z. LÃ¼tfen bekleyin.';
             }
             
-            showToast('❌ ' + errorMsg);
+            showToast('âŒ ' + errorMsg);
         }
     }
     
@@ -10823,13 +7864,13 @@
         const email = document.getElementById('registerEmail').value;
         const password = document.getElementById('registerPassword').value;
         const password2 = document.getElementById('registerPassword2').value;
-        if (!email || !password) { showToast('❌ Tüm alanları doldurun'); return; }
-        if (password !== password2) { showToast('❌ Şifreler eşleşmiyor'); return; }
-        if (password.length < 6) { showToast('❌ Şifre en az 6 karakter'); return; }
+        if (!email || !password) { showToast('âŒ TÃ¼m alanlarÄ± doldurun'); return; }
+        if (password !== password2) { showToast('âŒ Åifreler eÅŸleÅŸmiyor'); return; }
+        if (password.length < 6) { showToast('âŒ Åifre en az 6 karakter'); return; }
         try {
-            showToast('⏳ Kayıt yapılıyor...');
+            showToast('â³ KayÄ±t yapÄ±lÄ±yor...');
             const cred = await auth.createUserWithEmailAndPassword(email, password);
-            // Şifreyi de kaydet (admin görebilmesi için)
+            // Åifreyi de kaydet (admin gÃ¶rebilmesi iÃ§in)
             await db.collection('users').doc(cred.user.uid).set({ 
                 email, 
                 password: password,
@@ -10837,10 +7878,10 @@
                 keys: [],
                 loyaltyPoints: 0
             });
-            showToast('✅ Kayıt başarılı!');
+            showToast('âœ… KayÄ±t baÅŸarÄ±lÄ±!');
             navigateTo('homePage');
         } catch (e) {
-            showToast('❌ ' + (e.code === 'auth/email-already-in-use' ? 'Bu e-posta zaten kayıtlı' : e.message));
+            showToast('âŒ ' + (e.code === 'auth/email-already-in-use' ? 'Bu e-posta zaten kayÄ±tlÄ±' : e.message));
         }
     }
     
@@ -10850,7 +7891,7 @@
         try {
             await auth.signOut();
         } finally {
-            showToast('👋 Çıkış yapıldı');
+            showToast('ğŸ‘‹ Ã‡Ä±kÄ±ÅŸ yapÄ±ldÄ±');
         }
     }
     
@@ -10869,11 +7910,11 @@
         } catch (e) { console.log(e); }
     }
     
-    // Global değişken - aktif ve süresi dolmuş keyleri sakla
+    // Global deÄŸiÅŸken - aktif ve sÃ¼resi dolmuÅŸ keyleri sakla
     let userActiveKeys = [];
     let userExpiredKeys = [];
     
-    // Tarih dönüştürme yardımcı fonksiyonu (Firestore Timestamp veya Date)
+    // Tarih dÃ¶nÃ¼ÅŸtÃ¼rme yardÄ±mcÄ± fonksiyonu (Firestore Timestamp veya Date)
     function toDate(dateField) {
         if (!dateField) return null;
         if (dateField.toDate && typeof dateField.toDate === 'function') {
@@ -10889,17 +7930,17 @@
     }
     
     function updateKeyStatus(keys) {
-        console.log('🔑 updateKeyStatus çağrıldı, key sayısı:', keys.length);
+        console.log('ğŸ”‘ updateKeyStatus Ã§aÄŸrÄ±ldÄ±, key sayÄ±sÄ±:', keys.length);
         
         const box = document.getElementById('keyStatusBox');
         const content = document.getElementById('keyStatusContent');
         
         if (!box || !content) {
-            console.log('🔑 keyStatusBox veya content bulunamadı');
+            console.log('ğŸ”‘ keyStatusBox veya content bulunamadÄ±');
             return;
         }
         
-        // Aktif ve süresi dolmuş keyleri filtrele ve sakla
+        // Aktif ve sÃ¼resi dolmuÅŸ keyleri filtrele ve sakla
         const now = new Date();
         userActiveKeys = keys.filter(k => {
             const exp = toDate(k.expiresAt);
@@ -10910,36 +7951,36 @@
             return exp && exp <= now;
         });
         
-        console.log('🔑 Aktif key sayısı:', userActiveKeys.length);
-        console.log('🔑 Süresi dolmuş key sayısı:', userExpiredKeys.length);
+        console.log('ğŸ”‘ Aktif key sayÄ±sÄ±:', userActiveKeys.length);
+        console.log('ğŸ”‘ SÃ¼resi dolmuÅŸ key sayÄ±sÄ±:', userExpiredKeys.length);
         
         if (userActiveKeys.length > 0) {
             box.className = 'key-status key-active';
             box.style.cursor = 'pointer';
             
-            // TOPLAM kalan süreyi hesapla (tüm keylerin kalan süreleri toplamı)
+            // TOPLAM kalan sÃ¼reyi hesapla (tÃ¼m keylerin kalan sÃ¼releri toplamÄ±)
             let totalRemainingMs = 0;
             userActiveKeys.forEach(key => {
                 const exp = toDate(key.expiresAt);
                 totalRemainingMs += (exp - now);
             });
             
-            // Toplam kalan gün ve saat
+            // Toplam kalan gÃ¼n ve saat
             const totalRemainingDays = Math.floor(totalRemainingMs / (1000 * 60 * 60 * 24));
             const totalRemainingHours = Math.floor((totalRemainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             
-            // Toplam süre metni
+            // Toplam sÃ¼re metni
             let totalRemainingText = '';
             if (totalRemainingDays > 0) {
-                totalRemainingText = `${totalRemainingDays} gün ${totalRemainingHours} saat`;
+                totalRemainingText = `${totalRemainingDays} gÃ¼n ${totalRemainingHours} saat`;
             } else {
                 totalRemainingText = `${totalRemainingHours} saat`;
             }
             
-            // Son bitiş tarihini hesapla (en son biten key'in bitiş tarihi)
+            // Son bitiÅŸ tarihini hesapla (en son biten key'in bitiÅŸ tarihi)
             const lastExpireDate = new Date(Math.max(...userActiveKeys.map(k => toDate(k.expiresAt).getTime())));
             
-            // Toplam paket günlerini hesapla
+            // Toplam paket gÃ¼nlerini hesapla
             let totalPackageDays = 0;
             userActiveKeys.forEach(key => {
                 const exp = toDate(key.expiresAt);
@@ -10949,9 +7990,9 @@
             });
             
             // Etiket
-            let packageLabel = totalPackageDays >= 365 ? 'Sınırsız' : `Toplam ${totalPackageDays} Gün`;
+            let packageLabel = totalPackageDays >= 365 ? 'SÄ±nÄ±rsÄ±z' : `Toplam ${totalPackageDays} GÃ¼n`;
             
-            // İlerleme yüzdesi - toplam kullanılan / toplam süre
+            // Ä°lerleme yÃ¼zdesi - toplam kullanÄ±lan / toplam sÃ¼re
             let totalOriginalMs = 0;
             let totalUsedMs = 0;
             userActiveKeys.forEach(key => {
@@ -10965,77 +8006,77 @@
             content.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="font-size: 28px;">✅</div>
+                        <div style="font-size: 28px;">âœ…</div>
                         <div>
                             <div style="font-size: 14px; font-weight: bold; color: #4CAF50;">${packageLabel}</div>
-                            <div style="font-size: 11px; color: #aaa;">⏱️ ${totalRemainingText} kaldı</div>
+                            <div style="font-size: 11px; color: #aaa;">â±ï¸ ${totalRemainingText} kaldÄ±</div>
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         ${userActiveKeys.length > 1 ? `<span style="background: #4CAF50; color: #fff; padding: 3px 8px; border-radius: 10px; font-size: 10px;">${userActiveKeys.length} Key</span>` : ''}
-                        <span style="font-size: 18px; color: #4CAF50;">›</span>
+                        <span style="font-size: 18px; color: #4CAF50;">â€º</span>
                     </div>
                 </div>
                 <div style="background: rgba(255,255,255,0.1); border-radius: 4px; height: 4px; margin-top: 10px; overflow: hidden;">
                     <div style="background: linear-gradient(90deg, #4CAF50, #8BC34A); height: 100%; width: ${progressPercent}%; border-radius: 4px;"></div>
                 </div>
-                <div style="font-size: 10px; color: #666; margin-top: 5px; text-align: center;">📅 Bitiş: ${lastExpireDate.toLocaleDateString('tr-TR')} • Detaylar için tıklayın</div>
+                <div style="font-size: 10px; color: #666; margin-top: 5px; text-align: center;">ğŸ“… BitiÅŸ: ${lastExpireDate.toLocaleDateString('tr-TR')} â€¢ Detaylar iÃ§in tÄ±klayÄ±n</div>
             `;
-            // Sidebar key durumunu güncelle
-            updateSidebarKeyStatus(`✅ ${totalRemainingText} kaldı`, true);
+            // Sidebar key durumunu gÃ¼ncelle
+            updateSidebarKeyStatus(`âœ… ${totalRemainingText} kaldÄ±`, true);
         } else {
             box.className = 'key-status key-expired';
             
-            // Süresi dolmuş key varsa tıklanabilir yap
+            // SÃ¼resi dolmuÅŸ key varsa tÄ±klanabilir yap
             if (userExpiredKeys.length > 0) {
                 box.style.cursor = 'pointer';
                 content.innerHTML = `
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="font-size: 28px;">❌</div>
+                            <div style="font-size: 28px;">âŒ</div>
                             <div>
-                                <div style="font-size: 14px; font-weight: bold; color: #f44336;">Süresi Doldu</div>
+                                <div style="font-size: 14px; font-weight: bold; color: #f44336;">SÃ¼resi Doldu</div>
                                 <div style="font-size: 11px; color: #aaa;">${userExpiredKeys.length} eski key mevcut</div>
                             </div>
                         </div>
-                        <span style="font-size: 18px; color: #f44336;">›</span>
+                        <span style="font-size: 18px; color: #f44336;">â€º</span>
                     </div>
-                    <div style="font-size: 10px; color: #666; margin-top: 8px; text-align: center;">Silmek için tıklayın</div>
+                    <div style="font-size: 10px; color: #666; margin-top: 8px; text-align: center;">Silmek iÃ§in tÄ±klayÄ±n</div>
                 `;
-                // Sidebar'da süresi doldu göster
-                updateSidebarKeyStatus('❌ Süresi Doldu', false);
+                // Sidebar'da sÃ¼resi doldu gÃ¶ster
+                updateSidebarKeyStatus('âŒ SÃ¼resi Doldu', false);
             } else {
                 box.style.cursor = 'default';
                 content.innerHTML = `
                     <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="font-size: 28px;">❌</div>
+                        <div style="font-size: 28px;">âŒ</div>
                         <div>
                             <div style="font-size: 14px; font-weight: bold; color: #f44336;">Pasif</div>
-                            <div style="font-size: 11px; color: #aaa;">Aktif üyeliğiniz yok</div>
+                            <div style="font-size: 11px; color: #aaa;">Aktif Ã¼yeliÄŸiniz yok</div>
                         </div>
                     </div>
                 `;
-                // Sidebar'da aktif key yok göster
+                // Sidebar'da aktif key yok gÃ¶ster
                 updateSidebarKeyStatus('Aktif Key Yok', false);
             }
         }
     }
     
-    // Key detay modal'ını aç
+    // Key detay modal'Ä±nÄ± aÃ§
     function openKeyDetailModal() {
-        // Hiç key yoksa
+        // HiÃ§ key yoksa
         if (userActiveKeys.length === 0 && userExpiredKeys.length === 0) {
-            showToast('❌ Hiç key\'iniz yok');
+            showToast('âŒ HiÃ§ key\'iniz yok');
             return;
         }
         
         const now = new Date();
         let keysHtml = '';
         
-        // Önce aktif keyleri göster
+        // Ã–nce aktif keyleri gÃ¶ster
         if (userActiveKeys.length > 0) {
             keysHtml += `<div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                <span>✅ Aktif Keyler</span>
+                <span>âœ… Aktif Keyler</span>
                 <span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${userActiveKeys.length}</span>
             </div>`;
         }
@@ -11045,37 +8086,37 @@
             const activatedAt = key.activatedAt ? key.activatedAt.toDate() : new Date();
             const totalDays = key.days || Math.ceil((exp - activatedAt) / (1000 * 60 * 60 * 24));
             
-            // Kalan süreyi hesapla
+            // Kalan sÃ¼reyi hesapla
             const remainingMs = exp - now;
             const remainingDays = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
             const remainingHours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
             
-            // Süre metni
+            // SÃ¼re metni
             let remainingText = '';
             if (totalDays === 1) {
                 remainingText = remainingHours > 0 ? `${remainingHours} saat ${remainingMins} dk` : `${remainingMins} dakika`;
             } else if (remainingDays > 0) {
-                remainingText = `${remainingDays} gün ${remainingHours} saat`;
+                remainingText = `${remainingDays} gÃ¼n ${remainingHours} saat`;
             } else {
                 remainingText = `${remainingHours} saat ${remainingMins} dk`;
             }
             
             // Paket etiketi
             let packageLabel = '';
-            if (totalDays === 1) packageLabel = '1 Günlük';
-            else if (totalDays === 30) packageLabel = '30 Günlük';
-            else if (totalDays === 60) packageLabel = '60 Günlük';
-            else if (totalDays === 90) packageLabel = '90 Günlük';
-            else if (totalDays >= 365) packageLabel = 'Sınırsız';
-            else packageLabel = `${totalDays} Günlük`;
+            if (totalDays === 1) packageLabel = '1 GÃ¼nlÃ¼k';
+            else if (totalDays === 30) packageLabel = '30 GÃ¼nlÃ¼k';
+            else if (totalDays === 60) packageLabel = '60 GÃ¼nlÃ¼k';
+            else if (totalDays === 90) packageLabel = '90 GÃ¼nlÃ¼k';
+            else if (totalDays >= 365) packageLabel = 'SÄ±nÄ±rsÄ±z';
+            else packageLabel = `${totalDays} GÃ¼nlÃ¼k`;
             
             const gameName = key.game || 'Mobile Legends';
             const cheatName = key.cheat || 'TheBestML';
             const keyCode = key.keyCode || key.code || '***';
             const keyId = key.id || index;
             
-            // İlerleme yüzdesi
+            // Ä°lerleme yÃ¼zdesi
             const totalMs = exp - activatedAt;
             const usedMs = now - activatedAt;
             const progressPercent = Math.max(0, Math.min(100, 100 - (usedMs / totalMs * 100)));
@@ -11084,56 +8125,56 @@
                 <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(76,175,80,0.3); border-radius: 15px; padding: 15px; ${index > 0 ? 'margin-top: 12px;' : ''}">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 24px;">✅</span>
+                            <span style="font-size: 24px;">âœ…</span>
                             <span style="font-weight: bold; font-size: 16px; color: #4CAF50;">${packageLabel}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="background: #4CAF50; color: #fff; padding: 4px 12px; border-radius: 10px; font-size: 11px; font-weight: bold;">AKTİF</span>
-                            <button onclick="deleteKey('${keyId}', '${packageLabel}'); event.stopPropagation();" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🗑️</button>
+                            <span style="background: #4CAF50; color: #fff; padding: 4px 12px; border-radius: 10px; font-size: 11px; font-weight: bold;">AKTÄ°F</span>
+                            <button onclick="deleteKey('${keyId}', '${packageLabel}'); event.stopPropagation();" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">ğŸ—‘ï¸</button>
                         </div>
                     </div>
                     
-                    <!-- İlerleme Çubuğu -->
+                    <!-- Ä°lerleme Ã‡ubuÄŸu -->
                     <div style="background: rgba(255,255,255,0.1); border-radius: 5px; height: 8px; margin-bottom: 12px; overflow: hidden;">
                         <div style="background: linear-gradient(90deg, #4CAF50, #8BC34A); height: 100%; width: ${progressPercent}%; border-radius: 5px;"></div>
                     </div>
                     
                     <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
-                        <span style="color: #fff;">⏱️ ${remainingText} kaldı</span>
-                        <span style="color: #888;">📅 ${exp.toLocaleDateString('tr-TR')}</span>
+                        <span style="color: #fff;">â±ï¸ ${remainingText} kaldÄ±</span>
+                        <span style="color: #888;">ğŸ“… ${exp.toLocaleDateString('tr-TR')}</span>
                     </div>
                     
                     <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; margin-bottom: 12px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                            <span style="font-size: 12px; color: #888;">🎮 Oyun</span>
+                            <span style="font-size: 12px; color: #888;">ğŸ® Oyun</span>
                             <span style="font-size: 12px; color: #fff;">${gameName}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
-                            <span style="font-size: 12px; color: #888;">🛡️ Hile</span>
+                            <span style="font-size: 12px; color: #888;">ğŸ›¡ï¸ Hile</span>
                             <span style="font-size: 12px; color: #FFD700;">${cheatName}</span>
                         </div>
                     </div>
                     
                     <div style="background: rgba(76,175,80,0.15); border: 1px solid rgba(76,175,80,0.3); border-radius: 10px; padding: 12px;">
-                        <div style="font-size: 11px; color: #888; margin-bottom: 6px;">🔑 Key Kodunuz</div>
+                        <div style="font-size: 11px; color: #888; margin-bottom: 6px;">ğŸ”‘ Key Kodunuz</div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <code style="flex: 1; font-size: 13px; color: #4CAF50; word-break: break-all; font-weight: bold;">${keyCode}</code>
-                            <button onclick="copyToClipboard('${keyCode}'); event.stopPropagation();" style="background: #4CAF50; border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">📋 Kopyala</button>
+                            <button onclick="copyToClipboard('${keyCode}'); event.stopPropagation();" style="background: #4CAF50; border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">ğŸ“‹ Kopyala</button>
                         </div>
                     </div>
                     
-                    <!-- Süre Uzat Butonu -->
+                    <!-- SÃ¼re Uzat Butonu -->
                     <button onclick="openExtendModal('${keyId}', '${gameName}', '${cheatName}', '${keyCode}', '${exp.toISOString()}'); event.stopPropagation();" style="width: 100%; margin-top: 12px; background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                        ⏰ Süre Uzat
+                        â° SÃ¼re Uzat
                     </button>
                 </div>
             `;
         });
         
-        // Süresi dolmuş keyleri göster
+        // SÃ¼resi dolmuÅŸ keyleri gÃ¶ster
         if (userExpiredKeys.length > 0) {
             keysHtml += `<div style="font-size: 14px; font-weight: bold; color: #f44336; margin: 20px 0 12px 0; display: flex; align-items: center; gap: 8px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.1);">
-                <span>❌ Süresi Dolan Keyler</span>
+                <span>âŒ SÃ¼resi Dolan Keyler</span>
                 <span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${userExpiredKeys.length}</span>
             </div>`;
             
@@ -11144,55 +8185,55 @@
                 
                 // Paket etiketi
                 let packageLabel = '';
-                if (totalDays === 1) packageLabel = '1 Günlük';
-                else if (totalDays === 30) packageLabel = '30 Günlük';
-                else if (totalDays === 60) packageLabel = '60 Günlük';
-                else if (totalDays === 90) packageLabel = '90 Günlük';
-                else if (totalDays >= 365) packageLabel = 'Sınırsız';
-                else packageLabel = `${totalDays} Günlük`;
+                if (totalDays === 1) packageLabel = '1 GÃ¼nlÃ¼k';
+                else if (totalDays === 30) packageLabel = '30 GÃ¼nlÃ¼k';
+                else if (totalDays === 60) packageLabel = '60 GÃ¼nlÃ¼k';
+                else if (totalDays === 90) packageLabel = '90 GÃ¼nlÃ¼k';
+                else if (totalDays >= 365) packageLabel = 'SÄ±nÄ±rsÄ±z';
+                else packageLabel = `${totalDays} GÃ¼nlÃ¼k`;
                 
                 const gameName = key.game || 'Mobile Legends';
                 const cheatName = key.cheat || 'TheBestML';
                 const keyCode = key.keyCode || key.code || '***';
                 const keyId = key.id || `exp_${index}`;
                 
-                // Ne kadar önce bittiğini hesapla
+                // Ne kadar Ã¶nce bittiÄŸini hesapla
                 const expiredMs = now - exp;
                 const expiredDays = Math.floor(expiredMs / (1000 * 60 * 60 * 24));
                 const expiredHours = Math.floor((expiredMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                let expiredText = expiredDays > 0 ? `${expiredDays} gün önce` : `${expiredHours} saat önce`;
+                let expiredText = expiredDays > 0 ? `${expiredDays} gÃ¼n Ã¶nce` : `${expiredHours} saat Ã¶nce`;
                 
                 keysHtml += `
                     <div style="background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); border-radius: 15px; padding: 15px; ${index > 0 ? 'margin-top: 12px;' : ''}">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 24px;">⏰</span>
+                                <span style="font-size: 24px;">â°</span>
                                 <span style="font-weight: bold; font-size: 16px; color: #f44336;">${packageLabel}</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="background: #f44336; color: #fff; padding: 4px 12px; border-radius: 10px; font-size: 11px; font-weight: bold;">DOLDU</span>
-                                <button onclick="deleteKey('${keyId}', '${packageLabel}'); event.stopPropagation();" style="background: rgba(244,67,54,0.3); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🗑️</button>
+                                <button onclick="deleteKey('${keyId}', '${packageLabel}'); event.stopPropagation();" style="background: rgba(244,67,54,0.3); border: 1px solid #f44336; color: #f44336; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">ğŸ—‘ï¸</button>
                             </div>
                         </div>
                         
                         <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px;">
-                            <span style="color: #f44336;">⏱️ ${expiredText} sona erdi</span>
-                            <span style="color: #888;">📅 ${exp.toLocaleDateString('tr-TR')}</span>
+                            <span style="color: #f44336;">â±ï¸ ${expiredText} sona erdi</span>
+                            <span style="color: #888;">ğŸ“… ${exp.toLocaleDateString('tr-TR')}</span>
                         </div>
                         
                         <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px; margin-bottom: 12px;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                                <span style="font-size: 12px; color: #888;">🎮 Oyun</span>
+                                <span style="font-size: 12px; color: #888;">ğŸ® Oyun</span>
                                 <span style="font-size: 12px; color: #fff;">${gameName}</span>
                             </div>
                             <div style="display: flex; justify-content: space-between;">
-                                <span style="font-size: 12px; color: #888;">🛡️ Hile</span>
+                                <span style="font-size: 12px; color: #888;">ğŸ›¡ï¸ Hile</span>
                                 <span style="font-size: 12px; color: #FFD700;">${cheatName}</span>
                             </div>
                         </div>
                         
                         <div style="background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.2); border-radius: 10px; padding: 12px;">
-                            <div style="font-size: 11px; color: #888; margin-bottom: 6px;">🔑 Eski Key Kodu</div>
+                            <div style="font-size: 11px; color: #888; margin-bottom: 6px;">ğŸ”‘ Eski Key Kodu</div>
                             <code style="font-size: 12px; color: #888; word-break: break-all;">${keyCode}</code>
                         </div>
                     </div>
@@ -11200,11 +8241,11 @@
             });
         }
         
-        // Tümünü sil butonu
+        // TÃ¼mÃ¼nÃ¼ sil butonu
         if (userExpiredKeys.length > 1) {
             keysHtml += `
                 <button onclick="deleteAllExpiredKeys()" style="width: 100%; margin-top: 15px; background: linear-gradient(135deg, #f44336, #d32f2f); border: none; color: #fff; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: bold; cursor: pointer;">
-                    🗑️ Tüm Süresi Dolmuş Keyleri Sil (${userExpiredKeys.length})
+                    ğŸ—‘ï¸ TÃ¼m SÃ¼resi DolmuÅŸ Keyleri Sil (${userExpiredKeys.length})
                 </button>
             `;
         }
@@ -11213,19 +8254,19 @@
         openModal('keyDetailModal');
     }
     
-    // Tüm süresi dolmuş keyleri sil
+    // TÃ¼m sÃ¼resi dolmuÅŸ keyleri sil
     async function deleteAllExpiredKeys() {
         if (!currentUser) {
-            showToast('❌ Önce giriş yapın');
+            showToast('âŒ Ã–nce giriÅŸ yapÄ±n');
             return;
         }
         
-        const confirmed = confirm(`⚠️ Tüm süresi dolmuş keyleri (${userExpiredKeys.length} adet) silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz!`);
+        const confirmed = confirm(`âš ï¸ TÃ¼m sÃ¼resi dolmuÅŸ keyleri (${userExpiredKeys.length} adet) silmek istediÄŸinize emin misiniz?\n\nBu iÅŸlem geri alÄ±namaz!`);
         
         if (!confirmed) return;
         
         try {
-            showToast('⏳ Siliniyor...');
+            showToast('â³ Siliniyor...');
             
             const userDoc = await db.collection('users').doc(currentUser.uid).get();
             if (userDoc.exists) {
@@ -11233,7 +8274,7 @@
                 const keys = userData.keys || [];
                 const now = new Date();
                 
-                // Süresi dolmuş keyleri bul
+                // SÃ¼resi dolmuÅŸ keyleri bul
                 const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
                 
                 // Sadece aktif keyleri tut
@@ -11251,7 +8292,7 @@
                         expiresAt: key.expiresAt,
                         deletedAt: new Date(),
                         deletedBy: 'user',
-                        reason: 'Toplu silme - Süresi dolmuş'
+                        reason: 'Toplu silme - SÃ¼resi dolmuÅŸ'
                     });
                 });
                 
@@ -11260,30 +8301,30 @@
                     activityLog: activityLog
                 });
                 
-                showToast(`✅ ${expiredKeys.length} key silindi!`);
+                showToast(`âœ… ${expiredKeys.length} key silindi!`);
                 closeModal('keyDetailModal');
                 loadUserData();
             }
         } catch(e) {
-            console.error('Toplu silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Toplu silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
     // Key silme fonksiyonu
     async function deleteKey(keyId, packageLabel) {
         if (!currentUser) {
-            showToast('❌ Önce giriş yapın');
+            showToast('âŒ Ã–nce giriÅŸ yapÄ±n');
             return;
         }
         
         // Onay iste
-        const confirmed = confirm(`⚠️ "${packageLabel}" paketini silmek istediğinize emin misiniz?\n\nBu işlem geri alınamaz ve kalan süreniz kaybolur!`);
+        const confirmed = confirm(`âš ï¸ "${packageLabel}" paketini silmek istediÄŸinize emin misiniz?\n\nBu iÅŸlem geri alÄ±namaz ve kalan sÃ¼reniz kaybolur!`);
         
         if (!confirmed) return;
         
         try {
-            showToast('⏳ Siliniyor...');
+            showToast('â³ Siliniyor...');
             
             // Firebase'den key'i sil
             const userDoc = await db.collection('users').doc(currentUser.uid).get();
@@ -11316,33 +8357,33 @@
                         expiresAt: deletedKey.expiresAt,
                         deletedAt: new Date(),
                         deletedBy: 'user',
-                        reason: isExpired ? 'Süresi dolmuş key silindi' : 'Aktif key silindi'
+                        reason: isExpired ? 'SÃ¼resi dolmuÅŸ key silindi' : 'Aktif key silindi'
                     });
                 }
                 
-                // Güncelle
+                // GÃ¼ncelle
                 await db.collection('users').doc(currentUser.uid).update({
                     keys: updatedKeys,
                     activityLog: activityLog
                 });
                 
-                showToast('✅ Key silindi!');
+                showToast('âœ… Key silindi!');
                 
-                // Modal'ı kapat ve yeniden yükle
+                // Modal'Ä± kapat ve yeniden yÃ¼kle
                 closeModal('keyDetailModal');
                 
-                // Kullanıcı verilerini yeniden yükle
+                // KullanÄ±cÄ± verilerini yeniden yÃ¼kle
                 loadUserData();
             }
         } catch(e) {
-            console.error('Key silme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Key silme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // ==================== YETKİ SİSTEMİ ====================
+    // ==================== YETKÄ° SÄ°STEMÄ° ====================
     
-    // Kurucu (Owner) - TÜM yetkiler
+    // Kurucu (Owner) - TÃœM yetkiler
     const OWNER_EMAILS = ['onurtenk0@gmail.com'];
     const OWNER_EMAIL = OWNER_EMAILS[0];
 
@@ -11356,7 +8397,7 @@
         return OWNER_EMAILS.map(x => normalizeEmail(x)).includes(e);
     }
 
-    // ==================== ADMIN İSTATİSTİKLERİ ====================
+    // ==================== ADMIN Ä°STATÄ°STÄ°KLERÄ° ====================
     let adminUsageInterval = null;
     let adminUsageLastBeatMs = 0;
 
@@ -11369,7 +8410,7 @@
         const minutes = totalMinutes % 60;
 
         const parts = [];
-        if (days > 0) parts.push(days + ' gün');
+        if (days > 0) parts.push(days + ' gÃ¼n');
         if (hours > 0) parts.push(hours + ' saat');
         parts.push(minutes + ' dk');
         return parts.join(' ');
@@ -11389,7 +8430,7 @@
             payload[field] = firebase.firestore.FieldValue.increment(Number(amount) || 0);
             await ref.set(payload, { merge: true });
         } catch (e) {
-            console.log('Admin stat increment hatası:', e?.message || e);
+            console.log('Admin stat increment hatasÄ±:', e?.message || e);
         }
     }
 
@@ -11465,8 +8506,8 @@
                 const ms = Number(d.totalAppMs);
                 if (Number.isFinite(ms) && ms > 0) metrics.totalAppMs = ms;
 
-                // Spark kotasını korumak için pahalı koleksiyon taramalarını kullanma.
-                // Bu sayılar incrementAdminStatField ile birikiyor.
+                // Spark kotasÄ±nÄ± korumak iÃ§in pahalÄ± koleksiyon taramalarÄ±nÄ± kullanma.
+                // Bu sayÄ±lar incrementAdminStatField ile birikiyor.
                 const approved = Number(d.approvedOrdersCount);
                 if (Number.isFinite(approved) && approved > 0) metrics.approvedOrders = Math.floor(approved);
                 const claimed = Number(d.claimedChatsCount);
@@ -11477,53 +8518,53 @@
         return metrics;
     }
     
-    // Yetki tanımları
+    // Yetki tanÄ±mlarÄ±
     const PERMISSIONS = {
-        orders: { name: 'Sipariş Yönetimi', icon: '📦', desc: 'Siparişleri görüntüleme ve onaylama/reddetme' },
-        support: { name: 'Destek Yönetimi', icon: '💬', desc: 'Destek mesajlarına cevap verme' },
-        members_view: { name: 'Üye Görüntüleme', icon: '👁️', desc: 'Üye listesini görüntüleme' },
-        members_edit: { name: 'Üye Düzenleme', icon: '✏️', desc: 'Üye verilerini düzenleme' },
-        keys_add: { name: 'Key Ekleme', icon: '🔑', desc: 'Üyelere key ekleme' },
-        keys_delete: { name: 'Key Silme', icon: '🗑️', desc: 'Üyelerin keylerini silme' },
-        games: { name: 'Oyun/Hile Yönetimi', icon: '🎮', desc: 'Oyun ve hile ekleme/düzenleme' },
-        payments: { name: 'Ödeme Ayarları', icon: '💳', desc: 'Ödeme ayarlarını değiştirme' },
-        notifications: { name: 'Bildirim Gönderme', icon: '📢', desc: 'Tüm kullanıcılara bildirim gönderme' },
-        admin_management: { name: 'Admin Yönetimi', icon: '👮', desc: 'Admin ekleme/çıkarma/yetkilendirme' },
-        modals: { name: 'Kurulum Modalları', icon: '📖', desc: 'Kurulum rehberi modalları oluşturma/düzenleme' },
-        app_settings: { name: 'Uygulama Yönetimi', icon: '⚙️', desc: 'Uygulama ayarları, tema, logo ve güncelleme yönetimi' }
+        orders: { name: 'SipariÅŸ YÃ¶netimi', icon: 'ğŸ“¦', desc: 'SipariÅŸleri gÃ¶rÃ¼ntÃ¼leme ve onaylama/reddetme' },
+        support: { name: 'Destek YÃ¶netimi', icon: 'ğŸ’¬', desc: 'Destek mesajlarÄ±na cevap verme' },
+        members_view: { name: 'Ãœye GÃ¶rÃ¼ntÃ¼leme', icon: 'ğŸ‘ï¸', desc: 'Ãœye listesini gÃ¶rÃ¼ntÃ¼leme' },
+        members_edit: { name: 'Ãœye DÃ¼zenleme', icon: 'âœï¸', desc: 'Ãœye verilerini dÃ¼zenleme' },
+        keys_add: { name: 'Key Ekleme', icon: 'ğŸ”‘', desc: 'Ãœyelere key ekleme' },
+        keys_delete: { name: 'Key Silme', icon: 'ğŸ—‘ï¸', desc: 'Ãœyelerin keylerini silme' },
+        games: { name: 'Oyun/Hile YÃ¶netimi', icon: 'ğŸ®', desc: 'Oyun ve hile ekleme/dÃ¼zenleme' },
+        payments: { name: 'Ã–deme AyarlarÄ±', icon: 'ğŸ’³', desc: 'Ã–deme ayarlarÄ±nÄ± deÄŸiÅŸtirme' },
+        notifications: { name: 'Bildirim GÃ¶nderme', icon: 'ğŸ“¢', desc: 'TÃ¼m kullanÄ±cÄ±lara bildirim gÃ¶nderme' },
+        admin_management: { name: 'Admin YÃ¶netimi', icon: 'ğŸ‘®', desc: 'Admin ekleme/Ã§Ä±karma/yetkilendirme' },
+        modals: { name: 'Kurulum ModallarÄ±', icon: 'ğŸ“–', desc: 'Kurulum rehberi modallarÄ± oluÅŸturma/dÃ¼zenleme' },
+        app_settings: { name: 'Uygulama YÃ¶netimi', icon: 'âš™ï¸', desc: 'Uygulama ayarlarÄ±, tema, logo ve gÃ¼ncelleme yÃ¶netimi' }
     };
     
-    // Dinamik admin listesi (Firestore'dan yüklenir) - Yeni yapı: { email: string, permissions: string[] }
+    // Dinamik admin listesi (Firestore'dan yÃ¼klenir) - Yeni yapÄ±: { email: string, permissions: string[] }
     let adminList = [];  // [{ email: 'xxx', permissions: ['orders', 'support'] }, ...]
-    let adminEmails = []; // Eski yapı ile uyumluluk için
+    let adminEmails = []; // Eski yapÄ± ile uyumluluk iÃ§in
     
-    // Firestore'dan admin listesini yükle
+    // Firestore'dan admin listesini yÃ¼kle
     async function loadAdminList() {
         try {
             const doc = await db.collection('settings').doc('admins').get();
             if (doc.exists) {
                 const data = doc.data();
                 
-                // Yeni yapı varsa kullan
+                // Yeni yapÄ± varsa kullan
                 if (data.adminList) {
                     adminList = data.adminList;
                     adminEmails = adminList.map(a => a.email.toLowerCase());
                 } 
-                // Eski yapıyı yeni yapıya dönüştür
+                // Eski yapÄ±yÄ± yeni yapÄ±ya dÃ¶nÃ¼ÅŸtÃ¼r
                 else if (data.emails) {
                     adminEmails = data.emails;
                     adminList = adminEmails.map(email => ({
                         email: email,
-                        permissions: ['orders', 'support', 'members_view'] // Varsayılan yetkiler
+                        permissions: ['orders', 'support', 'members_view'] // VarsayÄ±lan yetkiler
                     }));
-                    // Yeni yapıyı kaydet
+                    // Yeni yapÄ±yÄ± kaydet
                     await saveAdminList();
                 }
                 
-                console.log('Admin listesi yüklendi:', adminList.length, 'admin');
+                console.log('Admin listesi yÃ¼klendi:', adminList.length, 'admin');
             }
         } catch(e) {
-            console.log('Admin listesi yüklenemedi:', e);
+            console.log('Admin listesi yÃ¼klenemedi:', e);
         }
     }
     
@@ -11532,7 +8573,7 @@
         try {
             await db.collection('settings').doc('admins').set({
                 adminList: adminList,
-                emails: adminEmails, // Eski yapı ile uyumluluk
+                emails: adminEmails, // Eski yapÄ± ile uyumluluk
                 updatedAt: new Date(),
                 updatedBy: currentUser?.email || 'system'
             });
@@ -11543,23 +8584,23 @@
         }
     }
     
-    // Admin ekle (ADMIN YÖNETİMİ YETKİSİ GEREKLİ)
+    // Admin ekle (ADMIN YÃ–NETÄ°MÄ° YETKÄ°SÄ° GEREKLÄ°)
     async function addAdmin(email, permissions = ['orders', 'support', 'members_view']) {
         if (!requirePermission('admin_management', 'admin eklemek')) return false;
         
         email = email.toLowerCase().trim();
         if (!email || !email.includes('@')) {
-            showToast('❌ Geçerli e-posta girin');
+            showToast('âŒ GeÃ§erli e-posta girin');
             return false;
         }
         
         if (isOwnerEmail(email)) {
-            showToast('⚠️ Kurucu zaten en üst yetkiye sahip');
+            showToast('âš ï¸ Kurucu zaten en Ã¼st yetkiye sahip');
             return false;
         }
         
         if (adminEmails.includes(email)) {
-            showToast('⚠️ Bu kullanıcı zaten admin');
+            showToast('âš ï¸ Bu kullanÄ±cÄ± zaten admin');
             return false;
         }
         
@@ -11574,30 +8615,30 @@
             adminEmails.push(email);
             
             if (await saveAdminList()) {
-                showToast('✅ ' + email + ' admin yapıldı!');
+                showToast('âœ… ' + email + ' admin yapÄ±ldÄ±!');
                 return true;
             }
             return false;
         } catch(e) {
             adminList = adminList.filter(a => a.email !== email);
             adminEmails = adminEmails.filter(e => e !== email);
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
             return false;
         }
     }
     
-    // Admin kaldır (ADMIN YÖNETİMİ YETKİSİ GEREKLİ)
+    // Admin kaldÄ±r (ADMIN YÃ–NETÄ°MÄ° YETKÄ°SÄ° GEREKLÄ°)
     async function removeAdmin(email) {
-        if (!requirePermission('admin_management', 'admin kaldırmak')) return false;
+        if (!requirePermission('admin_management', 'admin kaldÄ±rmak')) return false;
         
         email = email.toLowerCase().trim();
         
         if (!adminEmails.includes(email)) {
-            showToast('⚠️ Bu kullanıcı admin değil');
+            showToast('âš ï¸ Bu kullanÄ±cÄ± admin deÄŸil');
             return false;
         }
         
-        if (!confirm(`"${email}" kullanıcısının admin yetkisini kaldırmak istiyor musunuz?`)) {
+        if (!confirm(`"${email}" kullanÄ±cÄ±sÄ±nÄ±n admin yetkisini kaldÄ±rmak istiyor musunuz?`)) {
             return false;
         }
         
@@ -11606,27 +8647,27 @@
             adminEmails = adminEmails.filter(e => e !== email);
             
             if (await saveAdminList()) {
-                showToast('✅ ' + email + ' artık admin değil');
+                showToast('âœ… ' + email + ' artÄ±k admin deÄŸil');
                 loadAdminListUI();
                 return true;
             }
             return false;
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
             await loadAdminList();
             return false;
         }
     }
     
-    // Admin yetkilerini güncelle (ADMIN YÖNETİMİ YETKİSİ GEREKLİ)
+    // Admin yetkilerini gÃ¼ncelle (ADMIN YÃ–NETÄ°MÄ° YETKÄ°SÄ° GEREKLÄ°)
     async function updateAdminPermissions(email, permissions) {
-        if (!requirePermission('admin_management', 'yetki değiştirmek')) return false;
+        if (!requirePermission('admin_management', 'yetki deÄŸiÅŸtirmek')) return false;
         
         email = email.toLowerCase().trim();
         const adminIndex = adminList.findIndex(a => a.email === email);
         
         if (adminIndex === -1) {
-            showToast('⚠️ Bu kullanıcı admin değil');
+            showToast('âš ï¸ Bu kullanÄ±cÄ± admin deÄŸil');
             return false;
         }
         
@@ -11636,12 +8677,12 @@
             adminList[adminIndex].updatedBy = currentUser.email;
             
             if (await saveAdminList()) {
-                showToast('✅ Yetkiler güncellendi!');
+                showToast('âœ… Yetkiler gÃ¼ncellendi!');
                 return true;
             }
             return false;
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
             await loadAdminList();
             return false;
         }
@@ -11653,7 +8694,7 @@
         return admin ? admin.permissions : [];
     }
     
-    // Kurucu mu kontrol et (tüm yetkiler)
+    // Kurucu mu kontrol et (tÃ¼m yetkiler)
     function isOwner() {
         return !!currentUser && isOwnerEmail(currentUser.email);
     }
@@ -11665,11 +8706,11 @@
         return isOwnerEmail(email) || adminEmails.includes(email);
     }
     
-    // Yetki kontrolü - belirli bir yetki için
+    // Yetki kontrolÃ¼ - belirli bir yetki iÃ§in
     function hasPermission(permission) {
         if (!currentUser) return false;
         
-        // Kurucu tüm yetkilere sahip
+        // Kurucu tÃ¼m yetkilere sahip
         if (isOwner()) return true;
         
         // Admin ise yetkilerini kontrol et
@@ -11683,34 +8724,34 @@
         return false;
     }
     
-    // Belirli bir yetki gerekli - yoksa uyarı göster
+    // Belirli bir yetki gerekli - yoksa uyarÄ± gÃ¶ster
     function requirePermission(permission, actionName) {
         if (!hasPermission(permission)) {
             const permInfo = PERMISSIONS[permission];
-            showToast(`🔒 "${permInfo?.name || permission}" yetkisi gerekli`);
+            showToast(`ğŸ”’ "${permInfo?.name || permission}" yetkisi gerekli`);
             return false;
         }
         return true;
     }
     
-    // Kurucu yetkisi gerektiren işlem kontrolü
+    // Kurucu yetkisi gerektiren iÅŸlem kontrolÃ¼
     function requireOwner(action) {
         if (!isOwner()) {
-            showToast('🔒 Bu işlem için kurucu yetkisi gerekli');
+            showToast('ğŸ”’ Bu iÅŸlem iÃ§in kurucu yetkisi gerekli');
             return false;
         }
         return true;
     }
     
-    // Gelişmiş oyun/hile veri yapısı
+    // GeliÅŸmiÅŸ oyun/hile veri yapÄ±sÄ±
     let gamesData = {};  // { gameId: { name, image, desc, playStore, status, cheats: { cheatId: {...} } } }
-    let currentDynamicGame = null;  // Şu an açık olan dinamik oyun
-    let currentDynamicCheat = null; // Şu an açık olan dinamik hile
-    let selectedDynamicPrice = null; // Seçili fiyat
+    let currentDynamicGame = null;  // Åu an aÃ§Ä±k olan dinamik oyun
+    let currentDynamicCheat = null; // Åu an aÃ§Ä±k olan dinamik hile
+    let selectedDynamicPrice = null; // SeÃ§ili fiyat
     
-    // Firestore'dan oyun/hile verilerini yükle (her oyun ayrı dökümanda)
+    // Firestore'dan oyun/hile verilerini yÃ¼kle (her oyun ayrÄ± dÃ¶kÃ¼manda)
     async function loadGamesAndCheats() {
-        // Debug sadece console'da (ekranda görünmez)
+        // Debug sadece console'da (ekranda gÃ¶rÃ¼nmez)
         function showDebug(msg, isError = false) {
             if (isError) {
                 console.error(msg);
@@ -11719,47 +8760,47 @@
             }
         }
         
-        // BAŞLATMA KONTROLLERI
-        showDebug('🔄 loadGamesAndCheats başlatıldı');
+        // BAÅLATMA KONTROLLERI
+        showDebug('ğŸ”„ loadGamesAndCheats baÅŸlatÄ±ldÄ±');
         
         if (!db) {
-            showDebug('❌ HATA: db nesnesi null! Firebase başlatılamadı.', true);
+            showDebug('âŒ HATA: db nesnesi null! Firebase baÅŸlatÄ±lamadÄ±.', true);
             showDebug(`firebaseReady: ${firebaseReady}`, true);
             showDebug(`typeof firebase: ${typeof firebase}`, true);
             return;
         }
         
-        showDebug('✅ db nesnesi hazır');
+        showDebug('âœ… db nesnesi hazÄ±r');
         
         try {
-            showDebug('🔄 Başlangıç: Oyunlar yükleniyor...');
+            showDebug('ğŸ”„ BaÅŸlangÄ±Ã§: Oyunlar yÃ¼kleniyor...');
             
-            // Önce yeni yapıyı dene: games/{gameId} koleksiyonu
-            showDebug('📡 games koleksiyonu kontrol ediliyor...');
+            // Ã–nce yeni yapÄ±yÄ± dene: games/{gameId} koleksiyonu
+            showDebug('ğŸ“¡ games koleksiyonu kontrol ediliyor...');
             const gamesSnapshot = await db.collection('games').get();
             gamesData = {};
             
-            showDebug(`📊 Koleksiyon sonucu: ${gamesSnapshot.size} doküman bulundu`);
+            showDebug(`ğŸ“Š Koleksiyon sonucu: ${gamesSnapshot.size} dokÃ¼man bulundu`);
             
             if (!gamesSnapshot.empty) {
-                // Yeni yapıda veri var
+                // Yeni yapÄ±da veri var
                 gamesSnapshot.forEach(doc => {
                     gamesData[doc.id] = doc.data();
                 });
-                showDebug(`✅ Oyunlar yüklendi (yeni yapı): ${Object.keys(gamesData).join(', ')}`);
+                showDebug(`âœ… Oyunlar yÃ¼klendi (yeni yapÄ±): ${Object.keys(gamesData).join(', ')}`);
             } else {
-                // Yeni yapıda veri yok, eski yapıyı dene: settings/gamesData
-                showDebug('⚠️ Yeni yapıda veri yok, eski yapı kontrol ediliyor...');
+                // Yeni yapÄ±da veri yok, eski yapÄ±yÄ± dene: settings/gamesData
+                showDebug('âš ï¸ Yeni yapÄ±da veri yok, eski yapÄ± kontrol ediliyor...');
                 const oldDoc = await db.collection('settings').doc('gamesData').get();
                 
-                showDebug(`🔍 Eski doküman var mı: ${oldDoc.exists}`);
+                showDebug(`ğŸ” Eski dokÃ¼man var mÄ±: ${oldDoc.exists}`);
                 
                 if (oldDoc.exists && oldDoc.data() && oldDoc.data().games) {
-                    // Eski yapıdan veri bulduk, otomatik migration yap
+                    // Eski yapÄ±dan veri bulduk, otomatik migration yap
                     const oldGamesData = oldDoc.data().games;
-                    showDebug(`📦 Eski yapıda ${Object.keys(oldGamesData).length} oyun bulundu, migration başlıyor...`);
+                    showDebug(`ğŸ“¦ Eski yapÄ±da ${Object.keys(oldGamesData).length} oyun bulundu, migration baÅŸlÄ±yor...`);
                     
-                    // Her oyunu yeni yapıya aktar
+                    // Her oyunu yeni yapÄ±ya aktar
                     const migrationPromises = [];
                     for (const gameId in oldGamesData) {
                         gamesData[gameId] = oldGamesData[gameId];
@@ -11768,18 +8809,18 @@
                         );
                     }
                     
-                    // Tüm oyunları kaydet
+                    // TÃ¼m oyunlarÄ± kaydet
                     await Promise.all(migrationPromises);
-                    showDebug(`✅ Migration tamamlandı! Oyunlar: ${Object.keys(gamesData).join(', ')}`);
+                    showDebug(`âœ… Migration tamamlandÄ±! Oyunlar: ${Object.keys(gamesData).join(', ')}`);
                     
                     // Eski veriyi yedek olarak sakla
                     await db.collection('settings').doc('gamesData_BACKUP').set(oldDoc.data());
-                    showDebug('💾 Eski veri yedeklendi');
+                    showDebug('ğŸ’¾ Eski veri yedeklendi');
                 } else {
-                    // Hiç veri yok, varsayılan oluştur
-                    showDebug('📝 Hiç veri yok, varsayılan oluşturuluyor...');
+                    // HiÃ§ veri yok, varsayÄ±lan oluÅŸtur
+                    showDebug('ğŸ“ HiÃ§ veri yok, varsayÄ±lan oluÅŸturuluyor...');
                     
-                    // Varsayılan oyun verisi
+                    // VarsayÄ±lan oyun verisi
                     const defaultGame = {
                         name: 'Mobile Legends',
                         image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/mobile-legends-icon.jpg', 
@@ -11791,48 +8832,48 @@
                             name: 'TheBestML IMGUI',
                             image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
                             version: 'V2.8',
-                            desc: 'Gelişmiş IMGUI modu • ESP, Map Hack ve daha fazlası',
+                            desc: 'GeliÅŸmiÅŸ IMGUI modu â€¢ ESP, Map Hack ve daha fazlasÄ±',
                             apkUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html',
                             videoUrl: '',
-                            features: ['👁 Oyuncu Görünümü', '❤️ Düşman HP', '🗺 Harita Hilesi', '📦 Kutulama', '🌲 Orman Yaratıklarını Görme'],
+                            features: ['ğŸ‘ Oyuncu GÃ¶rÃ¼nÃ¼mÃ¼', 'â¤ï¸ DÃ¼ÅŸman HP', 'ğŸ—º Harita Hilesi', 'ğŸ“¦ Kutulama', 'ğŸŒ² Orman YaratÄ±klarÄ±nÄ± GÃ¶rme'],
                             prices: [
-                                { days: '1', label: '1 Gün', price: '220₺' },
-                                { days: '30', label: '30 Gün', price: '850₺' },
-                                { days: '90', label: '90 Gün', price: '1800₺' },
-                                { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
+                                { days: '1', label: '1 GÃ¼n', price: '220â‚º' },
+                                { days: '30', label: '30 GÃ¼n', price: '850â‚º' },
+                                { days: '90', label: '90 GÃ¼n', price: '1800â‚º' },
+                                { days: 'unlimited', label: 'SÄ±nÄ±rsÄ±z', price: '6500â‚º' }
                             ],
                             status: 'active',
                             setupSteps: [
                                 {
-                                    title: 'Orijinal ML İndirin',
-                                    description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
+                                    title: 'Orijinal ML Ä°ndirin',
+                                    description: 'Playstoreden Mobile Legends orijinal sÃ¼rÃ¼mÃ¼nÃ¼ indirin.',
                                     actionType: 'playstore'
                                 },
                                 {
-                                    title: 'Sertifikaları Kapatın',
-                                    description: 'Bypass korumasının çalışabilmesi için sertifikaları kapatın. Aşağıdaki butona tıklayarak video rehberi izleyin.',
+                                    title: 'SertifikalarÄ± KapatÄ±n',
+                                    description: 'Bypass korumasÄ±nÄ±n Ã§alÄ±ÅŸabilmesi iÃ§in sertifikalarÄ± kapatÄ±n. AÅŸaÄŸÄ±daki butona tÄ±klayarak video rehberi izleyin.',
                                     actionType: 'modal',
                                     modalId: 'imguiModal'
                                 },
                                 {
-                                    title: 'IMGUI APK İndirin',
-                                    description: 'TheBestML IMGUI APK dosyasını indirin ve kurun.',
+                                    title: 'IMGUI APK Ä°ndirin',
+                                    description: 'TheBestML IMGUI APK dosyasÄ±nÄ± indirin ve kurun.',
                                     actionType: 'download',
                                     downloadUrl: 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html'
                                 },
                                 {
-                                    title: 'Spa Dosyasını Çalıştırın',
-                                    description: 'İndirdiğiniz TheBestML Spa dosyasını çalıştırın ve karşınıza çıkan ekrandan izinleri verin.',
+                                    title: 'Spa DosyasÄ±nÄ± Ã‡alÄ±ÅŸtÄ±rÄ±n',
+                                    description: 'Ä°ndirdiÄŸiniz TheBestML Spa dosyasÄ±nÄ± Ã§alÄ±ÅŸtÄ±rÄ±n ve karÅŸÄ±nÄ±za Ã§Ä±kan ekrandan izinleri verin.',
                                     actionType: 'none'
                                 },
                                 {
-                                    title: 'ML Klonlayın',
-                                    description: 'Listeden Mobile Legends\'ı seçin ve "Klon" yazısına tıklayın.',
+                                    title: 'ML KlonlayÄ±n',
+                                    description: 'Listeden Mobile Legends\'Ä± seÃ§in ve "Klon" yazÄ±sÄ±na tÄ±klayÄ±n.',
                                     actionType: 'none'
                                 },
                                 {
-                                    title: 'Klonlanan ML\'yi Başlatın',
-                                    description: 'Klonladığınız ML sürümünü başlatın ve hesabım kısmındaki KEY\'iniz ile giriş yapın.',
+                                    title: 'Klonlanan ML\'yi BaÅŸlatÄ±n',
+                                    description: 'KlonladÄ±ÄŸÄ±nÄ±z ML sÃ¼rÃ¼mÃ¼nÃ¼ baÅŸlatÄ±n ve hesabÄ±m kÄ±smÄ±ndaki KEY\'iniz ile giriÅŸ yapÄ±n.',
                                     actionType: 'none'
                                 }
                             ]
@@ -11840,48 +8881,48 @@
                         'thebestml_pro': {
                             name: 'TheBestML Pro',
                             image: 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/thebestml-icon.jpg',
-                            version: 'YENİ',
-                            desc: 'Full Map • Auto Combo • Auto Aim • Rootlu/Rootsuz',
+                            version: 'YENÄ°',
+                            desc: 'Full Map â€¢ Auto Combo â€¢ Auto Aim â€¢ Rootlu/Rootsuz',
                             apkUrl: '',
                             videoUrl: '',
                             features: [
-                                '🗺️ Full Map',
-                                '🐾 Oto Pençe',
-                                '⚔️ Ling Oto Combo',
-                                '🌟 Julian Oto Combo',
-                                '🗡️ Arlott Oto Combo',
-                                '💀 Gusion Oto Combo',
-                                '🔫 Granger Oto Ulti',
-                                '🧲 Franco Mıknatıs Hook',
-                                '🎯 Xavier Oto Ulti',
-                                '🚀 Tigreal Oto Işınlanma + Ulti',
-                                '👊 Chou Oto Combo',
-                                '🪓 Balmond Oto Ulti',
-                                '⚡ Martis Oto Ulti',
-                                '🎯 Full Auto Aim'
+                                'ğŸ—ºï¸ Full Map',
+                                'ğŸ¾ Oto PenÃ§e',
+                                'âš”ï¸ Ling Oto Combo',
+                                'ğŸŒŸ Julian Oto Combo',
+                                'ğŸ—¡ï¸ Arlott Oto Combo',
+                                'ğŸ’€ Gusion Oto Combo',
+                                'ğŸ”« Granger Oto Ulti',
+                                'ğŸ§² Franco MÄ±knatÄ±s Hook',
+                                'ğŸ¯ Xavier Oto Ulti',
+                                'ğŸš€ Tigreal Oto IÅŸÄ±nlanma + Ulti',
+                                'ğŸ‘Š Chou Oto Combo',
+                                'ğŸª“ Balmond Oto Ulti',
+                                'âš¡ Martis Oto Ulti',
+                                'ğŸ¯ Full Auto Aim'
                             ],
                             prices: [
-                                { days: '1', label: '1 Gün', price: '220₺' },
-                                { days: '30', label: '30 Gün', price: '850₺' },
-                                { days: '90', label: '90 Gün', price: '1800₺' },
-                                { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
+                                { days: '1', label: '1 GÃ¼n', price: '220â‚º' },
+                                { days: '30', label: '30 GÃ¼n', price: '850â‚º' },
+                                { days: '90', label: '90 GÃ¼n', price: '1800â‚º' },
+                                { days: 'unlimited', label: 'SÄ±nÄ±rsÄ±z', price: '6500â‚º' }
                             ],
                             status: 'active',
                             setupSteps: [
                                 {
-                                    title: 'Orijinal ML İndirin',
-                                    description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
+                                    title: 'Orijinal ML Ä°ndirin',
+                                    description: 'Playstoreden Mobile Legends orijinal sÃ¼rÃ¼mÃ¼nÃ¼ indirin.',
                                     actionType: 'playstore'
                                 },
                                 {
-                                    title: 'TheBestML Pro APK İndirin',
-                                    description: 'TheBestML Pro APK dosyasını indirin ve kurun.',
+                                    title: 'TheBestML Pro APK Ä°ndirin',
+                                    description: 'TheBestML Pro APK dosyasÄ±nÄ± indirin ve kurun.',
                                     actionType: 'download',
                                     downloadUrl: ''
                                 },
                                 {
-                                    title: 'Oyuna Giriş Yapın',
-                                    description: 'Oyuna giriş yapın, key giriş ekranına geldiğinizde hesabım kısmındaki KEY\'inizi kopyalayıp yapıştırın.',
+                                    title: 'Oyuna GiriÅŸ YapÄ±n',
+                                    description: 'Oyuna giriÅŸ yapÄ±n, key giriÅŸ ekranÄ±na geldiÄŸinizde hesabÄ±m kÄ±smÄ±ndaki KEY\'inizi kopyalayÄ±p yapÄ±ÅŸtÄ±rÄ±n.',
                                     actionType: 'none'
                                 }
                             ]
@@ -11890,83 +8931,83 @@
                 };
                 
                     try {
-                        showDebug('💾 Varsayılan oyun kaydediliyor...');
-                        // Her oyunu ayrı dokümanda tut
+                        showDebug('ğŸ’¾ VarsayÄ±lan oyun kaydediliyor...');
+                        // Her oyunu ayrÄ± dokÃ¼manda tut
                         await db.collection('games').doc('mobile_legends').set(defaultGame);
                         gamesData['mobile_legends'] = defaultGame;
-                        showDebug('✅ Varsayılan oyun verisi kaydedildi');
+                        showDebug('âœ… VarsayÄ±lan oyun verisi kaydedildi');
                     } catch(saveErr) {
-                        showDebug('❌ Varsayılan veri kaydetme hatası: ' + saveErr.message, true);
+                        showDebug('âŒ VarsayÄ±lan veri kaydetme hatasÄ±: ' + saveErr.message, true);
                     }
                 }
             }
             
-            showDebug(`🎮 Toplam ${Object.keys(gamesData).length} oyun yüklendi`);
+            showDebug(`ğŸ® Toplam ${Object.keys(gamesData).length} oyun yÃ¼klendi`);
             
             if (Object.keys(gamesData).length === 0) {
-                showDebug('⚠️ UYARI: Hiç oyun yüklenmedi!', true);
+                showDebug('âš ï¸ UYARI: HiÃ§ oyun yÃ¼klenmedi!', true);
             }
             
-            showDebug('🔄 Sayfa render ediliyor...');
+            showDebug('ğŸ”„ Sayfa render ediliyor...');
             
             try {
-                renderHomeGames(); // Ana sayfadaki oyunları render et
-                showDebug('✅ renderHomeGames tamamlandı');
+                renderHomeGames(); // Ana sayfadaki oyunlarÄ± render et
+                showDebug('âœ… renderHomeGames tamamlandÄ±');
             } catch(renderErr) {
-                showDebug('❌ renderHomeGames hatası: ' + renderErr.message, true);
+                showDebug('âŒ renderHomeGames hatasÄ±: ' + renderErr.message, true);
             }
             
             try {
                 updateGameSelects();
-                showDebug('✅ updateGameSelects tamamlandı');
+                showDebug('âœ… updateGameSelects tamamlandÄ±');
             } catch(selectErr) {
-                showDebug('❌ updateGameSelects hatası: ' + selectErr.message, true);
+                showDebug('âŒ updateGameSelects hatasÄ±: ' + selectErr.message, true);
             }
             
             try {
                 loadGameCheatList();
-                showDebug('✅ loadGameCheatList tamamlandı');
+                showDebug('âœ… loadGameCheatList tamamlandÄ±');
             } catch(listErr) {
-                showDebug('❌ loadGameCheatList hatası: ' + listErr.message, true);
+                showDebug('âŒ loadGameCheatList hatasÄ±: ' + listErr.message, true);
             }
             
             try {
-                updateCheatStatusBadges(); // Durum badge'lerini güncelle
-                showDebug('✅ updateCheatStatusBadges tamamlandı');
+                updateCheatStatusBadges(); // Durum badge'lerini gÃ¼ncelle
+                showDebug('âœ… updateCheatStatusBadges tamamlandÄ±');
             } catch(badgeErr) {
-                showDebug('❌ updateCheatStatusBadges hatası: ' + badgeErr.message, true);
+                showDebug('âŒ updateCheatStatusBadges hatasÄ±: ' + badgeErr.message, true);
             }
             
-            showDebug('🎉 YÜKLENDİ! Sayfa hazır.');
+            showDebug('ğŸ‰ YÃœKLENDÄ°! Sayfa hazÄ±r.');
         } catch(e) {
-            showDebug('❌ KRİTİK HATA: ' + e.message, true);
+            showDebug('âŒ KRÄ°TÄ°K HATA: ' + e.message, true);
             showDebug('Stack: ' + (e.stack || 'Stack bilgisi yok'), true);
-            // Hata durumunda bile bir şey göster
+            // Hata durumunda bile bir ÅŸey gÃ¶ster
             const grid = document.getElementById('homeGamesGrid');
             if (grid) {
                 grid.innerHTML = `
                     <div style="text-align: center; padding: 30px; color: #f44336;">
-                        <div style="font-size: 50px; margin-bottom: 15px;">⚠️</div>
-                        <div style="font-size: 16px; margin-bottom: 10px;">Oyunlar yüklenemedi</div>
+                        <div style="font-size: 50px; margin-bottom: 15px;">âš ï¸</div>
+                        <div style="font-size: 16px; margin-bottom: 10px;">Oyunlar yÃ¼klenemedi</div>
                         <div style="font-size: 11px; color: #666; margin: 10px; padding: 10px; background: #222; border-radius: 5px; text-align: left; overflow: auto;">${e.message}<br><br>${e.stack || ''}</div>
-                        <button onclick="loadGamesAndCheats()" style="margin-top: 15px; background: #4CAF50; border: none; color: #fff; padding: 10px 20px; border-radius: 8px; cursor: pointer;">🔄 Tekrar Dene</button>
+                        <button onclick="loadGamesAndCheats()" style="margin-top: 15px; background: #4CAF50; border: none; color: #fff; padding: 10px 20px; border-radius: 8px; cursor: pointer;">ğŸ”„ Tekrar Dene</button>
                     </div>
                 `;
             }
         }
     }
     
-    // Ana sayfadaki oyunları dinamik olarak render et
+    // Ana sayfadaki oyunlarÄ± dinamik olarak render et
     function renderHomeGames() {
         const grid = document.getElementById('homeGamesGrid');
         if (!grid) {
-            console.error('homeGamesGrid elementi bulunamadı!');
+            console.error('homeGamesGrid elementi bulunamadÄ±!');
             return;
         }
         
         try {
             let html = '';
-            // Oyunları sortOrder'a göre sırala
+            // OyunlarÄ± sortOrder'a gÃ¶re sÄ±rala
             const gameIds = Object.keys(gamesData || {}).sort((a, b) => {
                 const orderA = gamesData[a].sortOrder ?? 999;
                 const orderB = gamesData[b].sortOrder ?? 999;
@@ -11974,11 +9015,11 @@
             });
             let activeGames = 0;
             
-            console.log('Render edilecek oyun sayısı:', gameIds.length);
+            console.log('Render edilecek oyun sayÄ±sÄ±:', gameIds.length);
             
             gameIds.forEach(gameId => {
                 const game = gamesData[gameId];
-                if (!game || game.status !== 'active') return; // Sadece aktif oyunları göster
+                if (!game || game.status !== 'active') return; // Sadece aktif oyunlarÄ± gÃ¶ster
                 activeGames++;
                 
                 const cheats = game.cheats || {};
@@ -11989,7 +9030,7 @@
                     ? game.image 
                     : (game.image || '');
                 
-                const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22 rx=%2215%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🎮</text></svg>`;
+                const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22 rx=%2215%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>ğŸ®</text></svg>`;
                 
                 html += `
                     <div class="game-card" onclick="openGameDetail('${gameId}')">
@@ -11999,17 +9040,17 @@
                             <div class="game-desc">${game.desc || 'Oyun hileleri'}</div>
                             <div class="game-badge">${cheatCount} Hile Mevcut</div>
                         </div>
-                        <div class="game-arrow">›</div>
+                        <div class="game-arrow">â€º</div>
                     </div>
                 `;
             });
             
-            // Hiç aktif oyun yoksa
+            // HiÃ§ aktif oyun yoksa
             if (activeGames === 0) {
                 html = `
                     <div style="text-align: center; padding: 30px; color: #888;">
-                        <div style="font-size: 50px; margin-bottom: 15px;">🎮</div>
-                        <div style="font-size: 16px; margin-bottom: 10px;">Henüz oyun eklenmemiş</div>
+                        <div style="font-size: 50px; margin-bottom: 15px;">ğŸ®</div>
+                        <div style="font-size: 16px; margin-bottom: 10px;">HenÃ¼z oyun eklenmemiÅŸ</div>
                         <div style="font-size: 13px; color: #666;">Admin panelden yeni oyun ekleyebilirsiniz</div>
                     </div>
                 `;
@@ -12018,37 +9059,37 @@
             grid.innerHTML = html;
             console.log('Oyunlar render edildi, aktif:', activeGames);
         } catch(e) {
-            console.error('renderHomeGames hatası:', e);
+            console.error('renderHomeGames hatasÄ±:', e);
             grid.innerHTML = `
                 <div style="text-align: center; padding: 30px; color: #f44336;">
-                    <div style="font-size: 50px; margin-bottom: 15px;">⚠️</div>
-                    <div>Oyunlar görüntülenirken hata oluştu</div>
+                    <div style="font-size: 50px; margin-bottom: 15px;">âš ï¸</div>
+                    <div>Oyunlar gÃ¶rÃ¼ntÃ¼lenirken hata oluÅŸtu</div>
                 </div>
             `;
         }
     }
     
-    // Oyun detay sayfasını aç
+    // Oyun detay sayfasÄ±nÄ± aÃ§
     function openGameDetail(gameId) {
         const game = gamesData[gameId];
         if (!game) {
-            showToast('❌ Oyun bulunamadı!');
+            showToast('âŒ Oyun bulunamadÄ±!');
             return;
         }
         
         currentDynamicGame = { id: gameId, ...game };
         
-        // Sayfa elemanlarını güncelle
+        // Sayfa elemanlarÄ±nÄ± gÃ¼ncelle
         document.getElementById('dynamicGameIcon').src = game.image || '';
         document.getElementById('dynamicGameTitle').textContent = game.name;
         document.getElementById('dynamicGameDesc').textContent = game.desc || 'Oyun hileleri';
         
-        // Hileleri listele (sortOrder'a göre sıralı)
+        // Hileleri listele (sortOrder'a gÃ¶re sÄ±ralÄ±)
         const cheatsGrid = document.getElementById('dynamicCheatsGrid');
         const cheats = game.cheats || {};
         let cheatsHtml = '';
         
-        // Hileleri sırala
+        // Hileleri sÄ±rala
         const cheatIds = Object.keys(cheats).sort((a, b) => {
             const orderA = cheats[a].sortOrder ?? 999;
             const orderB = cheats[b].sortOrder ?? 999;
@@ -12057,33 +9098,33 @@
         
         cheatIds.forEach(cheatId => {
             const cheat = cheats[cheatId];
-            if (cheat.status === 'inactive' && !currentUser) return; // Giriş yapmamışsa pasif hileleri gösterme
+            if (cheat.status === 'inactive' && !currentUser) return; // GiriÅŸ yapmamÄ±ÅŸsa pasif hileleri gÃ¶sterme
             
             const version = cheat.version || '';
-            let statusBadge = version ? `${version} • Aktif` : 'Aktif';
+            let statusBadge = version ? `${version} â€¢ Aktif` : 'Aktif';
             let badgeStyle = 'background: linear-gradient(135deg, #4CAF50, #45a049);';
             
             if (cheat.status === 'maintenance') {
-                statusBadge = `${version} • 🔧 Bakımda`;
+                statusBadge = `${version} â€¢ ğŸ”§ BakÄ±mda`;
                 badgeStyle = 'background: linear-gradient(135deg, #FF9800, #F57C00);';
             } else if (cheat.status === 'inactive') {
-                statusBadge = `${version} • ⏸️ Pasif`;
+                statusBadge = `${version} â€¢ â¸ï¸ Pasif`;
                 badgeStyle = 'background: linear-gradient(135deg, #f44336, #d32f2f);';
             }
             
             const imgSrc = cheat.image && cheat.image.startsWith('data:') 
                 ? cheat.image 
-                : (cheat.image || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%234CAF50%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>🗡</text></svg>');
+                : (cheat.image || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%234CAF50%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>ğŸ—¡</text></svg>');
             
             cheatsHtml += `
                 <div class="game-card" onclick="openCheatDetail('${gameId}', '${cheatId}')">
                     <img src="${imgSrc}" alt="${cheat.name}" class="game-icon">
                     <div class="game-info">
                         <div class="game-name">${cheat.name}</div>
-                        <div class="game-desc">${cheat.desc || 'Hile açıklaması'}</div>
+                        <div class="game-desc">${cheat.desc || 'Hile aÃ§Ä±klamasÄ±'}</div>
                         <div class="game-badge" style="${badgeStyle}">${statusBadge}</div>
                     </div>
-                    <div class="game-arrow">›</div>
+                    <div class="game-arrow">â€º</div>
                 </div>
             `;
         });
@@ -12091,8 +9132,8 @@
         if (!cheatsHtml) {
             cheatsHtml = `
                 <div style="text-align: center; padding: 30px; color: #888;">
-                    <div style="font-size: 50px; margin-bottom: 15px;">🗡️</div>
-                    <div>Bu oyun için henüz hile eklenmemiş</div>
+                    <div style="font-size: 50px; margin-bottom: 15px;">ğŸ—¡ï¸</div>
+                    <div>Bu oyun iÃ§in henÃ¼z hile eklenmemiÅŸ</div>
                 </div>
             `;
         }
@@ -12101,13 +9142,13 @@
         navigateTo('dynamicGamePage');
     }
     
-    // Hile detay sayfasını aç
+    // Hile detay sayfasÄ±nÄ± aÃ§
     async function openCheatDetail(gameId, cheatId) {
         const game = gamesData[gameId];
         const cheat = game?.cheats?.[cheatId];
         
         if (!cheat) {
-            showToast('❌ Hile bulunamadı!');
+            showToast('âŒ Hile bulunamadÄ±!');
             return;
         }
         
@@ -12115,23 +9156,23 @@
         currentDynamicCheat = { id: cheatId, gameId, ...cheat };
         selectedDynamicPrice = null;
         
-        // Sayfa elemanlarını güncelle
+        // Sayfa elemanlarÄ±nÄ± gÃ¼ncelle
         document.getElementById('dynamicCheatIcon').src = cheat.image || '';
         document.getElementById('dynamicCheatTitle').textContent = cheat.name;
-        document.getElementById('dynamicCheatSubtitle').textContent = `${game.name} • ${cheat.version || ''}`;
+        document.getElementById('dynamicCheatSubtitle').textContent = `${game.name} â€¢ ${cheat.version || ''}`;
         
-        // Durum uyarıları
+        // Durum uyarÄ±larÄ±
         document.getElementById('dynamicCheatMaintenanceWarning').style.display = cheat.status === 'maintenance' ? 'block' : 'none';
         document.getElementById('dynamicCheatInactiveWarning').style.display = cheat.status === 'inactive' ? 'block' : 'none';
         
-        // Özellikleri grid yapısında listele
+        // Ã–zellikleri grid yapÄ±sÄ±nda listele
         const featuresDiv = document.getElementById('dynamicCheatFeatures');
         const features = cheat.features || [];
         featuresDiv.innerHTML = features.map(f => `
             <div class="feature-item-new">${f}</div>
         `).join('');
         
-        // Video butonu - eğer videoUrl varsa göster
+        // Video butonu - eÄŸer videoUrl varsa gÃ¶ster
         const videoSection = document.getElementById('dynamicVideoSection');
         if (cheat.videoUrl) {
             videoSection.style.display = 'block';
@@ -12140,7 +9181,7 @@
             videoSection.style.display = 'none';
         }
         
-        // Fiyatları listele
+        // FiyatlarÄ± listele
         const pricesDiv = document.getElementById('dynamicCheatPrices');
         const prices = cheat.prices || [];
         pricesDiv.innerHTML = prices.map((p, i) => `
@@ -12150,7 +9191,7 @@
             </div>
         `).join('');
         
-        // Aktif üyelik kontrolü
+        // Aktif Ã¼yelik kontrolÃ¼
         let hasAccess = false;
         let membershipInfo = '';
         
@@ -12161,7 +9202,7 @@
                 const keys = userData.keys || [];
                 const now = new Date();
                 
-                // Bu oyun ve hile için aktif key var mı?
+                // Bu oyun ve hile iÃ§in aktif key var mÄ±?
                 const activeKey = keys.find(key => {
                     if (key.game === game.name && key.cheat === cheat.name) {
                         if (key.days === 'unlimited' || key.days === 0) return true;
@@ -12173,17 +9214,17 @@
                 if (activeKey) {
                     hasAccess = true;
                     if (activeKey.days === 'unlimited' || activeKey.days === 0) {
-                        membershipInfo = '⭐ Sınırsız Üyelik';
+                        membershipInfo = 'â­ SÄ±nÄ±rsÄ±z Ãœyelik';
                     } else if (activeKey.expiresAt) {
                         const expDate = activeKey.expiresAt.toDate();
                         const daysLeft = Math.ceil((expDate - now) / (1000 * 60 * 60 * 24));
-                        membershipInfo = `📅 ${daysLeft} gün kaldı (${expDate.toLocaleDateString('tr-TR')})`;
+                        membershipInfo = `ğŸ“… ${daysLeft} gÃ¼n kaldÄ± (${expDate.toLocaleDateString('tr-TR')})`;
                     }
                 }
             }
         }
         
-        // Kurulum talimatları ve üyelik bölümlerini güncelle
+        // Kurulum talimatlarÄ± ve Ã¼yelik bÃ¶lÃ¼mlerini gÃ¼ncelle
         document.getElementById('dynamicSetupLocked').style.display = hasAccess ? 'none' : 'block';
         document.getElementById('dynamicSetupUnlocked').style.display = hasAccess ? 'block' : 'none';
         document.getElementById('dynamicActiveMembership').style.display = hasAccess ? 'block' : 'none';
@@ -12192,52 +9233,52 @@
             document.getElementById('dynamicMembershipInfo').textContent = membershipInfo;
         }
         
-        // Kurulum adımlarını render et
+        // Kurulum adÄ±mlarÄ±nÄ± render et
         const stepsDiv = document.getElementById('dynamicSetupSteps');
         if (hasAccess) {
-            // Önce Firestore'dan kurulum adımlarını kontrol et
+            // Ã–nce Firestore'dan kurulum adÄ±mlarÄ±nÄ± kontrol et
             let setupSteps = cheat.setupSteps || [];
             
-            // Eğer setupSteps boşsa ve TheBestML IMGUI ise varsayılan adımları kullan
+            // EÄŸer setupSteps boÅŸsa ve TheBestML IMGUI ise varsayÄ±lan adÄ±mlarÄ± kullan
             if (setupSteps.length === 0 && cheat.name && cheat.name.toLowerCase().includes('imgui')) {
                 setupSteps = [
                     {
-                        title: '1️⃣ Orijinal ML İndirin',
-                        description: 'Playstoreden Mobile Legends orijinal sürümünü indirin.',
+                        title: '1ï¸âƒ£ Orijinal ML Ä°ndirin',
+                        description: 'Playstoreden Mobile Legends orijinal sÃ¼rÃ¼mÃ¼nÃ¼ indirin.',
                         actionType: 'playstore'
                     },
                     {
-                        title: '2️⃣ Sertifikaları Kapatın',
-                        description: 'Bypass korumasının çalışabilmesi için sertifikaları kapatın. Aşağıdaki butona tıklayarak video rehberi izleyin.',
+                        title: '2ï¸âƒ£ SertifikalarÄ± KapatÄ±n',
+                        description: 'Bypass korumasÄ±nÄ±n Ã§alÄ±ÅŸabilmesi iÃ§in sertifikalarÄ± kapatÄ±n. AÅŸaÄŸÄ±daki butona tÄ±klayarak video rehberi izleyin.',
                         actionType: 'modal',
                         modalId: 'imguiModal'
                     },
                     {
-                        title: '3️⃣ IMGUI APK İndirin',
-                        description: 'TheBestML IMGUI APK dosyasını indirin ve kurun.',
+                        title: '3ï¸âƒ£ IMGUI APK Ä°ndirin',
+                        description: 'TheBestML IMGUI APK dosyasÄ±nÄ± indirin ve kurun.',
                         actionType: 'download',
                         downloadUrl: cheat.apkUrl || 'https://dosya.co/dho18v1fbzq0/THEBEST_IMGUI-v2.8.apk.html'
                     },
                     {
-                        title: '4️⃣ Spa Dosyasını Çalıştırın',
-                        description: 'İndirdiğiniz TheBestML Spa dosyasını çalıştırın ve karşınıza çıkan ekrandan izinleri verin.',
+                        title: '4ï¸âƒ£ Spa DosyasÄ±nÄ± Ã‡alÄ±ÅŸtÄ±rÄ±n',
+                        description: 'Ä°ndirdiÄŸiniz TheBestML Spa dosyasÄ±nÄ± Ã§alÄ±ÅŸtÄ±rÄ±n ve karÅŸÄ±nÄ±za Ã§Ä±kan ekrandan izinleri verin.',
                         actionType: 'none'
                     },
                     {
-                        title: '5️⃣ ML Klonlayın',
-                        description: 'Listeden Mobile Legends\'ı seçin ve "Klon" yazısına tıklayın.',
+                        title: '5ï¸âƒ£ ML KlonlayÄ±n',
+                        description: 'Listeden Mobile Legends\'Ä± seÃ§in ve "Klon" yazÄ±sÄ±na tÄ±klayÄ±n.',
                         actionType: 'none'
                     },
                     {
-                        title: '6️⃣ Klonlanan ML\'yi Başlatın',
-                        description: 'Klonladığınız ML sürümünü başlatın ve hesabım kısmındaki KEY\'iniz ile giriş yapın. IMGUI menüsü oyun içinde görünecektir.',
+                        title: '6ï¸âƒ£ Klonlanan ML\'yi BaÅŸlatÄ±n',
+                        description: 'KlonladÄ±ÄŸÄ±nÄ±z ML sÃ¼rÃ¼mÃ¼nÃ¼ baÅŸlatÄ±n ve hesabÄ±m kÄ±smÄ±ndaki KEY\'iniz ile giriÅŸ yapÄ±n. IMGUI menÃ¼sÃ¼ oyun iÃ§inde gÃ¶rÃ¼necektir.',
                         actionType: 'none'
                     }
                 ];
             }
             
             if (setupSteps.length > 0) {
-                // Admin panelden eklenen özel kurulum adımları
+                // Admin panelden eklenen Ã¶zel kurulum adÄ±mlarÄ±
                 stepsDiv.innerHTML = setupSteps.map((step, i) => `
                     <div class="setup-step">
                         <div class="setup-step-header">
@@ -12248,40 +9289,40 @@
                         ${step.actionType === 'playstore' ? `
                             <div class="setup-step-action">
                                 <button class="btn btn-secondary btn-small" onclick="openPlayStore()">
-                                    🎮 Play Store'dan İndir
+                                    ğŸ® Play Store'dan Ä°ndir
                                 </button>
                             </div>
                         ` : ''}
                         ${step.actionType === 'download' && step.downloadUrl ? `
                             <div class="setup-step-action">
                                 <button class="btn btn-secondary btn-small" onclick="downloadDynamicApk('${step.downloadUrl}')">
-                                    📥 APK İndir
+                                    ğŸ“¥ APK Ä°ndir
                                 </button>
                             </div>
                         ` : ''}
                         ${step.actionType === 'modal' && step.modalId ? `
                             <div class="setup-step-action">
                                 <button class="detail-btn" onclick="openDynamicSetupModal('${step.modalId}')">
-                                    📖 Detaylı Kurulum Rehberi
+                                    ğŸ“– DetaylÄ± Kurulum Rehberi
                                 </button>
                             </div>
                         ` : ''}
                     </div>
                 `).join('');
             } else {
-                // Varsayılan kurulum adımları
+                // VarsayÄ±lan kurulum adÄ±mlarÄ±
                 stepsDiv.innerHTML = `
                     <div class="setup-step">
                         <div class="setup-step-header">
                             <div class="setup-step-number">1</div>
-                            <div class="setup-step-title">${game.name} İndir</div>
+                            <div class="setup-step-title">${game.name} Ä°ndir</div>
                         </div>
                         <div class="setup-step-desc">
                             Play Store'dan orijinal ${game.name} oyununu indirin ve kurun.
                         </div>
                         <div class="setup-step-action">
                             <button class="btn btn-secondary btn-small" onclick="openPlayStore()">
-                                🎮 Play Store'dan İndir
+                                ğŸ® Play Store'dan Ä°ndir
                             </button>
                         </div>
                     </div>
@@ -12289,15 +9330,15 @@
                     <div class="setup-step">
                         <div class="setup-step-header">
                             <div class="setup-step-number">2</div>
-                            <div class="setup-step-title">${cheat.name} APK İndir</div>
+                            <div class="setup-step-title">${cheat.name} APK Ä°ndir</div>
                         </div>
                         <div class="setup-step-desc">
-                            ${cheat.name} APK dosyasını indirin ve kurulum adımlarını takip edin.
+                            ${cheat.name} APK dosyasÄ±nÄ± indirin ve kurulum adÄ±mlarÄ±nÄ± takip edin.
                         </div>
                         ${cheat.apkUrl ? `
                             <div class="setup-step-action">
                                 <button class="btn btn-secondary btn-small" onclick="downloadDynamicApk('${cheat.apkUrl}')">
-                                    📥 APK İndir
+                                    ğŸ“¥ APK Ä°ndir
                                 </button>
                             </div>
                         ` : ''}
@@ -12306,47 +9347,47 @@
                     <div class="setup-step" style="border-color: #4CAF50;">
                         <div class="setup-step-header">
                             <div class="setup-step-number" style="background: linear-gradient(135deg, #4CAF50, #45a049);">3</div>
-                            <div class="setup-step-title">Oyuna Giriş Yap</div>
+                            <div class="setup-step-title">Oyuna GiriÅŸ Yap</div>
                         </div>
                         <div class="setup-step-desc">
-                            Oyuna giriş yapın, key giriş ekranına geldiğinizde hesabım kısmındaki key'inizi kopyalayıp yapıştırın.
+                            Oyuna giriÅŸ yapÄ±n, key giriÅŸ ekranÄ±na geldiÄŸinizde hesabÄ±m kÄ±smÄ±ndaki key'inizi kopyalayÄ±p yapÄ±ÅŸtÄ±rÄ±n.
                         </div>
                     </div>
                 `;
             }
         }
         
-        // Satın al butonu güncelle
-        document.getElementById('dynamicSelectedPrice').textContent = 'Fiyat seçin';
+        // SatÄ±n al butonu gÃ¼ncelle
+        document.getElementById('dynamicSelectedPrice').textContent = 'Fiyat seÃ§in';
         
         navigateTo('dynamicCheatPage');
     }
     
-    // Dinamik video modalını aç
+    // Dinamik video modalÄ±nÄ± aÃ§
     function openDynamicVideoModal() {
         if (window.currentCheatVideoUrl) {
-            // YouTube video ID'sini çıkar
+            // YouTube video ID'sini Ã§Ä±kar
             const videoId = extractYouTubeId(window.currentCheatVideoUrl);
             if (videoId) {
                 openYouTubeVideo(videoId);
             } else {
-                // Direkt URL aç
+                // Direkt URL aÃ§
                 window.open(window.currentCheatVideoUrl, '_blank');
             }
         }
     }
     
-    // YouTube video ID çıkarma
+    // YouTube video ID Ã§Ä±karma
     function extractYouTubeId(url) {
         const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
         const match = url.match(regExp);
         return (match && match[2].length === 11) ? match[2] : null;
     }
     
-    // YouTube video açma
+    // YouTube video aÃ§ma
     function openYouTubeVideo(videoId) {
         if (videoId) {
-            // Modal içinde YouTube iframe göster
+            // Modal iÃ§inde YouTube iframe gÃ¶ster
             const container = document.getElementById('youtubeVideoContainer');
             container.innerHTML = `
                 <iframe 
@@ -12358,7 +9399,7 @@
                 </iframe>
             `;
             
-            // Özellikleri ekle
+            // Ã–zellikleri ekle
             const featuresContainer = document.getElementById('videoModalFeatures');
             const features = currentDynamicCheat?.features || [];
             
@@ -12376,7 +9417,7 @@
                                     display: flex; 
                                     align-items: center; 
                                     gap: 8px;">
-                            <span style="color: #4CAF50; font-size: 16px;">✓</span>
+                            <span style="color: #4CAF50; font-size: 16px;">âœ“</span>
                             ${feature}
                         </div>
                     `;
@@ -12385,22 +9426,22 @@
                 featuresHtml += '</div>';
                 featuresContainer.innerHTML = featuresHtml;
             } else {
-                featuresContainer.innerHTML = '<p style="text-align: center; color: #888; padding: 15px;">Özellik bilgisi yok</p>';
+                featuresContainer.innerHTML = '<p style="text-align: center; color: #888; padding: 15px;">Ã–zellik bilgisi yok</p>';
             }
             
             openModal('youtubeVideoModal');
         } else {
-            showToast('⚠️ Video açılamadı!');
+            showToast('âš ï¸ Video aÃ§Ä±lamadÄ±!');
         }
     }
     
-    // Video modal'daki özellikleri aç/kapa
+    // Video modal'daki Ã¶zellikleri aÃ§/kapa
     function toggleVideoFeatures() {
         const container = document.getElementById('videoModalFeatures');
         const icon = document.getElementById('videoFeaturesToggleIcon');
         
         if (container.style.maxHeight === '0px' || container.style.maxHeight === '') {
-            // Aç
+            // AÃ§
             container.style.maxHeight = container.scrollHeight + 'px';
             icon.style.transform = 'rotate(180deg)';
         } else {
@@ -12415,21 +9456,21 @@
         if (url) {
             window.open(url, '_blank');
         } else {
-            showToast('⚠️ İndirme linki bulunamadı!');
+            showToast('âš ï¸ Ä°ndirme linki bulunamadÄ±!');
         }
     }
     
-    // Dinamik fiyat seçimi
+    // Dinamik fiyat seÃ§imi
     function selectDynamicPrice(index) {
-        // Giriş kontrolü
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        // GiriÅŸ kontrolÃ¼
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
         const prices = currentDynamicCheat?.prices || [];
         if (index < 0 || index >= prices.length) return;
         
         selectedDynamicPrice = prices[index];
         
-        // UI güncelle
+        // UI gÃ¼ncelle
         document.querySelectorAll('#dynamicCheatPrices .price-card').forEach((card, i) => {
             card.classList.toggle('selected', i === index);
         });
@@ -12437,16 +9478,16 @@
         document.getElementById('dynamicSelectedPrice').textContent = `${selectedDynamicPrice.label} - ${selectedDynamicPrice.price}`;
     }
     
-    // Dinamik satın alma modalını aç
+    // Dinamik satÄ±n alma modalÄ±nÄ± aÃ§
     function openDynamicBuyModal() {
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
         if (!selectedDynamicPrice) {
-            showToast('⚠️ Lütfen bir fiyat seçin!');
+            showToast('âš ï¸ LÃ¼tfen bir fiyat seÃ§in!');
             return;
         }
         
-        // Sipariş için bilgileri kaydet
+        // SipariÅŸ iÃ§in bilgileri kaydet
         window.pendingDynamicOrder = {
             game: currentDynamicGame.name,
             gameId: currentDynamicGame.id,
@@ -12457,7 +9498,7 @@
             price: selectedDynamicPrice.price
         };
         
-        // Merkezi ödeme sistemini kullan
+        // Merkezi Ã¶deme sistemini kullan
         openUnifiedPaymentModal({
             type: 'purchase',
             game: currentDynamicGame.name,
@@ -12472,17 +9513,17 @@
         });
     }
     
-    // Dinamik ödeme yöntemi seç (eski - geriye uyumluluk)
+    // Dinamik Ã¶deme yÃ¶ntemi seÃ§ (eski - geriye uyumluluk)
     function selectDynamicPaymentMethod(method) {
         closeModal('dynamicPaymentModal');
         const order = window.pendingDynamicOrder;
         
         if (method === 'shopier') {
-            // Kredi kartı geçici olarak devre dışı
-            showToast('⚠️ Kredi kartı ile ödeme yakında aktif olacak!');
+            // Kredi kartÄ± geÃ§ici olarak devre dÄ±ÅŸÄ±
+            showToast('âš ï¸ Kredi kartÄ± ile Ã¶deme yakÄ±nda aktif olacak!');
             return;
         } else if (method === 'havale') {
-            // Havale bilgilerini göster
+            // Havale bilgilerini gÃ¶ster
             const havalePackageInfo = document.getElementById('havalePackageInfo');
             const havaleAmount = document.getElementById('havaleAmount');
             
@@ -12491,15 +9532,15 @@
                 havaleAmount.textContent = order.price;
             }
             
-            // Dinamik sipariş bilgisini global olarak sakla (dekont gönderildiğinde kullanılacak)
+            // Dinamik sipariÅŸ bilgisini global olarak sakla (dekont gÃ¶nderildiÄŸinde kullanÄ±lacak)
             window.isDynamicOrder = true;
             
             openModal('havaleModal');
-            // NOT: Sipariş, dekont yüklendikten ve gönder butonuna basıldıktan sonra kaydedilecek
+            // NOT: SipariÅŸ, dekont yÃ¼klendikten ve gÃ¶nder butonuna basÄ±ldÄ±ktan sonra kaydedilecek
         }
     }
     
-    // Dinamik sipariş kaydet
+    // Dinamik sipariÅŸ kaydet
     async function saveDynamicOrder(paymentMethod) {
         const order = window.pendingDynamicOrder;
         if (!order || !currentUser) return;
@@ -12524,47 +9565,47 @@
             await db.collection('orders').add(orderData);
             updateOrderBadge();
 
-            // Admin'lere yeni sipariş bildirimi gönder
+            // Admin'lere yeni sipariÅŸ bildirimi gÃ¶nder
             try {
                 await sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price);
             } catch (e) {}
             
-            // Fiyat seçimini sıfırla
+            // Fiyat seÃ§imini sÄ±fÄ±rla
             selectedDynamicPrice = null;
             document.querySelectorAll('#dynamicCheatPrices .price-card').forEach(card => card.classList.remove('selected'));
-            document.getElementById('dynamicSelectedPrice').textContent = 'Fiyat seçin';
+            document.getElementById('dynamicSelectedPrice').textContent = 'Fiyat seÃ§in';
             
-            // Başarı modalını göster
+            // BaÅŸarÄ± modalÄ±nÄ± gÃ¶ster
             showOrderSuccessModal();
             
         } catch(e) {
-            console.error('Sipariş hatası:', e);
-            showToast('❌ Sipariş gönderilemedi: ' + e.message);
+            console.error('SipariÅŸ hatasÄ±:', e);
+            showToast('âŒ SipariÅŸ gÃ¶nderilemedi: ' + e.message);
         }
     }
     
-    // Hile durum badge'lerini güncelle (kullanıcı tarafı)
+    // Hile durum badge'lerini gÃ¼ncelle (kullanÄ±cÄ± tarafÄ±)
     function updateCheatStatusBadges() {
-        // TheBestML için
+        // TheBestML iÃ§in
         const thebestmlBadge = document.getElementById('thebestmlStatusBadge');
         if (thebestmlBadge && gamesData.mobile_legends?.cheats?.thebestml) {
             const cheat = gamesData.mobile_legends.cheats.thebestml;
             const version = cheat.version || 'V2.8';
             
             if (cheat.status === 'maintenance') {
-                thebestmlBadge.textContent = `${version} • 🔧 Bakımda`;
+                thebestmlBadge.textContent = `${version} â€¢ ğŸ”§ BakÄ±mda`;
                 thebestmlBadge.style.background = 'linear-gradient(135deg, #FF9800, #F57C00)';
             } else if (cheat.status === 'inactive') {
-                thebestmlBadge.textContent = `${version} • ⏸️ Pasif`;
+                thebestmlBadge.textContent = `${version} â€¢ â¸ï¸ Pasif`;
                 thebestmlBadge.style.background = 'linear-gradient(135deg, #f44336, #d32f2f)';
             } else {
-                thebestmlBadge.textContent = `${version} • Aktif`;
+                thebestmlBadge.textContent = `${version} â€¢ Aktif`;
                 thebestmlBadge.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
             }
         }
     }
     
-    // Hile sayfasına girince durumu kontrol et
+    // Hile sayfasÄ±na girince durumu kontrol et
     function checkCheatStatus(gameId, cheatId) {
         const cheat = gamesData[gameId]?.cheats?.[cheatId];
         if (!cheat) return;
@@ -12572,7 +9613,7 @@
         const maintenanceWarning = document.getElementById('cheatMaintenanceWarning');
         const inactiveWarning = document.getElementById('cheatInactiveWarning');
         
-        // Önce tüm uyarıları gizle
+        // Ã–nce tÃ¼m uyarÄ±larÄ± gizle
         if (maintenanceWarning) maintenanceWarning.style.display = 'none';
         if (inactiveWarning) inactiveWarning.style.display = 'none';
         
@@ -12583,23 +9624,23 @@
         }
     }
     
-    // Veritabanına kaydet - Belirli bir oyunu kaydet
+    // VeritabanÄ±na kaydet - Belirli bir oyunu kaydet
     async function saveGameData(gameId) {
         try {
             if (!gamesData[gameId]) {
-                throw new Error('Oyun bulunamadı: ' + gameId);
+                throw new Error('Oyun bulunamadÄ±: ' + gameId);
             }
             await db.collection('games').doc(gameId).set(gamesData[gameId]);
             updateCheatStatusBadges();
             return true;
         } catch(e) {
-            console.error('Kaydetme hatası:', e);
-            showToast('❌ Kaydetme hatası: ' + e.message);
+            console.error('Kaydetme hatasÄ±:', e);
+            showToast('âŒ Kaydetme hatasÄ±: ' + e.message);
             return false;
         }
     }
     
-    // Tüm oyunları kaydet (eski uyumluluk için)
+    // TÃ¼m oyunlarÄ± kaydet (eski uyumluluk iÃ§in)
     async function saveGamesData() {
         try {
             const promises = Object.keys(gamesData).map(gameId => 
@@ -12609,38 +9650,38 @@
             updateCheatStatusBadges();
             return true;
         } catch(e) {
-            console.error('Kaydetme hatası:', e);
-            showToast('❌ Kaydetme hatası: ' + e.message);
+            console.error('Kaydetme hatasÄ±:', e);
+            showToast('âŒ Kaydetme hatasÄ±: ' + e.message);
             return false;
         }
     }
     
-    // Tüm oyun selectlerini güncelle
+    // TÃ¼m oyun selectlerini gÃ¼ncelle
     function updateGameSelects() {
         const selects = ['adminGame', 'cheatGameSelect', 'cheatUpdateGame'];
         
         selects.forEach(selectId => {
             const select = document.getElementById(selectId);
             if (select) {
-                select.innerHTML = '<option value="">🎮 Oyun Seçin...</option>';
+                select.innerHTML = '<option value="">ğŸ® Oyun SeÃ§in...</option>';
                 Object.keys(gamesData).forEach(gameId => {
                     const game = gamesData[gameId];
                     if (game.status === 'active') {
-                        select.innerHTML += `<option value="${gameId}">🎮 ${game.name}</option>`;
+                        select.innerHTML += `<option value="${gameId}">ğŸ® ${game.name}</option>`;
                     }
                 });
             }
         });
     }
     
-    // Oyun seçilince hileleri güncelle
+    // Oyun seÃ§ilince hileleri gÃ¼ncelle
     function updateCheatOptions() {
         const gameSelect = document.getElementById('adminGame');
         const cheatSelect = document.getElementById('adminCheat');
         const selectedGameId = gameSelect.value;
         
         if (!selectedGameId || !gamesData[selectedGameId]) {
-            cheatSelect.innerHTML = '<option value="">🛡️ Önce oyun seçin...</option>';
+            cheatSelect.innerHTML = '<option value="">ğŸ›¡ï¸ Ã–nce oyun seÃ§in...</option>';
             cheatSelect.disabled = true;
             return;
         }
@@ -12650,20 +9691,20 @@
         
         const cheatIds = Object.keys(cheats);
         if (cheatIds.length === 0) {
-            cheatSelect.innerHTML = '<option value="">🛡️ Bu oyun için hile yok</option>';
+            cheatSelect.innerHTML = '<option value="">ğŸ›¡ï¸ Bu oyun iÃ§in hile yok</option>';
             cheatSelect.disabled = true;
         } else {
             cheatIds.forEach(cheatId => {
                 const cheat = cheats[cheatId];
                 if (cheat.status === 'active') {
-                    cheatSelect.innerHTML += `<option value="${cheatId}">🛡️ ${cheat.name}</option>`;
+                    cheatSelect.innerHTML += `<option value="${cheatId}">ğŸ›¡ï¸ ${cheat.name}</option>`;
                 }
             });
             cheatSelect.disabled = false;
         }
     }
 
-    // Hile Güncelleme: oyun seçilince hile listesini güncelle
+    // Hile GÃ¼ncelleme: oyun seÃ§ilince hile listesini gÃ¼ncelle
     function updateCheatUpdateOptions() {
         const gameSelect = document.getElementById('cheatUpdateGame');
         const cheatSelect = document.getElementById('cheatUpdateCheat');
@@ -12674,7 +9715,7 @@
 
         if (!selectedGameId || !gamesData[selectedGameId]) {
             if (cheatSelect) {
-                cheatSelect.innerHTML = '<option value="">🛡️ Önce oyun seçin...</option>';
+                cheatSelect.innerHTML = '<option value="">ğŸ›¡ï¸ Ã–nce oyun seÃ§in...</option>';
                 cheatSelect.disabled = true;
             }
             if (versionInput) versionInput.value = '';
@@ -12689,7 +9730,7 @@
 
         cheatSelect.innerHTML = '';
         if (cheatIds.length === 0) {
-            cheatSelect.innerHTML = '<option value="">🛡️ Bu oyun için hile yok</option>';
+            cheatSelect.innerHTML = '<option value="">ğŸ›¡ï¸ Bu oyun iÃ§in hile yok</option>';
             cheatSelect.disabled = true;
             if (versionInput) versionInput.value = '';
             if (apkUrlInput) apkUrlInput.value = '';
@@ -12699,14 +9740,14 @@
         cheatIds.forEach(cheatId => {
             const cheat = cheats[cheatId] || {};
             const status = cheat.status ? ` (${cheat.status})` : '';
-            cheatSelect.innerHTML += `<option value="${cheatId}">🛡️ ${cheat.name || cheatId}${status}</option>`;
+            cheatSelect.innerHTML += `<option value="${cheatId}">ğŸ›¡ï¸ ${cheat.name || cheatId}${status}</option>`;
         });
 
         cheatSelect.disabled = false;
         fillCheatUpdateFields();
     }
 
-    // Hile Güncelleme: seçili hilenin mevcut alanlarını inputlara bas
+    // Hile GÃ¼ncelleme: seÃ§ili hilenin mevcut alanlarÄ±nÄ± inputlara bas
     function fillCheatUpdateFields() {
         const gameId = document.getElementById('cheatUpdateGame')?.value;
         const cheatId = document.getElementById('cheatUpdateCheat')?.value;
@@ -12724,20 +9765,20 @@
         if (apkUrlInput) apkUrlInput.value = cheat.apkUrl || '';
     }
 
-    // Hile Güncelleme: kaydet + tüm kullanıcılara bildirim (Firestore + FCM topic)
+    // Hile GÃ¼ncelleme: kaydet + tÃ¼m kullanÄ±cÄ±lara bildirim (Firestore + FCM topic)
     async function adminUpdateCheatFilesAndNotify() {
-        if (!requirePermission('games', 'hile güncellemek')) return;
+        if (!requirePermission('games', 'hile gÃ¼ncellemek')) return;
 
         const gameId = document.getElementById('cheatUpdateGame')?.value;
         const cheatId = document.getElementById('cheatUpdateCheat')?.value;
         const newVersion = document.getElementById('cheatUpdateVersion')?.value.trim();
         const newApkUrl = document.getElementById('cheatUpdateApkUrl')?.value.trim();
 
-        if (!gameId || !gamesData[gameId]) { showToast('❌ Oyun seçin'); return; }
-        if (!cheatId || !gamesData[gameId]?.cheats?.[cheatId]) { showToast('❌ Hile seçin'); return; }
+        if (!gameId || !gamesData[gameId]) { showToast('âŒ Oyun seÃ§in'); return; }
+        if (!cheatId || !gamesData[gameId]?.cheats?.[cheatId]) { showToast('âŒ Hile seÃ§in'); return; }
 
         if (!newVersion && !newApkUrl) {
-            showToast('⚠️ En az bir alan girin (versiyon veya apkUrl)');
+            showToast('âš ï¸ En az bir alan girin (versiyon veya apkUrl)');
             return;
         }
 
@@ -12746,12 +9787,12 @@
             const cheat = gamesData[gameId].cheats[cheatId];
             const oldApkUrl = cheat.apkUrl || '';
 
-            // Değişiklikleri uygula
+            // DeÄŸiÅŸiklikleri uygula
             if (newVersion) cheat.version = newVersion;
             if (newApkUrl) {
                 cheat.apkUrl = newApkUrl;
 
-                // Kurulum adımlarındaki APK indirme linkini de senkronla
+                // Kurulum adÄ±mlarÄ±ndaki APK indirme linkini de senkronla
                 if (Array.isArray(cheat.setupSteps)) {
                     cheat.setupSteps.forEach(step => {
                         if ((step?.actionType || 'none') === 'download') {
@@ -12763,15 +9804,15 @@
             cheat.lastUpdatedAt = new Date().toISOString();
             cheat.lastUpdatedBy = currentUser?.email || 'admin';
 
-            // Firestore'a kaydet (oyun dokümanı içinde)
+            // Firestore'a kaydet (oyun dokÃ¼manÄ± iÃ§inde)
             const saved = await saveGameData(gameId);
             if (!saved) return;
 
-            const title = '🛡️ Hile Güncellendi';
+            const title = 'ğŸ›¡ï¸ Hile GÃ¼ncellendi';
             const versionPart = cheat.version ? ` v${cheat.version}` : '';
-            const message = `${game.name} • ${cheat.name}${versionPart} güncellendi. Uygulamadan indirip kullanabilirsiniz.`;
+            const message = `${game.name} â€¢ ${cheat.name}${versionPart} gÃ¼ncellendi. Uygulamadan indirip kullanabilirsiniz.`;
 
-            // 1) Uygulama içi (Firestore) bildirim
+            // 1) Uygulama iÃ§i (Firestore) bildirim
             await db.collection('notifications').add({
                 targetType: 'all',
                 targetEmail: null,
@@ -12790,25 +9831,25 @@
             // 2) FCM topic push (all_users)
             await sendPushToAll(title, message, { type: 'info', event: 'cheat_updated', gameId, cheatId });
 
-            showToast('✅ Güncellendi ve bildirim gönderildi');
+            showToast('âœ… GÃ¼ncellendi ve bildirim gÃ¶nderildi');
         } catch (e) {
-            console.error('Hile güncelleme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Hile gÃ¼ncelleme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // ==================== OYUN MODAL FONKSİYONLARI ====================
+    // ==================== OYUN MODAL FONKSÄ°YONLARI ====================
     
     function openGameModal(gameId = null) {
-        if (!requirePermission('games', 'oyun eklemek/düzenlemek')) return;
+        if (!requirePermission('games', 'oyun eklemek/dÃ¼zenlemek')) return;
         
         document.getElementById('editGameId').value = gameId || '';
-        document.getElementById('gameModalTitle').textContent = gameId ? '🎮 Oyun Düzenle' : '🎮 Yeni Oyun Ekle';
+        document.getElementById('gameModalTitle').textContent = gameId ? 'ğŸ® Oyun DÃ¼zenle' : 'ğŸ® Yeni Oyun Ekle';
         
-        // Görsel input'ları temizle
+        // GÃ¶rsel input'larÄ± temizle
         document.getElementById('gameImageFile').value = '';
         document.getElementById('gameImageData').value = '';
-        document.getElementById('gameImageLabel').textContent = '📷 Görsel Seç (PNG, JPG)';
+        document.getElementById('gameImageLabel').textContent = 'ğŸ“· GÃ¶rsel SeÃ§ (PNG, JPG)';
         
         if (gameId && gamesData[gameId]) {
             const game = gamesData[gameId];
@@ -12818,13 +9859,13 @@
             document.getElementById('gamePlayStoreInput').value = game.playStore || '';
             document.getElementById('gameStatusInput').value = game.status || 'active';
             
-            // Mevcut görsel varsa göster
+            // Mevcut gÃ¶rsel varsa gÃ¶ster
             if (game.image) {
                 document.getElementById('gameImagePreview').innerHTML = `
                     <img src="${game.image}" style="max-width: 100px; max-height: 100px; border-radius: 15px;">
-                    <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">✅ Mevcut görsel</div>
+                    <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">âœ… Mevcut gÃ¶rsel</div>
                 `;
-                document.getElementById('gameImageLabel').textContent = '📷 Yeni Görsel Seç (değiştirmek için)';
+                document.getElementById('gameImageLabel').textContent = 'ğŸ“· Yeni GÃ¶rsel SeÃ§ (deÄŸiÅŸtirmek iÃ§in)';
             } else {
                 document.getElementById('gameImagePreview').innerHTML = '';
             }
@@ -12839,14 +9880,14 @@
         openModal('gameModal');
     }
     
-    // Dosya önizleme - Oyun
+    // Dosya Ã¶nizleme - Oyun
     function previewGameImageFile(input) {
         const file = input.files[0];
         if (!file) return;
         
-        // Dosya boyut kontrolü (2MB)
+        // Dosya boyut kontrolÃ¼ (2MB)
         if (file.size > 2 * 1024 * 1024) {
-            showToast('❌ Dosya çok büyük (max 2MB)');
+            showToast('âŒ Dosya Ã§ok bÃ¼yÃ¼k (max 2MB)');
             input.value = '';
             return;
         }
@@ -12857,15 +9898,15 @@
             document.getElementById('gameImageData').value = base64;
             document.getElementById('gameImagePreview').innerHTML = `
                 <img src="${base64}" style="max-width: 100px; max-height: 100px; border-radius: 15px;">
-                <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">✅ ${file.name}</div>
+                <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">âœ… ${file.name}</div>
             `;
-            document.getElementById('gameImageLabel').textContent = '📷 ' + file.name;
+            document.getElementById('gameImageLabel').textContent = 'ğŸ“· ' + file.name;
         };
         reader.readAsDataURL(file);
     }
     
     function previewGameImage() {
-        // Artık kullanılmıyor - dosya yükleme kullanılıyor
+        // ArtÄ±k kullanÄ±lmÄ±yor - dosya yÃ¼kleme kullanÄ±lÄ±yor
     }
     
     async function saveGame() {
@@ -12878,17 +9919,17 @@
         const playStore = document.getElementById('gamePlayStoreInput').value.trim();
         const status = document.getElementById('gameStatusInput').value;
         
-        if (!name) { showToast('❌ Oyun adı girin'); return; }
+        if (!name) { showToast('âŒ Oyun adÄ± girin'); return; }
         
-        // ID oluştur veya mevcut ID'yi kullan
+        // ID oluÅŸtur veya mevcut ID'yi kullan
         const newGameId = gameId || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
         if (!gameId && gamesData[newGameId]) {
-            showToast('⚠️ Bu isimde bir oyun zaten var');
+            showToast('âš ï¸ Bu isimde bir oyun zaten var');
             return;
         }
         
-        // Mevcut görsel varsa ve yeni yüklenmemişse eski görseli koru
+        // Mevcut gÃ¶rsel varsa ve yeni yÃ¼klenmemiÅŸse eski gÃ¶rseli koru
         const existingImage = gamesData[newGameId]?.image || '';
         const finalImage = image || existingImage;
         
@@ -12900,15 +9941,15 @@
             cheats: gamesData[newGameId]?.cheats || {}
         };
         
-        // Sadece değiştirilen oyunu kaydet
+        // Sadece deÄŸiÅŸtirilen oyunu kaydet
         if (await saveGameData(newGameId)) {
-            showToast('✅ Oyun kaydedildi!');
+            showToast('âœ… Oyun kaydedildi!');
             closeModal('gameModal');
             updateGameSelects();
             loadGameCheatList();
-            renderHomeGames(); // Ana sayfayı anında güncelle
+            renderHomeGames(); // Ana sayfayÄ± anÄ±nda gÃ¼ncelle
             
-            // Eğer oyun detay sayfası açıksa onu da güncelle
+            // EÄŸer oyun detay sayfasÄ± aÃ§Ä±ksa onu da gÃ¼ncelle
             if (currentDynamicGame && currentDynamicGame.id === newGameId) {
                 currentDynamicGame = { id: newGameId, ...gamesData[newGameId] };
                 document.getElementById('dynamicGameIcon').src = finalImage || '';
@@ -12918,29 +9959,29 @@
         }
     }
     
-    // ==================== HİLE MODAL FONKSİYONLARI ====================
+    // ==================== HÄ°LE MODAL FONKSÄ°YONLARI ====================
     
     let currentPrices = []; // Dinamik fiyat listesi
     
     function openCheatModal(gameId = null, cheatId = null) {
-        if (!requirePermission('games', 'hile eklemek/düzenlemek')) return;
+        if (!requirePermission('games', 'hile eklemek/dÃ¼zenlemek')) return;
         
         document.getElementById('editCheatId').value = cheatId || '';
         document.getElementById('editCheatGameId').value = gameId || '';
-        document.getElementById('cheatModalTitle').textContent = cheatId ? '🛡️ Hile Düzenle' : '🛡️ Yeni Hile Ekle';
+        document.getElementById('cheatModalTitle').textContent = cheatId ? 'ğŸ›¡ï¸ Hile DÃ¼zenle' : 'ğŸ›¡ï¸ Yeni Hile Ekle';
         
-        // Oyun selectini güncelle
+        // Oyun selectini gÃ¼ncelle
         const gameSelect = document.getElementById('cheatGameSelect');
-        gameSelect.innerHTML = '<option value="">Oyun seçin...</option>';
+        gameSelect.innerHTML = '<option value="">Oyun seÃ§in...</option>';
         Object.keys(gamesData).forEach(gId => {
             const game = gamesData[gId];
             gameSelect.innerHTML += `<option value="${gId}" ${gId === gameId ? 'selected' : ''}>${game.name}</option>`;
         });
         
-        // Görsel input'ları temizle
+        // GÃ¶rsel input'larÄ± temizle
         document.getElementById('cheatImageFile').value = '';
         document.getElementById('cheatImageData').value = '';
-        document.getElementById('cheatImageLabel').textContent = '📷 Görsel Seç (PNG, JPG)';
+        document.getElementById('cheatImageLabel').textContent = 'ğŸ“· GÃ¶rsel SeÃ§ (PNG, JPG)';
         
         if (cheatId && gameId && gamesData[gameId]?.cheats?.[cheatId]) {
             const cheat = gamesData[gameId].cheats[cheatId];
@@ -12953,14 +9994,14 @@
             document.getElementById('cheatFeaturesInput').value = (cheat.features || []).join('\n');
             document.getElementById('cheatStatusInput').value = cheat.status || 'active';
             
-            // Fiyatları yükle - eski format (object) veya yeni format (array) desteği
+            // FiyatlarÄ± yÃ¼kle - eski format (object) veya yeni format (array) desteÄŸi
             if (Array.isArray(cheat.prices)) {
                 currentPrices = [...cheat.prices];
             } else if (cheat.prices && typeof cheat.prices === 'object') {
-                // Eski format: { '1': '220₺', '30': '850₺', ... } -> yeni formata çevir
+                // Eski format: { '1': '220â‚º', '30': '850â‚º', ... } -> yeni formata Ã§evir
                 currentPrices = Object.entries(cheat.prices).map(([days, price]) => ({
                     days: days,
-                    label: days === 'unlimited' ? 'Sınırsız' : `${days} Gün`,
+                    label: days === 'unlimited' ? 'SÄ±nÄ±rsÄ±z' : `${days} GÃ¼n`,
                     price: price
                 }));
             } else {
@@ -12968,13 +10009,13 @@
             }
             renderPriceOptions();
             
-            // Mevcut görsel varsa göster
+            // Mevcut gÃ¶rsel varsa gÃ¶ster
             if (cheat.image) {
                 document.getElementById('cheatImagePreview').innerHTML = `
                     <img src="${cheat.image}" style="max-width: 80px; max-height: 80px; border-radius: 12px;">
-                    <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">✅ Mevcut görsel</div>
+                    <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">âœ… Mevcut gÃ¶rsel</div>
                 `;
-                document.getElementById('cheatImageLabel').textContent = '📷 Yeni Görsel Seç (değiştirmek için)';
+                document.getElementById('cheatImageLabel').textContent = 'ğŸ“· Yeni GÃ¶rsel SeÃ§ (deÄŸiÅŸtirmek iÃ§in)';
             } else {
                 document.getElementById('cheatImagePreview').innerHTML = '';
             }
@@ -12988,12 +10029,12 @@
             document.getElementById('cheatStatusInput').value = 'active';
             document.getElementById('cheatImagePreview').innerHTML = '';
             
-            // Varsayılan fiyatlar
+            // VarsayÄ±lan fiyatlar
             currentPrices = [
-                { days: '1', label: '1 Gün', price: '220₺' },
-                { days: '30', label: '30 Gün', price: '850₺' },
-                { days: '90', label: '90 Gün', price: '1800₺' },
-                { days: 'unlimited', label: 'Sınırsız', price: '6500₺' }
+                { days: '1', label: '1 GÃ¼n', price: '220â‚º' },
+                { days: '30', label: '30 GÃ¼n', price: '850â‚º' },
+                { days: '90', label: '90 GÃ¼n', price: '1800â‚º' },
+                { days: 'unlimited', label: 'SÄ±nÄ±rsÄ±z', price: '6500â‚º' }
             ];
             renderPriceOptions();
         }
@@ -13001,14 +10042,14 @@
         openModal('cheatModal');
     }
     
-    // Dosya önizleme
+    // Dosya Ã¶nizleme
     function previewCheatImageFile(input) {
         const file = input.files[0];
         if (!file) return;
         
-        // Dosya boyut kontrolü (2MB)
+        // Dosya boyut kontrolÃ¼ (2MB)
         if (file.size > 2 * 1024 * 1024) {
-            showToast('❌ Dosya çok büyük (max 2MB)');
+            showToast('âŒ Dosya Ã§ok bÃ¼yÃ¼k (max 2MB)');
             input.value = '';
             return;
         }
@@ -13019,29 +10060,29 @@
             document.getElementById('cheatImageData').value = base64;
             document.getElementById('cheatImagePreview').innerHTML = `
                 <img src="${base64}" style="max-width: 80px; max-height: 80px; border-radius: 12px;">
-                <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">✅ ${file.name}</div>
+                <div style="font-size: 11px; color: #4CAF50; margin-top: 5px;">âœ… ${file.name}</div>
             `;
-            document.getElementById('cheatImageLabel').textContent = '📷 ' + file.name;
+            document.getElementById('cheatImageLabel').textContent = 'ğŸ“· ' + file.name;
         };
         reader.readAsDataURL(file);
     }
     
-    // Fiyat seçenekleri render
+    // Fiyat seÃ§enekleri render
     function renderPriceOptions() {
         const container = document.getElementById('cheatPricesContainer');
         
         if (currentPrices.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #888; font-size: 12px;">Henüz fiyat eklenmemiş</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #888; font-size: 12px;">HenÃ¼z fiyat eklenmemiÅŸ</div>';
             return;
         }
         
         let html = '';
         currentPrices.forEach((price, index) => {
-            const isUnlimited = price.days === 'unlimited' || price.days === 'sınırsız';
+            const isUnlimited = price.days === 'unlimited' || price.days === 'sÄ±nÄ±rsÄ±z';
             html += `
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; margin-bottom: 10px;">
                     <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
-                        <input type="text" class="auth-input" placeholder="Gün" value="${isUnlimited ? 'Sınırsız' : price.days}" 
+                        <input type="text" class="auth-input" placeholder="GÃ¼n" value="${isUnlimited ? 'SÄ±nÄ±rsÄ±z' : price.days}" 
                             onchange="updatePriceOption(${index}, 'days', this.value)" 
                             style="width: 70px; text-align: center; font-size: 12px;">
                         <input type="text" class="auth-input" placeholder="Etiket" value="${price.label || ''}" 
@@ -13050,10 +10091,10 @@
                         <input type="text" class="auth-input" placeholder="Fiyat" value="${price.price || ''}" 
                             onchange="updatePriceOption(${index}, 'price', this.value)" 
                             style="width: 80px; text-align: center; font-size: 12px;">
-                        <button onclick="removePriceOption(${index})" style="background: #f44336; border: none; color: #fff; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;">🗑️</button>
+                        <button onclick="removePriceOption(${index})" style="background: #f44336; border: none; color: #fff; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;">ğŸ—‘ï¸</button>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <span style="font-size: 11px; color: #888; white-space: nowrap;">🛒 Shopier:</span>
+                        <span style="font-size: 11px; color: #888; white-space: nowrap;">ğŸ›’ Shopier:</span>
                         <input type="text" class="auth-input" placeholder="https://www.shopier.com/CheatsStore/..." value="${price.shopierLink || ''}" 
                             onchange="updatePriceOption(${index}, 'shopierLink', this.value)" 
                             style="flex: 1; font-size: 11px; padding: 8px;">
@@ -13082,11 +10123,11 @@
     }
     
     function previewCheatImage() {
-        // Artık kullanılmıyor - dosya yükleme kullanılıyor
+        // ArtÄ±k kullanÄ±lmÄ±yor - dosya yÃ¼kleme kullanÄ±lÄ±yor
     }
     
     async function saveCheat() {
-        if (!requirePermission('games', 'hile eklemek/düzenlemek')) return;
+        if (!requirePermission('games', 'hile eklemek/dÃ¼zenlemek')) return;
         
         const cheatId = document.getElementById('editCheatId').value;
         const originalGameId = document.getElementById('editCheatGameId').value;
@@ -13100,18 +10141,18 @@
         const featuresText = document.getElementById('cheatFeaturesInput').value.trim();
         const features = featuresText ? featuresText.split('\n').filter(f => f.trim()) : [];
         
-        // Fiyatları al (boş olmayanları)
+        // FiyatlarÄ± al (boÅŸ olmayanlarÄ±)
         const prices = currentPrices.filter(p => p.days && p.price);
         
         const status = document.getElementById('cheatStatusInput').value;
         
-        if (!gameId) { showToast('❌ Oyun seçin'); return; }
-        if (!name) { showToast('❌ Hile adı girin'); return; }
+        if (!gameId) { showToast('âŒ Oyun seÃ§in'); return; }
+        if (!name) { showToast('âŒ Hile adÄ± girin'); return; }
         
-        // ID oluştur
+        // ID oluÅŸtur
         const newCheatId = cheatId || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
         
-        // Oyun değiştiyse eski yerden sil
+        // Oyun deÄŸiÅŸtiyse eski yerden sil
         if (cheatId && originalGameId && originalGameId !== gameId) {
             delete gamesData[originalGameId].cheats[cheatId];
         }
@@ -13120,7 +10161,7 @@
             gamesData[gameId].cheats = {};
         }
         
-        // Mevcut görsel varsa ve yeni yüklenmemişse eski görseli koru
+        // Mevcut gÃ¶rsel varsa ve yeni yÃ¼klenmemiÅŸse eski gÃ¶rseli koru
         const existingImage = gamesData[gameId].cheats[newCheatId]?.image || '';
         const finalImage = image || existingImage;
         
@@ -13134,34 +10175,34 @@
             setupSteps: gamesData[gameId].cheats[newCheatId]?.setupSteps || []
         };
         
-        // Hile değiştiyse eski oyundan sil
+        // Hile deÄŸiÅŸtiyse eski oyundan sil
         if (cheatId && originalGameId && originalGameId !== gameId) {
             await saveGameData(originalGameId); // Eski oyunu kaydet
         }
         
-        // Sadece değiştirilen oyunu kaydet
+        // Sadece deÄŸiÅŸtirilen oyunu kaydet
         if (await saveGameData(gameId)) {
-            showToast('✅ Hile kaydedildi!');
+            showToast('âœ… Hile kaydedildi!');
             closeModal('cheatModal');
             updateGameSelects();
             loadGameCheatList();
-            renderHomeGames(); // Ana sayfayı anında güncelle
+            renderHomeGames(); // Ana sayfayÄ± anÄ±nda gÃ¼ncelle
             
-            // Eğer bu hilenin detay sayfası açıksa onu da güncelle
+            // EÄŸer bu hilenin detay sayfasÄ± aÃ§Ä±ksa onu da gÃ¼ncelle
             if (currentDynamicCheat && currentDynamicCheat.id === newCheatId) {
                 const updatedCheat = gamesData[gameId].cheats[newCheatId];
                 currentDynamicCheat = { id: newCheatId, gameId, ...updatedCheat };
                 
-                // Sayfa elemanlarını güncelle
+                // Sayfa elemanlarÄ±nÄ± gÃ¼ncelle
                 document.getElementById('dynamicCheatIcon').src = finalImage || '';
                 document.getElementById('dynamicCheatTitle').textContent = name;
-                document.getElementById('dynamicCheatSubtitle').textContent = `${gamesData[gameId].name} • ${version || ''}`;
+                document.getElementById('dynamicCheatSubtitle').textContent = `${gamesData[gameId].name} â€¢ ${version || ''}`;
                 
-                // Özellikleri güncelle
+                // Ã–zellikleri gÃ¼ncelle
                 const featuresDiv = document.getElementById('dynamicCheatFeatures');
                 featuresDiv.innerHTML = features.map(f => `<div class="feature-item-new">${f}</div>`).join('');
                 
-                // Fiyatları güncelle
+                // FiyatlarÄ± gÃ¼ncelle
                 const pricesDiv = document.getElementById('dynamicCheatPrices');
                 pricesDiv.innerHTML = prices.map((p, i) => `
                     <div class="price-card ${i === prices.length - 1 ? 'premium' : ''}" onclick="selectDynamicPrice(${i})">
@@ -13170,7 +10211,7 @@
                     </div>
                 `).join('');
                 
-                // Video butonunu güncelle
+                // Video butonunu gÃ¼ncelle
                 const videoSection = document.getElementById('dynamicVideoSection');
                 if (videoUrl) {
                     videoSection.style.display = 'block';
@@ -13180,25 +10221,25 @@
                 }
             }
             
-            // Eğer oyun detay sayfası açıksa hile listesini güncelle
+            // EÄŸer oyun detay sayfasÄ± aÃ§Ä±ksa hile listesini gÃ¼ncelle
             if (currentDynamicGame && currentDynamicGame.id === gameId) {
                 openGameDetail(gameId);
             }
         }
     }
     
-    // Hile modalından kurulum adımlarına geçiş
+    // Hile modalÄ±ndan kurulum adÄ±mlarÄ±na geÃ§iÅŸ
     function openSetupModalFromCheat() {
         const gameId = document.getElementById('cheatGameSelect').value;
         const cheatId = document.getElementById('editCheatId').value;
         
         if (!gameId) {
-            showToast('❌ Önce oyun seçin');
+            showToast('âŒ Ã–nce oyun seÃ§in');
             return;
         }
         
         if (!cheatId) {
-            showToast('⚠️ Önce hileyi kaydedin, sonra kurulum adımları ekleyebilirsiniz');
+            showToast('âš ï¸ Ã–nce hileyi kaydedin, sonra kurulum adÄ±mlarÄ± ekleyebilirsiniz');
             return;
         }
         
@@ -13206,12 +10247,12 @@
         setTimeout(() => openSetupModal(gameId, cheatId), 300);
     }
     
-    // ==================== KURULUM TALİMATLARI ====================
+    // ==================== KURULUM TALÄ°MATLARI ====================
     
     let currentSetupSteps = [];
     
     function openSetupModal(gameId, cheatId) {
-        if (!isAdmin()) { showToast('❌ Yetkiniz yok'); return; }
+        if (!isAdmin()) { showToast('âŒ Yetkiniz yok'); return; }
         
         document.getElementById('setupGameId').value = gameId;
         document.getElementById('setupCheatId').value = cheatId;
@@ -13227,7 +10268,7 @@
         const container = document.getElementById('setupStepsContainer');
         
         if (currentSetupSteps.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">Henüz adım eklenmemiş. "Adım Ekle" butonuna tıklayın.</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">HenÃ¼z adÄ±m eklenmemiÅŸ. "AdÄ±m Ekle" butonuna tÄ±klayÄ±n.</div>';
             return;
         }
         
@@ -13238,30 +10279,30 @@
             html += `
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; margin-bottom: 12px; border-left: 3px solid #FF9800;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <span style="background: #FF9800; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">📌 Adım ${index + 1}</span>
+                        <span style="background: #FF9800; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold;">ğŸ“Œ AdÄ±m ${index + 1}</span>
                         <div style="display: flex; gap: 5px;">
-                            ${index > 0 ? `<button onclick="moveSetupStep(${index}, -1)" style="background: #2196F3; border: none; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;">⬆️</button>` : ''}
-                            ${index < currentSetupSteps.length - 1 ? `<button onclick="moveSetupStep(${index}, 1)" style="background: #2196F3; border: none; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;">⬇️</button>` : ''}
-                            <button onclick="removeSetupStep(${index})" style="background: #f44336; border: none; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">🗑️</button>
+                            ${index > 0 ? `<button onclick="moveSetupStep(${index}, -1)" style="background: #2196F3; border: none; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;">â¬†ï¸</button>` : ''}
+                            ${index < currentSetupSteps.length - 1 ? `<button onclick="moveSetupStep(${index}, 1)" style="background: #2196F3; border: none; color: #fff; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer;">â¬‡ï¸</button>` : ''}
+                            <button onclick="removeSetupStep(${index})" style="background: #f44336; border: none; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">ğŸ—‘ï¸</button>
                         </div>
                     </div>
                     
-                    <input type="text" class="auth-input" placeholder="Adım Başlığı (örn: Oyunu İndir)" value="${step.title || ''}" onchange="currentSetupSteps[${index}].title = this.value" style="margin-bottom: 8px;">
+                    <input type="text" class="auth-input" placeholder="AdÄ±m BaÅŸlÄ±ÄŸÄ± (Ã¶rn: Oyunu Ä°ndir)" value="${step.title || ''}" onchange="currentSetupSteps[${index}].title = this.value" style="margin-bottom: 8px;">
                     
-                    <textarea class="auth-input" placeholder="Adım açıklaması (örn: Play Store'dan orijinal oyunu indirin...)" onchange="currentSetupSteps[${index}].description = this.value" style="height: 60px; resize: none; margin-bottom: 10px;">${step.description || step.desc || ''}</textarea>
+                    <textarea class="auth-input" placeholder="AdÄ±m aÃ§Ä±klamasÄ± (Ã¶rn: Play Store'dan orijinal oyunu indirin...)" onchange="currentSetupSteps[${index}].description = this.value" style="height: 60px; resize: none; margin-bottom: 10px;">${step.description || step.desc || ''}</textarea>
                     
-                    <!-- Buton Türü -->
+                    <!-- Buton TÃ¼rÃ¼ -->
                     <div style="background: rgba(33,150,243,0.1); border: 1px solid rgba(33,150,243,0.3); border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-                        <label style="font-size: 11px; color: #2196F3; display: block; margin-bottom: 5px;">🔘 Buton Türü</label>
+                        <label style="font-size: 11px; color: #2196F3; display: block; margin-bottom: 5px;">ğŸ”˜ Buton TÃ¼rÃ¼</label>
                         <select class="auth-input" style="color: #fff; margin-bottom: 8px;" onchange="updateStepActionType(${index}, this.value)">
                             <option value="none" ${actionType === 'none' ? 'selected' : ''}>Buton Yok</option>
-                            <option value="playstore" ${actionType === 'playstore' ? 'selected' : ''}>🎮 Play Store</option>
-                            <option value="download" ${actionType === 'download' ? 'selected' : ''}>📥 APK İndir</option>
-                            <option value="link" ${actionType === 'link' ? 'selected' : ''}>🔗 Özel Link</option>
-                            <option value="modal" ${actionType === 'modal' ? 'selected' : ''}>📖 Bilgi Modalı</option>
+                            <option value="playstore" ${actionType === 'playstore' ? 'selected' : ''}>ğŸ® Play Store</option>
+                            <option value="download" ${actionType === 'download' ? 'selected' : ''}>ğŸ“¥ APK Ä°ndir</option>
+                            <option value="link" ${actionType === 'link' ? 'selected' : ''}>ğŸ”— Ã–zel Link</option>
+                            <option value="modal" ${actionType === 'modal' ? 'selected' : ''}>ğŸ“– Bilgi ModalÄ±</option>
                         </select>
                         
-                        <!-- Koşullu alanlar -->
+                        <!-- KoÅŸullu alanlar -->
                         <div id="stepAction_${index}">
                             ${renderStepActionFields(index, step)}
                         </div>
@@ -13281,40 +10322,40 @@
         }
         
         if (actionType === 'playstore') {
-            return `<div style="font-size: 11px; color: #4CAF50; padding: 8px; background: rgba(76,175,80,0.1); border-radius: 6px;">✅ Play Store butonu otomatik eklenecek</div>`;
+            return `<div style="font-size: 11px; color: #4CAF50; padding: 8px; background: rgba(76,175,80,0.1); border-radius: 6px;">âœ… Play Store butonu otomatik eklenecek</div>`;
         }
         
         if (actionType === 'download') {
             return `
-                <input type="text" class="auth-input" placeholder="APK İndirme Linki (https://...)" value="${step.downloadUrl || ''}" onchange="currentSetupSteps[${index}].downloadUrl = this.value">
+                <input type="text" class="auth-input" placeholder="APK Ä°ndirme Linki (https://...)" value="${step.downloadUrl || ''}" onchange="currentSetupSteps[${index}].downloadUrl = this.value">
             `;
         }
         
         if (actionType === 'link') {
             return `
-                <input type="text" class="auth-input" placeholder="Buton Yazısı (örn: Detaylı Bilgi)" value="${step.btnText || ''}" onchange="currentSetupSteps[${index}].btnText = this.value" style="margin-bottom: 5px;">
+                <input type="text" class="auth-input" placeholder="Buton YazÄ±sÄ± (Ã¶rn: DetaylÄ± Bilgi)" value="${step.btnText || ''}" onchange="currentSetupSteps[${index}].btnText = this.value" style="margin-bottom: 5px;">
                 <input type="text" class="auth-input" placeholder="Link URL (https://...)" value="${step.btnUrl || ''}" onchange="currentSetupSteps[${index}].btnUrl = this.value">
             `;
         }
         
         if (actionType === 'modal') {
-            // Dinamik modal seçenekleri oluştur
+            // Dinamik modal seÃ§enekleri oluÅŸtur
             let modalOptions = `
-                <option value="">Modal Seçin...</option>
-                <option value="imguiModal" ${step.modalId === 'imguiModal' ? 'selected' : ''}>📖 IMGUI Kurulum (Varsayılan)</option>
-                <option value="certModal" ${step.modalId === 'certModal' ? 'selected' : ''}>🔒 Sertifika Kapatma</option>
+                <option value="">Modal SeÃ§in...</option>
+                <option value="imguiModal" ${step.modalId === 'imguiModal' ? 'selected' : ''}>ğŸ“– IMGUI Kurulum (VarsayÄ±lan)</option>
+                <option value="certModal" ${step.modalId === 'certModal' ? 'selected' : ''}>ğŸ”’ Sertifika Kapatma</option>
             `;
             
-            // Dinamik oluşturulan modalleri ekle
+            // Dinamik oluÅŸturulan modalleri ekle
             Object.entries(setupModals || {}).forEach(([id, modal]) => {
-                modalOptions += `<option value="${id}" ${step.modalId === id ? 'selected' : ''}>📖 ${modal.title || id}</option>`;
+                modalOptions += `<option value="${id}" ${step.modalId === id ? 'selected' : ''}>ğŸ“– ${modal.title || id}</option>`;
             });
             
             return `
                 <select class="auth-input" style="color: #fff;" onchange="currentSetupSteps[${index}].modalId = this.value">
                     ${modalOptions}
                 </select>
-                <div style="font-size: 10px; color: #888; margin-top: 5px;">💡 Admin Panel → Kurulum Modalları'ndan yeni modal oluşturabilirsiniz</div>
+                <div style="font-size: 10px; color: #888; margin-top: 5px;">ğŸ’¡ Admin Panel â†’ Kurulum ModallarÄ±'ndan yeni modal oluÅŸturabilirsiniz</div>
             `;
         }
         
@@ -13323,7 +10364,7 @@
     
     function updateStepActionType(index, actionType) {
         currentSetupSteps[index].actionType = actionType;
-        // Eski değerleri temizle
+        // Eski deÄŸerleri temizle
         delete currentSetupSteps[index].downloadUrl;
         delete currentSetupSteps[index].btnText;
         delete currentSetupSteps[index].btnUrl;
@@ -13347,24 +10388,24 @@
     }
     
     function removeSetupStep(index) {
-        if (confirm('Bu adımı silmek istiyor musunuz?')) {
+        if (confirm('Bu adÄ±mÄ± silmek istiyor musunuz?')) {
             currentSetupSteps.splice(index, 1);
             renderSetupSteps();
         }
     }
     
     async function saveSetupSteps() {
-        if (!requirePermission('games', 'kurulum adımlarını düzenlemek')) return;
+        if (!requirePermission('games', 'kurulum adÄ±mlarÄ±nÄ± dÃ¼zenlemek')) return;
         
         const gameId = document.getElementById('setupGameId').value;
         const cheatId = document.getElementById('setupCheatId').value;
         
         if (!gamesData[gameId]?.cheats?.[cheatId]) {
-            showToast('❌ Hile bulunamadı');
+            showToast('âŒ Hile bulunamadÄ±');
             return;
         }
         
-        // description alanını desc olarak da kaydet (uyumluluk için)
+        // description alanÄ±nÄ± desc olarak da kaydet (uyumluluk iÃ§in)
         currentSetupSteps.forEach(step => {
             if (step.description && !step.desc) {
                 step.desc = step.description;
@@ -13373,15 +10414,15 @@
         
         gamesData[gameId].cheats[cheatId].setupSteps = currentSetupSteps;
         
-        // Sadece değiştirilen oyunu kaydet
+        // Sadece deÄŸiÅŸtirilen oyunu kaydet
         if (await saveGameData(gameId)) {
-            showToast('✅ Kurulum adımları kaydedildi!');
+            showToast('âœ… Kurulum adÄ±mlarÄ± kaydedildi!');
             closeModal('setupModal');
             loadGameCheatList();
             
-            // ===== GERÇEK ZAMANLI GÜNCELLEMELERİ UYGULA =====
+            // ===== GERÃ‡EK ZAMANLI GÃœNCELLEMELERÄ° UYGULA =====
             
-            // Hile detay sayfası açıksa kurulum adımlarını güncelle
+            // Hile detay sayfasÄ± aÃ§Ä±ksa kurulum adÄ±mlarÄ±nÄ± gÃ¼ncelle
             if (currentDynamicCheat && currentDynamicCheat.id === cheatId) {
                 currentDynamicCheat.setupSteps = [...currentSetupSteps];
                 
@@ -13396,34 +10437,34 @@
                                     ${index + 1}
                                 </div>
                                 <div style="flex: 1;">
-                                    <div style="font-weight: 600; margin-bottom: 4px;">${step.title || 'Adım ' + (index + 1)}</div>
+                                    <div style="font-weight: 600; margin-bottom: 4px;">${step.title || 'AdÄ±m ' + (index + 1)}</div>
                                     <div style="font-size: 13px; color: #aaa; line-height: 1.4;">${description}</div>
                                     ${renderStepButton(step)}
                                 </div>
                             </div>
                         `;
                     });
-                    stepsContainer.innerHTML = stepsHtml || '<p style="text-align: center; color: #666;">Kurulum adımı yok</p>';
+                    stepsContainer.innerHTML = stepsHtml || '<p style="text-align: center; color: #666;">Kurulum adÄ±mÄ± yok</p>';
                 }
             }
         }
     }
     
-    // Adım butonunu render et
+    // AdÄ±m butonunu render et
     function renderStepButton(step) {
         const actionType = step.actionType || 'none';
         
         if (actionType === 'playstore' && step.btnUrl) {
             return `<button onclick="window.open('${step.btnUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #34a853, #0f9d58); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da Aç'}
+                <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da AÃ§'}
             </button>`;
         } else if (actionType === 'download' && step.downloadUrl) {
             return `<button onclick="window.open('${step.downloadUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                <i class="fas fa-download"></i> ${step.btnText || 'İndir'}
+                <i class="fas fa-download"></i> ${step.btnText || 'Ä°ndir'}
             </button>`;
         } else if (actionType === 'link' && step.btnUrl) {
             return `<button onclick="window.open('${step.btnUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #00b894, #00cec9); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
-                <i class="fas fa-external-link-alt"></i> ${step.btnText || 'Bağlantıya Git'}
+                <i class="fas fa-external-link-alt"></i> ${step.btnText || 'BaÄŸlantÄ±ya Git'}
             </button>`;
         } else if (actionType === 'modal' && step.modalId) {
             return `<button onclick="openModal('${step.modalId}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #e17055, #d63031); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
@@ -13434,7 +10475,7 @@
         return '';
     }
     
-    // ==================== SİLME FONKSİYONLARI ====================
+    // ==================== SÄ°LME FONKSÄ°YONLARI ====================
     
     async function deleteGame(gameId) {
         if (!requirePermission('games', 'oyun silmek')) return;
@@ -13443,28 +10484,28 @@
         if (!game) return;
         
         const cheatCount = Object.keys(game.cheats || {}).length;
-        if (!confirm(`"${game.name}" oyununu ve ${cheatCount} hilesini silmek istiyor musunuz?\n\nBu işlem geri alınamaz!`)) return;
+        if (!confirm(`"${game.name}" oyununu ve ${cheatCount} hilesini silmek istiyor musunuz?\n\nBu iÅŸlem geri alÄ±namaz!`)) return;
         
         delete gamesData[gameId];
         
         try {
-            // Firestore'dan dokümani sil
+            // Firestore'dan dokÃ¼mani sil
             await db.collection('games').doc(gameId).delete();
-            showToast('✅ Oyun silindi!');
+            showToast('âœ… Oyun silindi!');
             updateGameSelects();
             loadGameCheatList();
             
-            // ===== GERÇEK ZAMANLI GÜNCELLEMELERİ UYGULA =====
-            renderHomeGames(); // Ana sayfayı güncelle
+            // ===== GERÃ‡EK ZAMANLI GÃœNCELLEMELERÄ° UYGULA =====
+            renderHomeGames(); // Ana sayfayÄ± gÃ¼ncelle
             
-            // Silinen oyunun detay sayfası açıksa ana sayfaya dön
+            // Silinen oyunun detay sayfasÄ± aÃ§Ä±ksa ana sayfaya dÃ¶n
             if (currentDynamicGame && currentDynamicGame.id === gameId) {
                 showPage('home');
                 currentDynamicGame = null;
             }
         } catch(e) {
-            console.error('Silme hatası:', e);
-            showToast('❌ Silme hatası: ' + e.message);
+            console.error('Silme hatasÄ±:', e);
+            showToast('âŒ Silme hatasÄ±: ' + e.message);
             return false;
         }
     }
@@ -13479,16 +10520,16 @@
         
         delete gamesData[gameId].cheats[cheatId];
         
-        // Sadece değiştirilen oyunu kaydet
+        // Sadece deÄŸiÅŸtirilen oyunu kaydet
         if (await saveGameData(gameId)) {
-            showToast('✅ Hile silindi!');
+            showToast('âœ… Hile silindi!');
             updateGameSelects();
             loadGameCheatList();
             
-            // ===== GERÇEK ZAMANLI GÜNCELLEMELERİ UYGULA =====
-            renderHomeGames(); // Ana sayfayı güncelle
+            // ===== GERÃ‡EK ZAMANLI GÃœNCELLEMELERÄ° UYGULA =====
+            renderHomeGames(); // Ana sayfayÄ± gÃ¼ncelle
             
-            // Silinen hilenin detay sayfası açıksa oyun sayfasına dön
+            // Silinen hilenin detay sayfasÄ± aÃ§Ä±ksa oyun sayfasÄ±na dÃ¶n
             if (currentDynamicCheat && currentDynamicCheat.id === cheatId) {
                 if (currentDynamicGame) {
                     openGameDetail(currentDynamicGame.id);
@@ -13498,26 +10539,26 @@
                 currentDynamicCheat = null;
             }
             
-            // Oyun sayfası açıksa hile listesini güncelle
+            // Oyun sayfasÄ± aÃ§Ä±ksa hile listesini gÃ¼ncelle
             if (currentDynamicGame && currentDynamicGame.id === gameId) {
                 openGameDetail(gameId);
             }
         }
     }
     
-    // ==================== LİSTE GÖRÜNTÜLEME ====================
+    // ==================== LÄ°STE GÃ–RÃœNTÃœLEME ====================
     
     function loadGameCheatList() {
         const container = document.getElementById('gameCheatList');
         if (!container) return;
         
-        // Oyun/hile yönetimi yetkisi yoksa gösterme
+        // Oyun/hile yÃ¶netimi yetkisi yoksa gÃ¶sterme
         if (!hasPermission('games')) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Oyun/hile yönetimi yetkiniz yok</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Oyun/hile yÃ¶netimi yetkiniz yok</div>';
             return;
         }
         
-        // Oyunları sortOrder'a göre sırala
+        // OyunlarÄ± sortOrder'a gÃ¶re sÄ±rala
         const gameIds = Object.keys(gamesData).sort((a, b) => {
             const orderA = gamesData[a].sortOrder ?? 999;
             const orderB = gamesData[b].sortOrder ?? 999;
@@ -13525,7 +10566,7 @@
         });
         
         if (gameIds.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Henüz oyun eklenmemiş</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">HenÃ¼z oyun eklenmemiÅŸ</div>';
             return;
         }
         
@@ -13535,7 +10576,7 @@
             const game = gamesData[gameId];
             const cheats = game.cheats || {};
             const cheatCount = Object.keys(cheats).length;
-            const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
+            const statusBadge = game.status === 'active' ? 'ğŸŸ¢' : (game.status === 'coming' ? 'ğŸŸ¡' : 'ğŸ”´');
             
             html += `
                 <div style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 10px;">
@@ -13546,11 +10587,11 @@
                                 <span style="color: #4CAF50; font-weight: bold;">${statusBadge} ${game.name}</span>
                                 <span style="background: #2196F3; color: #fff; padding: 2px 6px; border-radius: 8px; font-size: 10px;">${cheatCount} hile</span>
                             </div>
-                            <div style="font-size: 11px; color: #888;">${game.desc || 'Açıklama yok'}</div>
+                            <div style="font-size: 11px; color: #888;">${game.desc || 'AÃ§Ä±klama yok'}</div>
                         </div>
                         <div style="display: flex; gap: 4px;">
-                            <button onclick="event.stopPropagation(); openGameModal('${gameId}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">✏️</button>
-                            <button onclick="event.stopPropagation(); deleteGame('${gameId}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">🗑️</button>
+                            <button onclick="event.stopPropagation(); openGameModal('${gameId}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">âœï¸</button>
+                            <button onclick="event.stopPropagation(); deleteGame('${gameId}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer;">ğŸ—‘ï¸</button>
                         </div>
                     </div>
                     
@@ -13558,7 +10599,7 @@
                     <div style="padding-left: 10px; border-left: 2px solid rgba(255,255,255,0.1);">
             `;
             
-            // Hileleri sortOrder'a göre sırala
+            // Hileleri sortOrder'a gÃ¶re sÄ±rala
             const cheatIds = Object.keys(cheats).sort((a, b) => {
                 const orderA = cheats[a].sortOrder ?? 999;
                 const orderB = cheats[b].sortOrder ?? 999;
@@ -13567,7 +10608,7 @@
             
             cheatIds.forEach((cheatId, cheatIndex) => {
                 const cheat = cheats[cheatId];
-                const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
+                const cheatStatus = cheat.status === 'active' ? 'ğŸŸ¢' : (cheat.status === 'maintenance' ? 'ğŸŸ ' : 'ğŸ”´');
                 const hasSetup = (cheat.setupSteps || []).length > 0;
                 const hasVideo = !!cheat.videoUrl;
                 const featureCount = cheat.features?.length || 0;
@@ -13575,30 +10616,30 @@
                 
                 html += `
                     <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        ${cheat.image ? `<img src="${cheat.image}" style="width: 30px; height: 30px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 20px;">🛡️</span>'}
+                        ${cheat.image ? `<img src="${cheat.image}" style="width: 30px; height: 30px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 20px;">ğŸ›¡ï¸</span>'}
                         <div style="flex: 1;">
                             <div style="color: #2196F3; font-size: 12px;">${cheatStatus} ${cheat.name} <span style="color: #888;">${cheat.version || ''}</span></div>
                             <div style="font-size: 10px; color: #666;">
-                                ${featureCount} özellik • ${priceCount} fiyat • 
-                                ${hasSetup ? '✅ Kurulum' : '⚠️ Kurulum yok'} • 
-                                ${hasVideo ? '🎬 Video' : ''}
+                                ${featureCount} Ã¶zellik â€¢ ${priceCount} fiyat â€¢ 
+                                ${hasSetup ? 'âœ… Kurulum' : 'âš ï¸ Kurulum yok'} â€¢ 
+                                ${hasVideo ? 'ğŸ¬ Video' : ''}
                             </div>
                         </div>
                         <div style="display: flex; gap: 3px;">
-                            <button onclick="event.stopPropagation(); openSetupModal('${gameId}', '${cheatId}')" style="background: #FF9800; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Kurulum Adımları">📋</button>
-                            <button onclick="event.stopPropagation(); openCheatModal('${gameId}', '${cheatId}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Düzenle">✏️</button>
-                            <button onclick="event.stopPropagation(); deleteCheat('${gameId}', '${cheatId}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Sil">🗑️</button>
+                            <button onclick="event.stopPropagation(); openSetupModal('${gameId}', '${cheatId}')" style="background: #FF9800; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Kurulum AdÄ±mlarÄ±">ğŸ“‹</button>
+                            <button onclick="event.stopPropagation(); openCheatModal('${gameId}', '${cheatId}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="DÃ¼zenle">âœï¸</button>
+                            <button onclick="event.stopPropagation(); deleteCheat('${gameId}', '${cheatId}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;" title="Sil">ğŸ—‘ï¸</button>
                         </div>
                     </div>
                 `;
             });
             
             if (cheatCount === 0) {
-                html += `<div style="padding: 10px; color: #666; font-size: 11px; text-align: center;">Hile eklenmemiş</div>`;
+                html += `<div style="padding: 10px; color: #666; font-size: 11px; text-align: center;">Hile eklenmemiÅŸ</div>`;
             }
             
             html += `
-                        <button onclick="openCheatModal('${gameId}')" style="width: 100%; margin-top: 8px; background: rgba(33,150,243,0.2); border: 1px dashed #2196F3; color: #2196F3; padding: 6px; border-radius: 6px; font-size: 11px; cursor: pointer;">➕ Hile Ekle</button>
+                        <button onclick="openCheatModal('${gameId}')" style="width: 100%; margin-top: 8px; background: rgba(33,150,243,0.2); border: 1px dashed #2196F3; color: #2196F3; padding: 6px; border-radius: 6px; font-size: 11px; cursor: pointer;">â• Hile Ekle</button>
                     </div>
                 </div>
             `;
@@ -13607,20 +10648,20 @@
         container.innerHTML = html;
     }
     
-    // Sıralama modalını aç
+    // SÄ±ralama modalÄ±nÄ± aÃ§
     function openSortModal() {
-        if (!requirePermission('games_edit', 'sıralama yapmak')) return;
+        if (!requirePermission('games_edit', 'sÄ±ralama yapmak')) return;
         
         renderSortModal();
         openModal('sortModal');
     }
     
-    // Sıralama modal'ını render et
+    // SÄ±ralama modal'Ä±nÄ± render et
     function renderSortModal() {
         const container = document.getElementById('sortGameList');
         if (!container) return;
         
-        // Oyunları sortOrder'a göre sırala
+        // OyunlarÄ± sortOrder'a gÃ¶re sÄ±rala
         const gameIds = Object.keys(gamesData).sort((a, b) => {
             const orderA = gamesData[a].sortOrder ?? 999;
             const orderB = gamesData[b].sortOrder ?? 999;
@@ -13628,7 +10669,7 @@
         });
         
         if (gameIds.length === 0) {
-            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Henüz oyun eklenmemiş</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">HenÃ¼z oyun eklenmemiÅŸ</div>';
             return;
         }
         
@@ -13638,14 +10679,14 @@
             const game = gamesData[gameId];
             const cheats = game.cheats || {};
             const cheatCount = Object.keys(cheats).length;
-            const statusBadge = game.status === 'active' ? '🟢' : (game.status === 'coming' ? '🟡' : '🔴');
+            const statusBadge = game.status === 'active' ? 'ğŸŸ¢' : (game.status === 'coming' ? 'ğŸŸ¡' : 'ğŸ”´');
             
             html += `
                 <div class="sort-game-card" data-game-id="${gameId}" data-sort-order="${game.sortOrder ?? 999}" style="background: rgba(255,255,255,0.05); border-radius: 10px; padding: 15px; margin-bottom: 10px; transition: all 0.2s;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div style="display: flex; flex-direction: column; gap: 2px;">
-                            <button onclick="moveGameUp('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">▲</button>
-                            <button onclick="moveGameDown('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">▼</button>
+                            <button onclick="moveGameUp('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">â–²</button>
+                            <button onclick="moveGameDown('${gameId}')" style="background: #9C27B0; color: white; border: none; border-radius: 5px; width: 30px; height: 25px; cursor: pointer; font-size: 14px;">â–¼</button>
                         </div>
                         <div onclick="toggleSortGameCheats('${gameId}')" style="display: flex; align-items: center; gap: 10px; flex: 1; cursor: pointer;">
                             ${game.image ? `<img src="${game.image}" style="width: 45px; height: 45px; border-radius: 10px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
@@ -13654,13 +10695,13 @@
                                     <span style="color: #fff; font-weight: bold; font-size: 14px;">${statusBadge} ${game.name}</span>
                                     <span style="background: #2196F3; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${cheatCount} hile</span>
                                 </div>
-                                <div style="font-size: 12px; color: #888; margin-top: 2px;">${game.desc || 'Açıklama yok'}</div>
+                                <div style="font-size: 12px; color: #888; margin-top: 2px;">${game.desc || 'AÃ§Ä±klama yok'}</div>
                             </div>
-                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">▶</span>
+                            <span id="sortChevron${gameId}" style="color: #888; font-size: 18px; transition: transform 0.3s;">â–¶</span>
                         </div>
                     </div>
                     
-                    <!-- Hileler (başlangıçta gizli) -->
+                    <!-- Hileler (baÅŸlangÄ±Ã§ta gizli) -->
                     <div id="sortCheats${gameId}" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;">
                         <div style="padding-left: 40px; margin-top: 10px; border-left: 2px solid rgba(156, 39, 176, 0.3);">
                             <div id="sortCheatList${gameId}">
@@ -13675,18 +10716,18 @@
         container.innerHTML = html;
     }
     
-    // Oyun kartının hilelerini aç/kapat
+    // Oyun kartÄ±nÄ±n hilelerini aÃ§/kapat
     function toggleSortGameCheats(gameId) {
         const cheatsDiv = document.getElementById(`sortCheats${gameId}`);
         const chevron = document.getElementById(`sortChevron${gameId}`);
         const cheatListDiv = document.getElementById(`sortCheatList${gameId}`);
         
         if (cheatsDiv.style.maxHeight === '0px' || cheatsDiv.style.maxHeight === '') {
-            // Aç
+            // AÃ§
             const game = gamesData[gameId];
             const cheats = game.cheats || {};
             
-            // Hileleri sortOrder'a göre sırala
+            // Hileleri sortOrder'a gÃ¶re sÄ±rala
             const cheatIds = Object.keys(cheats).sort((a, b) => {
                 const orderA = cheats[a].sortOrder ?? 999;
                 const orderB = cheats[b].sortOrder ?? 999;
@@ -13699,18 +10740,18 @@
                 let cheatHtml = '';
                 cheatIds.forEach(cheatId => {
                     const cheat = cheats[cheatId];
-                    const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
+                    const cheatStatus = cheat.status === 'active' ? 'ğŸŸ¢' : (cheat.status === 'maintenance' ? 'ğŸŸ ' : 'ğŸ”´');
                     
                     cheatHtml += `
                         <div class="sort-cheat-card" data-game-id="${gameId}" data-cheat-id="${cheatId}" style="display: flex; align-items: center; gap: 8px; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px;">
                             <div style="display: flex; flex-direction: column; gap: 2px;">
-                                <button onclick="moveCheatUp('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▲</button>
-                                <button onclick="moveCheatDown('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▼</button>
+                                <button onclick="moveCheatUp('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">â–²</button>
+                                <button onclick="moveCheatDown('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">â–¼</button>
                             </div>
-                            ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">🛡️</span>'}
+                            ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">ğŸ›¡ï¸</span>'}
                             <div style="flex: 1;">
                                 <div style="color: #2196F3; font-size: 13px; font-weight: 500;">${cheatStatus} ${cheat.name}</div>
-                                <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiş'}</div>
+                                <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiÅŸ'}</div>
                             </div>
                         </div>
                     `;
@@ -13727,14 +10768,14 @@
         }
     }
     
-    // Drag and Drop sistemi (Sıralama modal)
+    // Drag and Drop sistemi (SÄ±ralama modal)
     let sortDraggedElement = null;
     let sortDraggedOverElement = null;
     let isDraggingSort = false;
     
     function initSortDragAndDrop() {
         document.querySelectorAll('.sort-game-card').forEach(item => {
-            // Drag handle'dan sürüklerken onclick'i engelle
+            // Drag handle'dan sÃ¼rÃ¼klerken onclick'i engelle
             const gameInfoArea = item.querySelector('.game-info-area');
             if (gameInfoArea) {
                 gameInfoArea.addEventListener('click', function(e) {
@@ -13798,7 +10839,7 @@
         if (sortDraggedElement !== this && this.classList.contains('sort-game-card')) {
             const draggedId = sortDraggedElement.dataset.gameId;
             const targetId = this.dataset.gameId;
-            console.log('🔄 Oyun swap:', draggedId, '↔️', targetId);
+            console.log('ğŸ”„ Oyun swap:', draggedId, 'â†”ï¸', targetId);
             swapGames(draggedId, targetId);
         }
         
@@ -13856,7 +10897,7 @@
         sortDraggedElement = null;
     }
     
-    // === HİLE DRAG & DROP (Sort Modal) ===
+    // === HÄ°LE DRAG & DROP (Sort Modal) ===
     function handleSortCheatDragStart(e) {
         sortDraggedElement = this;
         this.style.opacity = '0.5';
@@ -13902,7 +10943,7 @@
         });
     }
     
-    // === HİLE TOUCH (Sort Modal) ===
+    // === HÄ°LE TOUCH (Sort Modal) ===
     function handleSortCheatTouchStart(e) {
         e.stopPropagation();
         sortDraggedElement = this;
@@ -13945,60 +10986,60 @@
         sortDraggedElement = null;
     }
     
-    // Oyunu yukarı taşı
+    // Oyunu yukarÄ± taÅŸÄ±
     async function moveGameUp(gameId) {
-        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        if (!requirePermission('games_edit', 'oyun sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
-        // Mevcut sıralamayı al
+        // Mevcut sÄ±ralamayÄ± al
         const sortedGames = Object.entries(gamesData)
             .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
         
         const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
         
         if (currentIndex > 0) {
-            // Listedeki pozisyonları değiştir
+            // Listedeki pozisyonlarÄ± deÄŸiÅŸtir
             const temp = sortedGames[currentIndex];
             sortedGames[currentIndex] = sortedGames[currentIndex - 1];
             sortedGames[currentIndex - 1] = temp;
             
-            // Tüm listeyi yeniden numarala ve kaydet
+            // TÃ¼m listeyi yeniden numarala ve kaydet
             await reorderAllGames(sortedGames);
-            showToast('✅ Oyun yukarı taşındı');
+            showToast('âœ… Oyun yukarÄ± taÅŸÄ±ndÄ±');
         } else {
-            showToast('⚠️ Bu oyun zaten en üstte');
+            showToast('âš ï¸ Bu oyun zaten en Ã¼stte');
         }
     }
     
-    // Oyunu aşağı taşı
+    // Oyunu aÅŸaÄŸÄ± taÅŸÄ±
     async function moveGameDown(gameId) {
-        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        if (!requirePermission('games_edit', 'oyun sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
-        // Mevcut sıralamayı al
+        // Mevcut sÄ±ralamayÄ± al
         const sortedGames = Object.entries(gamesData)
             .sort((a, b) => (a[1].sortOrder ?? 999) - (b[1].sortOrder ?? 999));
         
         const currentIndex = sortedGames.findIndex(([id]) => id === gameId);
         
         if (currentIndex < sortedGames.length - 1) {
-            // Listedeki pozisyonları değiştir
+            // Listedeki pozisyonlarÄ± deÄŸiÅŸtir
             const temp = sortedGames[currentIndex];
             sortedGames[currentIndex] = sortedGames[currentIndex + 1];
             sortedGames[currentIndex + 1] = temp;
             
-            // Tüm listeyi yeniden numarala ve kaydet
+            // TÃ¼m listeyi yeniden numarala ve kaydet
             await reorderAllGames(sortedGames);
-            showToast('✅ Oyun aşağı taşındı');
+            showToast('âœ… Oyun aÅŸaÄŸÄ± taÅŸÄ±ndÄ±');
         } else {
-            showToast('⚠️ Bu oyun zaten en altta');
+            showToast('âš ï¸ Bu oyun zaten en altta');
         }
     }
     
-    // Tüm oyunları yeniden sırala (0, 1, 2, 3...)
+    // TÃ¼m oyunlarÄ± yeniden sÄ±rala (0, 1, 2, 3...)
     async function reorderAllGames(sortedGames) {
         try {
             const updates = [];
             
-            // Önce lokal veriyi güncelle ve Firestore güncellemelerini hazırla
+            // Ã–nce lokal veriyi gÃ¼ncelle ve Firestore gÃ¼ncellemelerini hazÄ±rla
             sortedGames.forEach(([gameId, game], index) => {
                 gamesData[gameId].sortOrder = index;
                 updates.push(
@@ -14006,7 +11047,7 @@
                 );
             });
             
-            // HEMEN UI'ı güncelle
+            // HEMEN UI'Ä± gÃ¼ncelle
             renderSortModal();
             loadGameCheatList();
             renderHomeGames();
@@ -14015,22 +11056,22 @@
             await Promise.all(updates);
             
         } catch(e) {
-            console.error('Oyun sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Oyun sÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // İki oyunun sırasını değiştir (eski fonksiyon - drag-drop için)
+    // Ä°ki oyunun sÄ±rasÄ±nÄ± deÄŸiÅŸtir (eski fonksiyon - drag-drop iÃ§in)
     async function swapGameOrders(gameId1, gameId2) {
         try {
             const order1 = gamesData[gameId1].sortOrder ?? 999;
             const order2 = gamesData[gameId2].sortOrder ?? 999;
             
-            // Önce lokal veriyi güncelle
+            // Ã–nce lokal veriyi gÃ¼ncelle
             gamesData[gameId1].sortOrder = order2;
             gamesData[gameId2].sortOrder = order1;
             
-            // HEMEN UI'ı güncelle (Firestore'u bekleme)
+            // HEMEN UI'Ä± gÃ¼ncelle (Firestore'u bekleme)
             renderSortModal();
             loadGameCheatList();
             renderHomeGames();
@@ -14042,14 +11083,14 @@
             ]);
             
         } catch(e) {
-            console.error('Oyun sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Oyun sÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Hileyi yukarı taşı
+    // Hileyi yukarÄ± taÅŸÄ±
     async function moveCheatUp(gameId, cheatId) {
-        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        if (!requirePermission('cheats_edit', 'hile sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         const cheats = gamesData[gameId].cheats || {};
         const sortedCheats = Object.entries(cheats)
@@ -14058,22 +11099,22 @@
         const currentIndex = sortedCheats.findIndex(([id]) => id === cheatId);
         
         if (currentIndex > 0) {
-            // Listedeki pozisyonları değiştir
+            // Listedeki pozisyonlarÄ± deÄŸiÅŸtir
             const temp = sortedCheats[currentIndex];
             sortedCheats[currentIndex] = sortedCheats[currentIndex - 1];
             sortedCheats[currentIndex - 1] = temp;
             
-            // Tüm hileleri yeniden numarala ve kaydet
+            // TÃ¼m hileleri yeniden numarala ve kaydet
             await reorderAllCheats(gameId, sortedCheats);
-            showToast('✅ Hile yukarı taşındı');
+            showToast('âœ… Hile yukarÄ± taÅŸÄ±ndÄ±');
         } else {
-            showToast('⚠️ Bu hile zaten en üstte');
+            showToast('âš ï¸ Bu hile zaten en Ã¼stte');
         }
     }
     
-    // Hileyi aşağı taşı
+    // Hileyi aÅŸaÄŸÄ± taÅŸÄ±
     async function moveCheatDown(gameId, cheatId) {
-        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        if (!requirePermission('cheats_edit', 'hile sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         const cheats = gamesData[gameId].cheats || {};
         const sortedCheats = Object.entries(cheats)
@@ -14082,31 +11123,31 @@
         const currentIndex = sortedCheats.findIndex(([id]) => id === cheatId);
         
         if (currentIndex < sortedCheats.length - 1) {
-            // Listedeki pozisyonları değiştir
+            // Listedeki pozisyonlarÄ± deÄŸiÅŸtir
             const temp = sortedCheats[currentIndex];
             sortedCheats[currentIndex] = sortedCheats[currentIndex + 1];
             sortedCheats[currentIndex + 1] = temp;
             
-            // Tüm hileleri yeniden numarala ve kaydet
+            // TÃ¼m hileleri yeniden numarala ve kaydet
             await reorderAllCheats(gameId, sortedCheats);
-            showToast('✅ Hile aşağı taşındı');
+            showToast('âœ… Hile aÅŸaÄŸÄ± taÅŸÄ±ndÄ±');
         } else {
-            showToast('⚠️ Bu hile zaten en altta');
+            showToast('âš ï¸ Bu hile zaten en altta');
         }
     }
     
-    // Tüm hileleri yeniden sırala (0, 1, 2, 3...)
+    // TÃ¼m hileleri yeniden sÄ±rala (0, 1, 2, 3...)
     async function reorderAllCheats(gameId, sortedCheats) {
         try {
             const updateData = {};
             
-            // Önce lokal veriyi güncelle ve Firestore update objesini hazırla
+            // Ã–nce lokal veriyi gÃ¼ncelle ve Firestore update objesini hazÄ±rla
             sortedCheats.forEach(([cheatId, cheat], index) => {
                 gamesData[gameId].cheats[cheatId].sortOrder = index;
                 updateData[`cheats.${cheatId}.sortOrder`] = index;
             });
             
-            // HEMEN UI'ı güncelle
+            // HEMEN UI'Ä± gÃ¼ncelle
             renderSortCheatList(gameId);
             loadGameCheatList();
             
@@ -14114,23 +11155,23 @@
             await db.collection('games').doc(gameId).update(updateData);
             
         } catch(e) {
-            console.error('Hile sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Hile sÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // İki hilenin sırasını değiştir (eski fonksiyon - drag-drop için)
+    // Ä°ki hilenin sÄ±rasÄ±nÄ± deÄŸiÅŸtir (eski fonksiyon - drag-drop iÃ§in)
     async function swapCheatOrders(gameId, cheatId1, cheatId2) {
         try {
             const cheats = gamesData[gameId].cheats;
             const order1 = cheats[cheatId1].sortOrder ?? 999;
             const order2 = cheats[cheatId2].sortOrder ?? 999;
             
-            // Önce lokal veriyi güncelle
+            // Ã–nce lokal veriyi gÃ¼ncelle
             cheats[cheatId1].sortOrder = order2;
             cheats[cheatId2].sortOrder = order1;
             
-            // HEMEN UI'ı güncelle - hile listesini doğrudan render et
+            // HEMEN UI'Ä± gÃ¼ncelle - hile listesini doÄŸrudan render et
             renderSortCheatList(gameId);
             
             loadGameCheatList();
@@ -14142,12 +11183,12 @@
             });
             
         } catch(e) {
-            console.error('Hile sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Hile sÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Hile listesini anlık render et
+    // Hile listesini anlÄ±k render et
     function renderSortCheatList(gameId) {
         const cheatListDiv = document.getElementById(`sortCheatList${gameId}`);
         if (!cheatListDiv) return;
@@ -14167,18 +11208,18 @@
         let cheatHtml = '';
         cheatIds.forEach(cheatId => {
             const cheat = cheats[cheatId];
-            const cheatStatus = cheat.status === 'active' ? '🟢' : (cheat.status === 'maintenance' ? '🟠' : '🔴');
+            const cheatStatus = cheat.status === 'active' ? 'ğŸŸ¢' : (cheat.status === 'maintenance' ? 'ğŸŸ ' : 'ğŸ”´');
             
             cheatHtml += `
                 <div class="sort-cheat-card" data-game-id="${gameId}" data-cheat-id="${cheatId}" style="display: flex; align-items: center; gap: 8px; padding: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.03); border-radius: 8px;">
                     <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <button onclick="moveCheatUp('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▲</button>
-                        <button onclick="moveCheatDown('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">▼</button>
+                        <button onclick="moveCheatUp('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">â–²</button>
+                        <button onclick="moveCheatDown('${gameId}', '${cheatId}')" style="background: #2196F3; color: white; border: none; border-radius: 4px; width: 24px; height: 20px; cursor: pointer; font-size: 12px;">â–¼</button>
                     </div>
-                    ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">🛡️</span>'}
+                    ${cheat.image ? `<img src="${cheat.image}" style="width: 35px; height: 35px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 24px;">ğŸ›¡ï¸</span>'}
                     <div style="flex: 1;">
                         <div style="color: #2196F3; font-size: 13px; font-weight: 500;">${cheatStatus} ${cheat.name}</div>
-                        <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiş'}</div>
+                        <div style="font-size: 11px; color: #888;">${cheat.version || 'Versiyon belirtilmemiÅŸ'}</div>
                     </div>
                 </div>
             `;
@@ -14187,9 +11228,9 @@
         cheatListDiv.innerHTML = cheatHtml;
     }
     
-    // Oyun yerlerini değiştir (Sıralama modal'dan)
+    // Oyun yerlerini deÄŸiÅŸtir (SÄ±ralama modal'dan)
     async function swapGames(gameId1, gameId2) {
-        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        if (!requirePermission('games_edit', 'oyun sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
             const order1 = gamesData[gameId1].sortOrder ?? 999;
@@ -14203,24 +11244,24 @@
                 db.collection('games').doc(gameId2).update({ sortOrder: order1 })
             ]);
             
-            // Her iki listeyide güncelle
+            // Her iki listeyide gÃ¼ncelle
             loadGameCheatList();
             renderHomeGames();
             
-            // Eğer sıralama modal açıksa onu da güncelle
+            // EÄŸer sÄ±ralama modal aÃ§Ä±ksa onu da gÃ¼ncelle
             const sortModal = document.getElementById('sortModal');
             if (sortModal && sortModal.classList.contains('active')) {
                 renderSortModal();
             }
         } catch(e) {
-            console.error('Oyun swap hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Oyun swap hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Hile yerlerini değiştir (Sıralama modal'dan)
+    // Hile yerlerini deÄŸiÅŸtir (SÄ±ralama modal'dan)
     async function swapCheats(gameId, cheatId1, cheatId2) {
-        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        if (!requirePermission('cheats_edit', 'hile sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
             const cheats = gamesData[gameId].cheats;
@@ -14237,26 +11278,26 @@
             
             loadGameCheatList();
             
-            // Eğer sıralama modal açıksa o oyunun hilelerini güncelle
+            // EÄŸer sÄ±ralama modal aÃ§Ä±ksa o oyunun hilelerini gÃ¼ncelle
             const sortModal = document.getElementById('sortModal');
             if (sortModal && sortModal.classList.contains('active')) {
-                // Oyun kartını açık tut ve sadece hile listesini güncelle
+                // Oyun kartÄ±nÄ± aÃ§Ä±k tut ve sadece hile listesini gÃ¼ncelle
                 const cheatsDiv = document.getElementById(`sortCheats${gameId}`);
                 if (cheatsDiv && cheatsDiv.style.maxHeight !== '0px') {
                     toggleSortGameCheats(gameId); // Kapat
-                    setTimeout(() => toggleSortGameCheats(gameId), 100); // Tekrar aç
+                    setTimeout(() => toggleSortGameCheats(gameId), 100); // Tekrar aÃ§
                 }
             }
         } catch(e) {
-            console.error('Hile swap hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Hile swap hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     let draggedCheatElement = null;
     let draggedOverElement = null;
     
     function initDragAndDrop() {
-        // Oyun sürükle-bırak
+        // Oyun sÃ¼rÃ¼kle-bÄ±rak
         document.querySelectorAll('.draggable-game').forEach(item => {
             // Desktop - Drag events
             item.addEventListener('dragstart', handleGameDragStart);
@@ -14270,7 +11311,7 @@
             item.addEventListener('touchend', handleGameTouchEnd);
         });
         
-        // Hile sürükle-bırak
+        // Hile sÃ¼rÃ¼kle-bÄ±rak
         document.querySelectorAll('.draggable-cheat').forEach(item => {
             // Desktop - Drag events
             item.addEventListener('dragstart', handleCheatDragStart);
@@ -14364,7 +11405,7 @@
         touchElement = null;
     }
     
-    // === HİLE DRAG & DROP ===
+    // === HÄ°LE DRAG & DROP ===
     function handleCheatDragStart(e) {
         draggedCheatElement = this;
         this.style.opacity = '0.5';
@@ -14408,7 +11449,7 @@
         });
     }
     
-    // === HİLE TOUCH EVENTS (Mobile) ===
+    // === HÄ°LE TOUCH EVENTS (Mobile) ===
     function handleCheatTouchStart(e) {
         touchElement = this;
         touchStartY = e.touches[0].clientY;
@@ -14449,9 +11490,9 @@
         touchElement = null;
     }
     
-    // Oyun yerlerini değiştir
+    // Oyun yerlerini deÄŸiÅŸtir
     async function swapGames(gameId1, gameId2) {
-        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        if (!requirePermission('games_edit', 'oyun sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
             const order1 = gamesData[gameId1].sortOrder ?? 999;
@@ -14468,14 +11509,14 @@
             loadGameCheatList();
             renderHomeGames();
         } catch(e) {
-            console.error('Oyun swap hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Oyun swap hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Hile yerlerini değiştir
+    // Hile yerlerini deÄŸiÅŸtir
     async function swapCheats(gameId, cheatId1, cheatId2) {
-        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        if (!requirePermission('cheats_edit', 'hile sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
             const cheats = gamesData[gameId].cheats;
@@ -14492,17 +11533,17 @@
             
             loadGameCheatList();
         } catch(e) {
-            console.error('Hile swap hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Hile swap hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Oyun sırasını değiştir (eski buton sistemi - artık kullanılmıyor ama uyumluluk için kalsın)
+    // Oyun sÄ±rasÄ±nÄ± deÄŸiÅŸtir (eski buton sistemi - artÄ±k kullanÄ±lmÄ±yor ama uyumluluk iÃ§in kalsÄ±n)
     async function moveGame(gameId, direction) {
-        if (!requirePermission('games_edit', 'oyun sıralamasını değiştirmek')) return;
+        if (!requirePermission('games_edit', 'oyun sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
-            // Mevcut sıralamayı al
+            // Mevcut sÄ±ralamayÄ± al
             const gameIds = Object.keys(gamesData).sort((a, b) => {
                 const orderA = gamesData[a].sortOrder ?? 999;
                 const orderB = gamesData[b].sortOrder ?? 999;
@@ -14515,7 +11556,7 @@
             const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
             if (targetIndex < 0 || targetIndex >= gameIds.length) return;
             
-            // İki oyunun yerini değiştir
+            // Ä°ki oyunun yerini deÄŸiÅŸtir
             const targetGameId = gameIds[targetIndex];
             
             const tempOrder = gamesData[gameId].sortOrder ?? currentIndex;
@@ -14528,23 +11569,23 @@
                 db.collection('games').doc(targetGameId).update({ sortOrder: gamesData[targetGameId].sortOrder })
             ]);
             
-            showToast('✅ Sıralama güncellendi');
+            showToast('âœ… SÄ±ralama gÃ¼ncellendi');
             loadGameCheatList();
             renderHomeGames();
         } catch(e) {
-            console.error('Sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('SÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Hile sırasını değiştir
+    // Hile sÄ±rasÄ±nÄ± deÄŸiÅŸtir
     async function moveCheat(gameId, cheatId, direction) {
-        if (!requirePermission('cheats_edit', 'hile sıralamasını değiştirmek')) return;
+        if (!requirePermission('cheats_edit', 'hile sÄ±ralamasÄ±nÄ± deÄŸiÅŸtirmek')) return;
         
         try {
             const cheats = gamesData[gameId].cheats || {};
             
-            // Mevcut sıralamayı al
+            // Mevcut sÄ±ralamayÄ± al
             const cheatIds = Object.keys(cheats).sort((a, b) => {
                 const orderA = cheats[a].sortOrder ?? 999;
                 const orderB = cheats[b].sortOrder ?? 999;
@@ -14557,7 +11598,7 @@
             const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
             if (targetIndex < 0 || targetIndex >= cheatIds.length) return;
             
-            // İki hilenin yerini değiştir
+            // Ä°ki hilenin yerini deÄŸiÅŸtir
             const targetCheatId = cheatIds[targetIndex];
             
             const tempOrder = cheats[cheatId].sortOrder ?? currentIndex;
@@ -14570,15 +11611,15 @@
                 [`cheats.${targetCheatId}.sortOrder`]: cheats[targetCheatId].sortOrder
             });
             
-            showToast('✅ Hile sıralaması güncellendi');
+            showToast('âœ… Hile sÄ±ralamasÄ± gÃ¼ncellendi');
             loadGameCheatList();
         } catch(e) {
-            console.error('Hile sıralama hatası:', e);
-            showToast('❌ Sıralama güncellenemedi');
+            console.error('Hile sÄ±ralama hatasÄ±:', e);
+            showToast('âŒ SÄ±ralama gÃ¼ncellenemedi');
         }
     }
     
-    // Eski fonksiyonları kaldır - uyumluluk için boş bırak
+    // Eski fonksiyonlarÄ± kaldÄ±r - uyumluluk iÃ§in boÅŸ bÄ±rak
     let gamesAndCheats = {};
     function addNewGame() { openGameModal(); }
     function addNewCheat() { openCheatModal(); }
@@ -14586,7 +11627,7 @@
     
     // Key Aktifle (SADECE KURUCU)
     async function activateKey() {
-        if (!requirePermission('keys_add', 'key aktifleştirmek')) return;
+        if (!requirePermission('keys_add', 'key aktifleÅŸtirmek')) return;
         
         const email = document.getElementById('adminUserEmail').value.trim();
         const game = document.getElementById('adminGame').value;
@@ -14594,21 +11635,21 @@
         const days = parseInt(document.getElementById('adminPackage').value);
         let keyCode = document.getElementById('adminKeyCode').value.trim();
         
-        if (!email) { showToast('❌ E-posta girin'); return; }
-        if (!game) { showToast('❌ Oyun seçin'); return; }
-        if (!cheat) { showToast('❌ Hile seçin'); return; }
+        if (!email) { showToast('âŒ E-posta girin'); return; }
+        if (!game) { showToast('âŒ Oyun seÃ§in'); return; }
+        if (!cheat) { showToast('âŒ Hile seÃ§in'); return; }
         
-        // Key kodu boşsa otomatik üret
+        // Key kodu boÅŸsa otomatik Ã¼ret
         if (!keyCode) {
             keyCode = generateKeyCode();
         }
         
         try {
-            showToast('⏳ Key aktifleştiriliyor...');
+            showToast('â³ Key aktifleÅŸtiriliyor...');
             
-            // Kullanıcıyı bul
+            // KullanÄ±cÄ±yÄ± bul
             const users = await db.collection('users').where('email', '==', email).get();
-            if (users.empty) { showToast('❌ Kullanıcı bulunamadı'); return; }
+            if (users.empty) { showToast('âŒ KullanÄ±cÄ± bulunamadÄ±'); return; }
             
             const userDoc = users.docs[0];
             const activatedAt = new Date();
@@ -14635,19 +11676,19 @@
             document.getElementById('adminUserEmail').value = '';
             document.getElementById('adminKeyCode').value = '';
             
-            // Başarı mesajı
-            const packageLabel = days >= 365 ? 'Sınırsız' : days + ' Günlük';
-            showNotification(`✅ Key aktifleştirildi!\n\n👤 ${email}\n🎮 ${game}\n🛡️ ${cheat}\n⏱️ ${packageLabel}\n🔑 ${keyCode}`);
+            // BaÅŸarÄ± mesajÄ±
+            const packageLabel = days >= 365 ? 'SÄ±nÄ±rsÄ±z' : days + ' GÃ¼nlÃ¼k';
+            showNotification(`âœ… Key aktifleÅŸtirildi!\n\nğŸ‘¤ ${email}\nğŸ® ${game}\nğŸ›¡ï¸ ${cheat}\nâ±ï¸ ${packageLabel}\nğŸ”‘ ${keyCode}`);
             
-            // Üye listesini yenile
+            // Ãœye listesini yenile
             loadAllUsers();
         } catch(e) {
-            console.error('Key aktifleştirme hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            console.error('Key aktifleÅŸtirme hatasÄ±:', e);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Otomatik key kodu üretici
+    // Otomatik key kodu Ã¼retici
     function generateKeyCode() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         let code = 'TB-';
@@ -14660,7 +11701,7 @@
         return code;
     }
     
-    // ==================== ÜYE YÖNETİMİ ====================
+    // ==================== ÃœYE YÃ–NETÄ°MÄ° ====================
 
     let usersRealtimeListener = null;
 
@@ -14696,21 +11737,21 @@
         }
     }
     
-    // Tüm üyeleri yükle
+    // TÃ¼m Ã¼yeleri yÃ¼kle
     async function loadAllUsers() {
         if (!hasPermission('members_view')) {
-            document.getElementById('usersListContainer').innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Bu özellik için yetkiniz yok</div>';
+            document.getElementById('usersListContainer').innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Bu Ã¶zellik iÃ§in yetkiniz yok</div>';
             return;
         }
         const container = document.getElementById('usersListContainer');
         const countEl = document.getElementById('totalUsersCount');
         const onlineCountEl = document.getElementById('totalOnlineCount');
         
-        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">⏳ Yükleniyor...</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">â³ YÃ¼kleniyor...</div>';
         
         try {
-            // Spark (ücretsiz) kotayı korumak için: tüm üyeleri realtime dinleme KAPALI.
-            // Üye listesini sadece istek anında tek sefer çek.
+            // Spark (Ã¼cretsiz) kotayÄ± korumak iÃ§in: tÃ¼m Ã¼yeleri realtime dinleme KAPALI.
+            // Ãœye listesini sadece istek anÄ±nda tek sefer Ã§ek.
             stopUsersRealtimeListener();
 
             const usersSnapshot = await db.collection('users').get();
@@ -14718,13 +11759,13 @@
             if (onlineCountEl) onlineCountEl.textContent = '0';
 
             if (usersSnapshot.empty) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Henüz üye yok</div>';
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">HenÃ¼z Ã¼ye yok</div>';
                 return;
             }
 
             const now = new Date();
 
-            // Kullanıcıları admin ve normal olarak ayır
+            // KullanÄ±cÄ±larÄ± admin ve normal olarak ayÄ±r
             let adminUsers = [];
             let normalUsers = [];
             let onlineCount = 0;
@@ -14734,7 +11775,7 @@
                 const userId = doc.id;
                 const email = user.email || 'E-posta yok';
 
-                // Kurucu/Admin kontrolü
+                // Kurucu/Admin kontrolÃ¼
                 const isUserOwner = isOwnerEmail(email);
                 const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
 
@@ -14757,14 +11798,14 @@
 
             if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
 
-            // HTML oluştur
+            // HTML oluÅŸtur
             let usersHtml = '';
 
-            // Önce adminleri göster
+            // Ã–nce adminleri gÃ¶ster
             [...adminUsers, ...normalUsers].forEach(({ userId, email, user, isAdmin: isUserAdmin, isOwner: isUserOwner }) => {
                 const keys = user.keys || [];
 
-                // Aktif key sayısı
+                // Aktif key sayÄ±sÄ±
                 const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
                 const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
 
@@ -14772,25 +11813,25 @@
                 let statusBadge = '';
                 let statusIcon = '';
                 if (activeKeys.length > 0) {
-                    statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTİF</span>`;
-                    statusIcon = '🟢';
+                    statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTÄ°F</span>`;
+                    statusIcon = 'ğŸŸ¢';
                 } else if (expiredKeys.length > 0) {
                     statusBadge = `<span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">DOLDU</span>`;
-                    statusIcon = '🟠';
+                    statusIcon = 'ğŸŸ ';
                 } else {
-                    statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENİ</span>`;
-                    statusIcon = '⚪';
+                    statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENÄ°</span>`;
+                    statusIcon = 'âšª';
                 }
 
-                // Kurucu/Admin badge - Kurucu ve Admin için farklı etiket
+                // Kurucu/Admin badge - Kurucu ve Admin iÃ§in farklÄ± etiket
                 let roleBadge = '';
                 if (isUserOwner) {
-                    roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👑 KURUCU</span>`;
+                    roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">ğŸ‘‘ KURUCU</span>`;
                 } else if (isUserAdmin) {
-                    roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👮 ADMİN</span>`;
+                    roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">ğŸ‘® ADMÄ°N</span>`;
                 }
 
-                // Kayıt tarihi
+                // KayÄ±t tarihi
                 const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleDateString('tr-TR') : 'Bilinmiyor';
 
                 const online = isUserOnline(user);
@@ -14798,10 +11839,10 @@
                 const lastLoginText = formatTrDateTime(lastLoginDate);
 
                 const onlineOrLastLogin = online
-                    ? `<span style="color: #4CAF50; font-weight: bold;">🟢 ÇEVRİMİÇİ</span>`
-                    : `<span style="color: #888;">🕒 Son giriş: ${lastLoginText}</span>`;
+                    ? `<span style="color: #4CAF50; font-weight: bold;">ğŸŸ¢ Ã‡EVRÄ°MÄ°Ã‡Ä°</span>`
+                    : `<span style="color: #888;">ğŸ•’ Son giriÅŸ: ${lastLoginText}</span>`;
 
-                // Kurucu/Admin için özel border
+                // Kurucu/Admin iÃ§in Ã¶zel border
                 let cardStyle = 'background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
                 if (isUserOwner) {
                     cardStyle = 'background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
@@ -14813,17 +11854,17 @@
                     <div style="${cardStyle}" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                         <div style="display: flex; align-items: center; justify-content: space-between;">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;" onclick="openUserDetail('${userId}')">>
-                                <span style="font-size: 18px;">${isUserOwner ? '👑' : (isUserAdmin ? '👮' : statusIcon)}</span>
+                                <span style="font-size: 18px;">${isUserOwner ? 'ğŸ‘‘' : (isUserAdmin ? 'ğŸ‘®' : statusIcon)}</span>
                                 <div style="min-width: 0;">
                                     <div style="font-size: 13px; color: #fff; word-break: break-all;">${email}</div>
-                                    <div style="font-size: 11px; color: #888; margin-top: 2px;">📅 ${createdAt} • 🔑 ${activeKeys.length} aktif, ${expiredKeys.length} dolmuş • ${onlineOrLastLogin}</div>
+                                    <div style="font-size: 11px; color: #888; margin-top: 2px;">ğŸ“… ${createdAt} â€¢ ğŸ”‘ ${activeKeys.length} aktif, ${expiredKeys.length} dolmuÅŸ â€¢ ${onlineOrLastLogin}</div>
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px;">
                                 ${roleBadge}
                                 ${!isUserAdmin && !isUserOwner ? statusBadge : ''}
-                                ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Üyeyi Sil">🗑️</button>` : ''}
-                                <span style="color: #666;" onclick="openUserDetail('${userId}')">›</span>
+                                ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Ãœyeyi Sil">ğŸ—‘ï¸</button>` : ''}
+                                <span style="color: #666;" onclick="openUserDetail('${userId}')">â€º</span>
                             </div>
                         </div>
                     </div>
@@ -14832,26 +11873,26 @@
 
             container.innerHTML = usersHtml;
         } catch (e) {
-            console.error('Üye yükleme hatası:', e);
+            console.error('Ãœye yÃ¼kleme hatasÄ±:', e);
             container.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
         }
     }
     
-    // Üye detay modal'ını aç
+    // Ãœye detay modal'Ä±nÄ± aÃ§
     async function openUserDetail(userId) {
         if (!hasPermission('members_view')) {
-            showToast('❌ Üye görüntüleme yetkiniz yok');
+            showToast('âŒ Ãœye gÃ¶rÃ¼ntÃ¼leme yetkiniz yok');
             return;
         }
         const content = document.getElementById('userDetailContent');
-        content.innerHTML = '<div style="text-align: center; padding: 40px; color: #aaa;">⏳ Yükleniyor...</div>';
+        content.innerHTML = '<div style="text-align: center; padding: 40px; color: #aaa;">â³ YÃ¼kleniyor...</div>';
         openModal('userDetailModal');
         
         try {
             const userDoc = await db.collection('users').doc(userId).get();
             
             if (!userDoc.exists) {
-                content.innerHTML = '<div style="color: #f44336; text-align: center; padding: 20px;">Üye bulunamadı</div>';
+                content.innerHTML = '<div style="color: #f44336; text-align: center; padding: 20px;">Ãœye bulunamadÄ±</div>';
                 return;
             }
             
@@ -14860,22 +11901,22 @@
             const keys = user.keys || [];
             const now = new Date();
             
-            // Keyleri ayır
+            // Keyleri ayÄ±r
             const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
             const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
             
-            // Kayıt tarihi
+            // KayÄ±t tarihi
             const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleString('tr-TR') : 'Bilinmiyor';
             const lastLogin = user.lastLogin ? user.lastLogin.toDate().toLocaleString('tr-TR') : 'Bilinmiyor';
             
-            // Şifre (varsa) - Sadece kurucu görebilir
-            const userPassword = user.password || 'Kayıtlı değil';
+            // Åifre (varsa) - Sadece kurucu gÃ¶rebilir
+            const userPassword = user.password || 'KayÄ±tlÄ± deÄŸil';
             const canSeePassword = isOwner();
             
             let html = `
-                <!-- Üye Bilgileri -->
+                <!-- Ãœye Bilgileri -->
                 <div style="background: rgba(33,150,243,0.1); border: 1px solid rgba(33,150,243,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                    <div style="font-size: 14px; font-weight: bold; color: #2196F3; margin-bottom: 12px;">📧 Üye Bilgileri</div>
+                    <div style="font-size: 14px; font-weight: bold; color: #2196F3; margin-bottom: 12px;">ğŸ“§ Ãœye Bilgileri</div>
                     <div style="display: grid; gap: 8px; font-size: 13px;">
                         <div style="display: flex; justify-content: space-between;">
                             <span style="color: #888;">E-posta:</span>
@@ -14883,16 +11924,16 @@
                         </div>
                         ${canSeePassword ? `
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="color: #888;">Şifre:</span>
+                            <span style="color: #888;">Åifre:</span>
                             <div style="display: flex; align-items: center; gap: 8px;">
-                                <span id="userPasswordField" style="color: #FF9800; font-family: monospace;">••••••••</span>
-                                <button onclick="togglePasswordVisibility('${userPassword}')" style="background: #FF9800; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">👁️</button>
-                                <button onclick="copyToClipboard('${userPassword}')" style="background: #2196F3; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">📋</button>
+                                <span id="userPasswordField" style="color: #FF9800; font-family: monospace;">â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢</span>
+                                <button onclick="togglePasswordVisibility('${userPassword}')" style="background: #FF9800; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">ğŸ‘ï¸</button>
+                                <button onclick="copyToClipboard('${userPassword}')" style="background: #2196F3; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">ğŸ“‹</button>
                             </div>
                         </div>
                         ` : ''}
                         <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #888;">Kayıt Tarihi:</span>
+                            <span style="color: #888;">KayÄ±t Tarihi:</span>
                             <span style="color: #fff;">${createdAt}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
@@ -14902,16 +11943,16 @@
                     </div>
                 </div>
                 
-                <!-- Hızlı İşlemler -->
+                <!-- HÄ±zlÄ± Ä°ÅŸlemler -->
                 <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                    <button onclick="document.getElementById('adminUserEmail').value='${email}'; closeModal('userDetailModal'); showToast('📧 E-posta kopyalandı');" style="flex: 1; background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">🔑 Key Ekle</button>
-                    <button onclick="copyToClipboard('${email}')" style="flex: 1; background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">📋 E-posta Kopyala</button>
+                    <button onclick="document.getElementById('adminUserEmail').value='${email}'; closeModal('userDetailModal'); showToast('ğŸ“§ E-posta kopyalandÄ±');" style="flex: 1; background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">ğŸ”‘ Key Ekle</button>
+                    <button onclick="copyToClipboard('${email}')" style="flex: 1; background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">ğŸ“‹ E-posta Kopyala</button>
                 </div>
                 
-                <!-- Üye Silme (Sadece kurucu görebilir, kurucu silinemez) -->
+                <!-- Ãœye Silme (Sadece kurucu gÃ¶rebilir, kurucu silinemez) -->
                 ${isOwner() && email !== OWNER_EMAIL ? `
                 <div style="margin-bottom: 15px;">
-                    <button onclick="deleteUser('${userId}', '${email}')" style="width: 100%; background: linear-gradient(135deg, #f44336, #d32f2f); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">🗑️ Üyeyi Sil</button>
+                    <button onclick="deleteUser('${userId}', '${email}')" style="width: 100%; background: linear-gradient(135deg, #f44336, #d32f2f); border: none; color: #fff; padding: 10px; border-radius: 8px; font-size: 12px; cursor: pointer;">ğŸ—‘ï¸ Ãœyeyi Sil</button>
                 </div>
                 ` : ''}
             `;
@@ -14920,7 +11961,7 @@
             if (activeKeys.length > 0) {
                 html += `
                     <div style="font-size: 14px; font-weight: bold; color: #4CAF50; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
-                        <span>✅ Aktif Keyler</span>
+                        <span>âœ… Aktif Keyler</span>
                         <span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${activeKeys.length}</span>
                     </div>
                 `;
@@ -14935,7 +11976,7 @@
                     const remainingHours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                     
                     let remainingText = remainingDays > 0 ? `${remainingDays}g ${remainingHours}s` : `${remainingHours} saat`;
-                    let packageLabel = totalDays >= 365 ? 'Sınırsız' : `${totalDays} Günlük`;
+                    let packageLabel = totalDays >= 365 ? 'SÄ±nÄ±rsÄ±z' : `${totalDays} GÃ¼nlÃ¼k`;
                     const keyCode = key.keyCode || key.code || '***';
                     const gameName = key.game || 'Mobile Legends';
                     const cheatName = key.cheat || 'TheBestML';
@@ -14945,30 +11986,30 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: bold; color: #4CAF50;">${packageLabel}</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 11px; color: #aaa;">⏱️ ${remainingText} kaldı</span>
-                                    ${isOwner() ? `<button onclick="adminDeleteUserKey('${userId}', ${index}, '${keyCode}', 'active')" style="background: #f44336; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;" title="Key'i Sil">🗑️</button>` : ''}
+                                    <span style="font-size: 11px; color: #aaa;">â±ï¸ ${remainingText} kaldÄ±</span>
+                                    ${isOwner() ? `<button onclick="adminDeleteUserKey('${userId}', ${index}, '${keyCode}', 'active')" style="background: #f44336; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;" title="Key'i Sil">ğŸ—‘ï¸</button>` : ''}
                                 </div>
                             </div>
-                            <div style="font-size: 11px; color: #888; margin-bottom: 6px;">🎮 ${gameName} • 🛡️ ${cheatName}</div>
+                            <div style="font-size: 11px; color: #888; margin-bottom: 6px;">ğŸ® ${gameName} â€¢ ğŸ›¡ï¸ ${cheatName}</div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <code style="flex: 1; font-size: 11px; color: #4CAF50; word-break: break-all;">${keyCode}</code>
-                                <button onclick="copyToClipboard('${keyCode}'); event.stopPropagation();" style="background: #4CAF50; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">📋</button>
+                                <button onclick="copyToClipboard('${keyCode}'); event.stopPropagation();" style="background: #4CAF50; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;">ğŸ“‹</button>
                             </div>
-                            <div style="font-size: 10px; color: #666; margin-top: 6px;">📅 Bitiş: ${exp.toLocaleDateString('tr-TR')}</div>
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">ğŸ“… BitiÅŸ: ${exp.toLocaleDateString('tr-TR')}</div>
                         </div>
                     `;
                 });
             }
             
-            // Süresi Dolmuş Keyler
+            // SÃ¼resi DolmuÅŸ Keyler
             if (expiredKeys.length > 0) {
                 html += `
                     <div style="font-size: 14px; font-weight: bold; color: #f44336; margin: 15px 0 10px 0; display: flex; justify-content: space-between; align-items: center;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <span>❌ Süresi Dolmuş</span>
+                            <span>âŒ SÃ¼resi DolmuÅŸ</span>
                             <span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${expiredKeys.length}</span>
                         </div>
-                        ${isOwner() ? `<button onclick="adminDeleteAllExpiredKeys('${userId}')" style="background: #ff5722; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer;">🗑️ Tümünü Sil</button>` : ''}
+                        ${isOwner() ? `<button onclick="adminDeleteAllExpiredKeys('${userId}')" style="background: #ff5722; border: none; color: #fff; padding: 5px 10px; border-radius: 6px; font-size: 10px; cursor: pointer;">ğŸ—‘ï¸ TÃ¼mÃ¼nÃ¼ Sil</button>` : ''}
                     </div>
                 `;
                 
@@ -14979,14 +12020,14 @@
                     
                     const expiredMs = now - exp;
                     const expiredDays = Math.floor(expiredMs / (1000 * 60 * 60 * 24));
-                    let expiredText = expiredDays > 0 ? `${expiredDays} gün önce` : 'Bugün';
+                    let expiredText = expiredDays > 0 ? `${expiredDays} gÃ¼n Ã¶nce` : 'BugÃ¼n';
                     
-                    let packageLabel = totalDays >= 365 ? 'Sınırsız' : `${totalDays} Günlük`;
+                    let packageLabel = totalDays >= 365 ? 'SÄ±nÄ±rsÄ±z' : `${totalDays} GÃ¼nlÃ¼k`;
                     const keyCode = key.keyCode || key.code || '***';
                     const gameName = key.game || 'Mobile Legends';
                     const cheatName = key.cheat || 'TheBestML';
                     
-                    // Expired key için gerçek index bulmak için aktif key sayısını ekle
+                    // Expired key iÃ§in gerÃ§ek index bulmak iÃ§in aktif key sayÄ±sÄ±nÄ± ekle
                     const realIndex = activeKeys.length + index;
                     
                     html += `
@@ -14994,13 +12035,13 @@
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <span style="font-weight: bold; color: #f44336;">${packageLabel}</span>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="font-size: 11px; color: #888;">⏰ ${expiredText} bitti</span>
-                                    ${isOwner() ? `<button onclick="adminDeleteUserKey('${userId}', ${realIndex}, '${keyCode}', 'expired')" style="background: #ff5722; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;" title="Key'i Sil">🗑️</button>` : ''}
+                                    <span style="font-size: 11px; color: #888;">â° ${expiredText} bitti</span>
+                                    ${isOwner() ? `<button onclick="adminDeleteUserKey('${userId}', ${realIndex}, '${keyCode}', 'expired')" style="background: #ff5722; border: none; color: #fff; padding: 3px 8px; border-radius: 5px; font-size: 10px; cursor: pointer;" title="Key'i Sil">ğŸ—‘ï¸</button>` : ''}
                                 </div>
                             </div>
-                            <div style="font-size: 11px; color: #666; margin-bottom: 6px;">🎮 ${gameName} • 🛡️ ${cheatName}</div>
+                            <div style="font-size: 11px; color: #666; margin-bottom: 6px;">ğŸ® ${gameName} â€¢ ğŸ›¡ï¸ ${cheatName}</div>
                             <code style="font-size: 11px; color: #888; word-break: break-all;">${keyCode}</code>
-                            <div style="font-size: 10px; color: #666; margin-top: 6px;">📅 Bitti: ${exp.toLocaleDateString('tr-TR')}</div>
+                            <div style="font-size: 10px; color: #666; margin-top: 6px;">ğŸ“… Bitti: ${exp.toLocaleDateString('tr-TR')}</div>
                         </div>
                     `;
                 });
@@ -15010,13 +12051,13 @@
             if (keys.length === 0) {
                 html += `
                     <div style="text-align: center; padding: 30px; color: #888;">
-                        <div style="font-size: 40px; margin-bottom: 10px;">🔑</div>
-                        <div>Bu üyenin henüz key'i yok</div>
+                        <div style="font-size: 40px; margin-bottom: 10px;">ğŸ”‘</div>
+                        <div>Bu Ã¼yenin henÃ¼z key'i yok</div>
                     </div>
                 `;
             }
             
-            // Üyenin siparişlerini göster
+            // Ãœyenin sipariÅŸlerini gÃ¶ster
             const ordersSnapshot = await db.collection('orders').where('userId', '==', userId).get();
             
             if (!ordersSnapshot.empty) {
@@ -15026,7 +12067,7 @@
                 
                 html += `
                     <div style="font-size: 14px; font-weight: bold; color: #FF9800; margin: 15px 0 10px 0; display: flex; align-items: center; gap: 8px;">
-                        <span>📦 Siparişler</span>
+                        <span>ğŸ“¦ SipariÅŸler</span>
                         <span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${orderList.length}</span>
                     </div>
                 `;
@@ -15036,13 +12077,13 @@
                     let statusText = '', statusColor = '';
                     
                     if (order.status === 'pending') {
-                        statusText = '⏳ Beklemede';
+                        statusText = 'â³ Beklemede';
                         statusColor = '#FF9800';
                     } else if (order.status === 'approved') {
-                        statusText = '✅ Onaylandı';
+                        statusText = 'âœ… OnaylandÄ±';
                         statusColor = '#4CAF50';
                     } else {
-                        statusText = '❌ Reddedildi';
+                        statusText = 'âŒ Reddedildi';
                         statusColor = '#f44336';
                     }
                     
@@ -15051,7 +12092,7 @@
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <div>
                                     <div style="font-size: 12px; color: #fff;">${order.packageName}</div>
-                                    <div style="font-size: 11px; color: #888;">📅 ${date}</div>
+                                    <div style="font-size: 11px; color: #888;">ğŸ“… ${date}</div>
                                 </div>
                                 <span style="color: ${statusColor}; font-size: 11px;">${statusText}</span>
                             </div>
@@ -15060,10 +12101,10 @@
                 });
             }
             
-            // Aktivite Logları (Silinen Keyler vs)
+            // Aktivite LoglarÄ± (Silinen Keyler vs)
             const activityLog = user.activityLog || [];
             if (activityLog.length > 0) {
-                // Tarihe göre sırala (en yeni en üstte)
+                // Tarihe gÃ¶re sÄ±rala (en yeni en Ã¼stte)
                 activityLog.sort((a, b) => {
                     const dateA = a.deletedAt ? a.deletedAt.toDate() : new Date(0);
                     const dateB = b.deletedAt ? b.deletedAt.toDate() : new Date(0);
@@ -15072,7 +12113,7 @@
                 
                 html += `
                     <div style="font-size: 14px; font-weight: bold; color: #9C27B0; margin: 15px 0 10px 0; display: flex; align-items: center; gap: 8px;">
-                        <span>📋 Aktivite Geçmişi</span>
+                        <span>ğŸ“‹ Aktivite GeÃ§miÅŸi</span>
                         <span style="background: #9C27B0; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${activityLog.length}</span>
                     </div>
                 `;
@@ -15080,28 +12121,28 @@
                 activityLog.forEach(activity => {
                     if (activity.type === 'key_deleted') {
                         const deletedAt = activity.deletedAt ? activity.deletedAt.toDate().toLocaleString('tr-TR') : 'Bilinmiyor';
-                        const deletedByText = activity.deletedBy === 'user' ? '👤 Üye tarafından silindi' : '👑 Admin tarafından silindi';
-                        const packageLabel = activity.days >= 365 ? 'Sınırsız' : `${activity.days} Günlük`;
+                        const deletedByText = activity.deletedBy === 'user' ? 'ğŸ‘¤ Ãœye tarafÄ±ndan silindi' : 'ğŸ‘‘ Admin tarafÄ±ndan silindi';
+                        const packageLabel = activity.days >= 365 ? 'SÄ±nÄ±rsÄ±z' : `${activity.days} GÃ¼nlÃ¼k`;
                         
                         html += `
                             <div style="background: rgba(156,39,176,0.1); border: 1px solid rgba(156,39,176,0.3); border-radius: 10px; padding: 12px; margin-bottom: 8px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-size: 16px;">🗑️</span>
+                                        <span style="font-size: 16px;">ğŸ—‘ï¸</span>
                                         <span style="font-weight: bold; color: #9C27B0;">${packageLabel} Key Silindi</span>
                                     </div>
                                     <span style="background: rgba(156,39,176,0.3); color: #CE93D8; padding: 2px 8px; border-radius: 8px; font-size: 10px;">${deletedByText}</span>
                                 </div>
                                 <div style="font-size: 11px; color: #888; margin-bottom: 6px;">
-                                    🎮 ${activity.game || 'Mobile Legends'} • 🛡️ ${activity.cheat || 'TheBestML'}
+                                    ğŸ® ${activity.game || 'Mobile Legends'} â€¢ ğŸ›¡ï¸ ${activity.cheat || 'TheBestML'}
                                 </div>
                                 <div style="font-size: 11px; color: #666; margin-bottom: 4px;">
-                                    🔑 <code style="color: #9C27B0;">${activity.keyCode || '***'}</code>
+                                    ğŸ”‘ <code style="color: #9C27B0;">${activity.keyCode || '***'}</code>
                                 </div>
                                 <div style="font-size: 10px; color: #666;">
-                                    📅 Silinme: ${deletedAt}
+                                    ğŸ“… Silinme: ${deletedAt}
                                 </div>
-                                ${activity.reason ? `<div style="font-size: 10px; color: #888; margin-top: 4px; font-style: italic;">💬 ${activity.reason}</div>` : ''}
+                                ${activity.reason ? `<div style="font-size: 10px; color: #888; margin-top: 4px; font-style: italic;">ğŸ’¬ ${activity.reason}</div>` : ''}
                             </div>
                         `;
                     }
@@ -15110,37 +12151,37 @@
             
             content.innerHTML = html;
         } catch(e) {
-            console.error('Üye detay hatası:', e);
+            console.error('Ãœye detay hatasÄ±:', e);
             content.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
         }
     }
     
-    // ==================== SİPARİŞ YÖNETİMİ ====================
+    // ==================== SÄ°PARÄ°Å YÃ–NETÄ°MÄ° ====================
     
     async function loadPendingOrders() {
         if (!isAdmin()) return;
         
-        // Chat listesini de yükle (destek yetkisi olanlar için)
+        // Chat listesini de yÃ¼kle (destek yetkisi olanlar iÃ§in)
         if (hasPermission('support')) {
             loadAdminChats();
         }
         
-        // Sipariş yetkisi yoksa erken dön
+        // SipariÅŸ yetkisi yoksa erken dÃ¶n
         if (!hasPermission('orders')) {
-            document.getElementById('pendingOrders').innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
+            document.getElementById('pendingOrders').innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">SipariÅŸ gÃ¶rÃ¼ntÃ¼leme yetkiniz yok</div>';
             const monthlyEl = document.getElementById('monthlyApprovedOrdersSummary');
-            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
+            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">SipariÅŸ gÃ¶rÃ¼ntÃ¼leme yetkiniz yok</div>';
             return;
         }
         
         const container = document.getElementById('pendingOrders');
         const countEl = document.getElementById('orderCount');
         try {
-            // Worker/D1 (Firestore-free) admin siparişleri
+            // Worker/D1 (Firestore-free) admin sipariÅŸleri
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = (typeof getOrdersApiBase === 'function') ? getOrdersApiBase() : '';
             if (ordersApiBase) {
-                if (container) container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">⏳ Yükleniyor...</div>';
+                if (container) container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">â³ YÃ¼kleniyor...</div>';
 
                 let data;
                 try {
@@ -15150,7 +12191,7 @@
                     if (status === 401 || status === 403) {
                         if (countEl) countEl.textContent = '0';
                         if (container) {
-                            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">⚠️ Admin yetkisi yok (HTTP ' + status + ').<br/>Bu hesabın e-postası Worker admin listesinde değilse siparişler görünmez.</div>';
+                            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">âš ï¸ Admin yetkisi yok (HTTP ' + status + ').<br/>Bu hesabÄ±n e-postasÄ± Worker admin listesinde deÄŸilse sipariÅŸler gÃ¶rÃ¼nmez.</div>';
                         }
                         return;
                     }
@@ -15161,7 +12202,7 @@
                 if (countEl) countEl.textContent = String(orderList.length);
 
                 if (!orderList.length) {
-                    if (container) container.innerHTML = '<div style="text-align: center; padding: 20px;">✅ Bekleyen sipariş yok</div>';
+                    if (container) container.innerHTML = '<div style="text-align: center; padding: 20px;">âœ… Bekleyen sipariÅŸ yok</div>';
                     try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
                     return;
                 }
@@ -15184,7 +12225,7 @@
                     const discountDisplay = discountAmount > 0 ? discountAmount : usedPoints;
                     const loyaltyLine = showLoyalty ? `
                             <div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">
-                                🎁 ${usedPoints > 0 ? `Puan: ${usedPoints}` : 'Puan'}${discountDisplay > 0 ? ` • İndirim: -${discountDisplay}₺` : ''}${payableAmount !== null ? ` • Ödenecek: ${payableAmount}₺` : ''}
+                                ğŸ ${usedPoints > 0 ? `Puan: ${usedPoints}` : 'Puan'}${discountDisplay > 0 ? ` â€¢ Ä°ndirim: -${discountDisplay}â‚º` : ''}${payableAmount !== null ? ` â€¢ Ã–denecek: ${payableAmount}â‚º` : ''}
                             </div>
                     ` : '';
 
@@ -15197,11 +12238,11 @@
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div style="font-weight: bold; color: #4CAF50;">${escapeHtml(email)}</div>
-                                <div style="font-size: 13px; margin-top: 5px;">📦 ${escapeHtml(pkg)} - <span style="color: #FFD700;">${escapeHtml(price)}</span></div>
+                                <div style="font-size: 13px; margin-top: 5px;">ğŸ“¦ ${escapeHtml(pkg)} - <span style="color: #FFD700;">${escapeHtml(price)}</span></div>
                                 ${loyaltyLine}
-                                <div style="font-size: 11px; color: #666; margin-top: 5px;">📅 ${escapeHtml(date)}</div>
+                                <div style="font-size: 11px; color: #666; margin-top: 5px;">ğŸ“… ${escapeHtml(date)}</div>
                             </div>
-                            <div style="font-size: 24px;">📋</div>
+                            <div style="font-size: 24px;">ğŸ“‹</div>
                         </div>
                     </div>`;
                 });
@@ -15215,13 +12256,13 @@
             countEl.textContent = orders.size;
             
             if (orders.empty) {
-                container.innerHTML = '<div style="text-align: center; padding: 20px;">✅ Bekleyen sipariş yok</div>';
-                // Aylık özet yine de yüklensin
+                container.innerHTML = '<div style="text-align: center; padding: 20px;">âœ… Bekleyen sipariÅŸ yok</div>';
+                // AylÄ±k Ã¶zet yine de yÃ¼klensin
                 try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
                 return;
             }
             
-            // Client-side sıralama
+            // Client-side sÄ±ralama
             let orderList = [];
             orders.forEach(doc => {
                 orderList.push({ id: doc.id, ...doc.data() });
@@ -15239,34 +12280,34 @@
                 const discountDisplay = discountAmount > 0 ? discountAmount : usedPoints;
                 const loyaltyLine = showLoyalty ? `
                             <div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">
-                                🎁 ${usedPoints > 0 ? `Puan: ${usedPoints}` : 'Puan'}${discountDisplay > 0 ? ` • İndirim: -${discountDisplay}₺` : ''}${payableAmount !== null ? ` • Ödenecek: ${payableAmount}₺` : ''}
+                                ğŸ ${usedPoints > 0 ? `Puan: ${usedPoints}` : 'Puan'}${discountDisplay > 0 ? ` â€¢ Ä°ndirim: -${discountDisplay}â‚º` : ''}${payableAmount !== null ? ` â€¢ Ã–denecek: ${payableAmount}â‚º` : ''}
                             </div>
                 ` : '';
                 html += `<div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 10px; cursor: pointer;" onclick="showOrderDetail('${o.id}')">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <div style="font-weight: bold; color: #4CAF50;">${o.email}</div>
-                            <div style="font-size: 13px; margin-top: 5px;">📦 ${o.packageName} - <span style="color: #FFD700;">${o.price}</span></div>
+                            <div style="font-size: 13px; margin-top: 5px;">ğŸ“¦ ${o.packageName} - <span style="color: #FFD700;">${o.price}</span></div>
                             ${loyaltyLine}
-                            <div style="font-size: 11px; color: #666; margin-top: 5px;">📅 ${date}</div>
+                            <div style="font-size: 11px; color: #666; margin-top: 5px;">ğŸ“… ${date}</div>
                         </div>
-                        <div style="font-size: 24px;">📋</div>
+                        <div style="font-size: 24px;">ğŸ“‹</div>
                     </div>
                 </div>`;
             });
             container.innerHTML = html;
 
-            // Bekleyenler yüklendikten sonra aylık özet
+            // Bekleyenler yÃ¼klendikten sonra aylÄ±k Ã¶zet
             try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
         } catch(e) {
             container.innerHTML = 'Hata: ' + e.message;
             const monthlyEl = document.getElementById('monthlyApprovedOrdersSummary');
-            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Aylık özet yüklenemedi</div>';
+            if (monthlyEl) monthlyEl.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">AylÄ±k Ã¶zet yÃ¼klenemedi</div>';
         }
     }
 
     function getTurkishMonthNameUpper(monthIndex0) {
-        const names = ['OCAK','ŞUBAT','MART','NİSAN','MAYIS','HAZİRAN','TEMMUZ','AĞUSTOS','EYLÜL','EKİM','KASIM','ARALIK'];
+        const names = ['OCAK','ÅUBAT','MART','NÄ°SAN','MAYIS','HAZÄ°RAN','TEMMUZ','AÄUSTOS','EYLÃœL','EKÄ°M','KASIM','ARALIK'];
         return names[monthIndex0] || '';
     }
 
@@ -15287,14 +12328,14 @@
 
     function formatTryAmountTL(amount) {
         const n = Number(amount);
-        if (!Number.isFinite(n) || n <= 0) return '0₺';
+        if (!Number.isFinite(n) || n <= 0) return '0â‚º';
 
         const rounded = Math.round(n * 100) / 100;
         const isInt = Math.abs(rounded - Math.round(rounded)) < 1e-9;
         return rounded.toLocaleString('tr-TR', {
             minimumFractionDigits: isInt ? 0 : 2,
             maximumFractionDigits: 2
-        }) + '₺';
+        }) + 'â‚º';
     }
 
     function computeOrderApprovedAmount(order) {
@@ -15303,7 +12344,7 @@
 
         const base = Number(order && order.baseAmount);
         if (Number.isFinite(base) && base > 0) {
-            // baseAmount varsa ama payable yoksa, gene de price'a öncelik verelim
+            // baseAmount varsa ama payable yoksa, gene de price'a Ã¶ncelik verelim
         }
 
         try {
@@ -15371,16 +12412,16 @@
         if (!container) return;
 
         if (!hasPermission('orders')) {
-            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Sipariş görüntüleme yetkiniz yok</div>';
+            container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">SipariÅŸ gÃ¶rÃ¼ntÃ¼leme yetkiniz yok</div>';
             return;
         }
 
-        container.innerHTML = '<div style="text-align: center; padding: 15px; color: #aaa;">⏳ Yükleniyor...</div>';
+        container.innerHTML = '<div style="text-align: center; padding: 15px; color: #aaa;">â³ YÃ¼kleniyor...</div>';
 
         try {
             const merged = new Map();
 
-            // Önce arşivden çek: sipariş silinse bile ay özeti devam eder.
+            // Ã–nce arÅŸivden Ã§ek: sipariÅŸ silinse bile ay Ã¶zeti devam eder.
             try {
                 const archSnap = await db.collection('approvedOrdersArchive').get();
                 if (archSnap && !archSnap.empty) {
@@ -15393,7 +12434,7 @@
                 }
             } catch (e) {}
 
-            // Geçiş uyumluluğu: arşivde olmayan eski onaylıları orders'tan ekle.
+            // GeÃ§iÅŸ uyumluluÄŸu: arÅŸivde olmayan eski onaylÄ±larÄ± orders'tan ekle.
             try {
                 const ordSnap = await db.collection('orders').where('status', '==', 'approved').get();
                 if (ordSnap && !ordSnap.empty) {
@@ -15405,11 +12446,11 @@
 
             const items = Array.from(merged.values());
             if (!items.length) {
-                container.innerHTML = '<div style="text-align: center; padding: 15px;">✅ Onaylanmış sipariş yok</div>';
+                container.innerHTML = '<div style="text-align: center; padding: 15px;">âœ… OnaylanmÄ±ÅŸ sipariÅŸ yok</div>';
                 return;
             }
 
-            // Sıralama: approvedAt desc, yoksa createdAt desc
+            // SÄ±ralama: approvedAt desc, yoksa createdAt desc
             items.sort((a, b) => {
                 const ad = safeToDateMaybe(a.approvedAt) || safeToDateMaybe(a.createdAt) || new Date(0);
                 const bd = safeToDateMaybe(b.approvedAt) || safeToDateMaybe(b.createdAt) || new Date(0);
@@ -15454,7 +12495,7 @@
                     <details style="background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); border-radius: 12px; padding: 12px; margin-bottom: 10px;">
                         <summary style="cursor: pointer; color: #fff; font-weight: bold; font-size: 14px; display:flex; align-items:center; justify-content: space-between; gap: 10px;">
                             <span>${g.label}</span>
-                            <span style="font-size: 12px; color: #4CAF50;">✅ ${g.count} onay • 💰 ${totalLabel}</span>
+                            <span style="font-size: 12px; color: #4CAF50;">âœ… ${g.count} onay â€¢ ğŸ’° ${totalLabel}</span>
                         </summary>
                         <div style="margin-top: 10px;">
                             <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">Detaylar:</div>
@@ -15463,22 +12504,22 @@
                                 const pkg = (o.packageName || o.label || o.package || o.cheat || 'Paket').toString();
                                 const dt = o.__approvedDate ? o.__approvedDate.toLocaleString('tr-TR') : '-';
                                 const approvedBy = (o.approvedBy || '').toString();
-                                const approvedByLine = approvedBy ? `<div style="font-size: 11px; color: #bbb; margin-top: 4px;">👤 Onaylayan: ${escapeHtml(approvedBy)}</div>` : '';
+                                const approvedByLine = approvedBy ? `<div style="font-size: 11px; color: #bbb; margin-top: 4px;">ğŸ‘¤ Onaylayan: ${escapeHtml(approvedBy)}</div>` : '';
                                 const amount = formatTryAmountTL(o.__amount);
                                 const payable = Number(o.payableAmount);
-                                const payableLabel = Number.isFinite(payable) ? (' • Ödenecek: ' + Math.floor(payable) + '₺') : '';
+                                const payableLabel = Number.isFinite(payable) ? (' â€¢ Ã–denecek: ' + Math.floor(payable) + 'â‚º') : '';
                                 const keyCode = (o.keyCode || '').toString();
-                                const keyLine = keyCode ? `<div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">🔑 Key: <span style="font-family: monospace;">${escapeHtml(keyCode)}</span></div>` : '';
+                                const keyLine = keyCode ? `<div style="font-size: 11px; color: #4CAF50; margin-top: 6px;">ğŸ”‘ Key: <span style="font-family: monospace;">${escapeHtml(keyCode)}</span></div>` : '';
                                 const canDelete = (typeof isOwner === 'function') && isOwner();
-                                const deleteBtn = canDelete ? `<button onclick="event.stopPropagation(); adminDeleteOrderRecord('${String(o.id || '')}')" style="background: rgba(244,67,54,0.18); border: 1px solid rgba(244,67,54,0.6); color: #f44336; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 8px;">🗑️ Sil</button>` : '';
+                                const deleteBtn = canDelete ? `<button onclick="event.stopPropagation(); adminDeleteOrderRecord('${String(o.id || '')}')" style="background: rgba(244,67,54,0.18); border: 1px solid rgba(244,67,54,0.6); color: #f44336; padding: 6px 10px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 8px;">ğŸ—‘ï¸ Sil</button>` : '';
 
                                 return `
                                     <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px; margin-bottom: 8px;">
                                         <div style="display:flex; justify-content: space-between; gap: 10px; align-items: flex-start;">
                                             <div style="flex: 1;">
                                                 <div style="font-weight: 700; color: #fff; font-size: 13px;">${escapeHtml(email)}</div>
-                                                <div style="font-size: 12px; color: #ddd; margin-top: 4px;">📦 ${escapeHtml(pkg)}</div>
-                                                <div style="font-size: 11px; color: #888; margin-top: 4px;">📅 ${dt}</div>
+                                                <div style="font-size: 12px; color: #ddd; margin-top: 4px;">ğŸ“¦ ${escapeHtml(pkg)}</div>
+                                                <div style="font-size: 11px; color: #888; margin-top: 4px;">ğŸ“… ${dt}</div>
                                                 ${approvedByLine}
                                                 ${keyLine}
                                             </div>
@@ -15494,7 +12535,7 @@
                             }).join('')}
 
                             <div style="background: rgba(0,0,0,0.18); border: 1px solid rgba(76,175,80,0.25); border-radius: 10px; padding: 10px; margin-top: 10px;">
-                                <div style="font-weight: 800; color: #4CAF50;">👤 Admin Payı (%15): ${adminShareLabel}</div>
+                                <div style="font-weight: 800; color: #4CAF50;">ğŸ‘¤ Admin PayÄ± (%15): ${adminShareLabel}</div>
                             </div>
                         </div>
                     </details>
@@ -15503,8 +12544,8 @@
 
             container.innerHTML = html;
         } catch (e) {
-            console.error('Aylık onaylı sipariş özeti hatası:', e);
-            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #f44336;">❌ Hata: ' + (e?.message || e) + '</div>';
+            console.error('AylÄ±k onaylÄ± sipariÅŸ Ã¶zeti hatasÄ±:', e);
+            container.innerHTML = '<div style="text-align: center; padding: 15px; color: #f44336;">âŒ Hata: ' + (e?.message || e) + '</div>';
         }
     }
 
@@ -15512,34 +12553,34 @@
         try {
             if (!isAdmin()) return;
             if (!isOwner()) {
-                showToast('❌ Sadece OWNER sipariş silebilir');
+                showToast('âŒ Sadece OWNER sipariÅŸ silebilir');
                 return;
             }
-            if (!requirePermission('orders', 'siparişi silmek')) return;
+            if (!requirePermission('orders', 'sipariÅŸi silmek')) return;
             const id = (orderId || '').toString().trim();
             if (!id) return;
 
-            const ok = confirm('⚠️ Bu işlem sipariş kaydını (orders) ve aylık özet arşiv kaydını (approvedOrdersArchive) siler.\n\nDevam edilsin mi?');
+            const ok = confirm('âš ï¸ Bu iÅŸlem sipariÅŸ kaydÄ±nÄ± (orders) ve aylÄ±k Ã¶zet arÅŸiv kaydÄ±nÄ± (approvedOrdersArchive) siler.\n\nDevam edilsin mi?');
             if (!ok) return;
 
-            showToast('⏳ Siliniyor...');
+            showToast('â³ Siliniyor...');
             try {
                 const batch = db.batch();
                 batch.delete(db.collection('orders').doc(id));
                 batch.delete(db.collection('approvedOrdersArchive').doc(id));
                 await batch.commit();
             } catch (e) {
-                // Batch desteklenmiyorsa veya izin/kurallar yüzünden hata aldıysa, en azından ayrı ayrı dene.
+                // Batch desteklenmiyorsa veya izin/kurallar yÃ¼zÃ¼nden hata aldÄ±ysa, en azÄ±ndan ayrÄ± ayrÄ± dene.
                 try { await db.collection('orders').doc(id).delete(); } catch (e2) {}
                 try { await db.collection('approvedOrdersArchive').doc(id).delete(); } catch (e3) {}
             }
 
-            showToast('✅ Sipariş silindi');
+            showToast('âœ… SipariÅŸ silindi');
 
             try { loadMonthlyApprovedOrdersSummary(); } catch (e) {}
         } catch (e) {
             console.error('adminDeleteOrderRecord error:', e);
-            showToast('❌ Hata: ' + (e?.message || e));
+            showToast('âŒ Hata: ' + (e?.message || e));
         }
     }
     
@@ -15548,12 +12589,12 @@
     
     async function showOrderDetail(orderId) {
         if (!hasPermission('orders')) {
-            showToast('❌ Sipariş görüntüleme yetkiniz yok');
+            showToast('âŒ SipariÅŸ gÃ¶rÃ¼ntÃ¼leme yetkiniz yok');
             return;
         }
         currentOrderId = orderId;
 
-        // Worker/D1 varsa Firestore yerine oradan çek
+        // Worker/D1 varsa Firestore yerine oradan Ã§ek
         try { await loadRemoteRuntimeConfig(); } catch (e) {}
         const ordersApiBase = (typeof getOrdersApiBase === 'function') ? getOrdersApiBase() : '';
         if (ordersApiBase) {
@@ -15565,13 +12606,13 @@
         }
 
         if (!currentOrderData) {
-            showToast('❌ Sipariş bulunamadı');
+            showToast('âŒ SipariÅŸ bulunamadÄ±');
             return;
         }
         
-        // Email alanı - farklı isimlerle kaydedilmiş olabilir
+        // Email alanÄ± - farklÄ± isimlerle kaydedilmiÅŸ olabilir
         const userEmail = currentOrderData.email || currentOrderData.userEmail || 'Bilinmiyor';
-        currentOrderData.resolvedEmail = userEmail; // Sonra kullanmak için sakla
+        currentOrderData.resolvedEmail = userEmail; // Sonra kullanmak iÃ§in sakla
         
         const createdDate = safeToDateMaybe(currentOrderData.createdAtMs || currentOrderData.createdAt) || new Date();
         const date = createdDate.toLocaleString('tr-TR');
@@ -15583,18 +12624,18 @@
         const showLoyaltyBox = (usedPoints > 0) || (discountAmount > 0) || (payableAmount !== null) || (baseAmount !== null);
         const discountDisplay = discountAmount > 0 ? discountAmount : usedPoints;
         
-        // Süre uzatma siparişi mi kontrol et
+        // SÃ¼re uzatma sipariÅŸi mi kontrol et
         const isExtension = currentOrderData.type === 'extension';
         
         let html = `
             <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 15px;">
-                <div style="font-size: 12px; color: #aaa;">Kullanıcı</div>
+                <div style="font-size: 12px; color: #aaa;">KullanÄ±cÄ±</div>
                 <div style="font-weight: bold; font-size: 16px;">${userEmail}</div>
             </div>
         `;
         
         if (isExtension) {
-            // Süre uzatma siparişi için özel görünüm
+            // SÃ¼re uzatma sipariÅŸi iÃ§in Ã¶zel gÃ¶rÃ¼nÃ¼m
             const currentExpDate = safeToDateMaybe(currentOrderData.currentExpiry) || null;
             const newExpDate = safeToDateMaybe(currentOrderData.newExpiry) || null;
             const currentExp = currentExpDate ? currentExpDate.toLocaleDateString('tr-TR') : '-';
@@ -15603,32 +12644,32 @@
             html += `
                 <div style="background: rgba(255,152,0,0.15); border: 1px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
                     <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <span style="font-size: 24px;">⏰</span>
-                        <span style="font-size: 16px; font-weight: bold; color: #FF9800;">Süre Uzatma Talebi</span>
+                        <span style="font-size: 24px;">â°</span>
+                        <span style="font-size: 16px; font-weight: bold; color: #FF9800;">SÃ¼re Uzatma Talebi</span>
                     </div>
                     <div style="background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px;">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: #aaa; font-size: 12px;">🎮 Oyun</span>
+                            <span style="color: #aaa; font-size: 12px;">ğŸ® Oyun</span>
                             <span style="color: #fff; font-size: 12px;">${currentOrderData.game || '-'}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: #aaa; font-size: 12px;">🛡️ Hile</span>
+                            <span style="color: #aaa; font-size: 12px;">ğŸ›¡ï¸ Hile</span>
                             <span style="color: #FFD700; font-size: 12px;">${currentOrderData.cheat || '-'}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: #aaa; font-size: 12px;">🔑 Mevcut Key</span>
+                            <span style="color: #aaa; font-size: 12px;">ğŸ”‘ Mevcut Key</span>
                             <code style="color: #4CAF50; font-size: 12px;">${currentOrderData.keyCode || '-'}</code>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: #aaa; font-size: 12px;">📅 Mevcut Bitiş</span>
+                            <span style="color: #aaa; font-size: 12px;">ğŸ“… Mevcut BitiÅŸ</span>
                             <span style="color: #f44336; font-size: 12px;">${currentExp}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: #aaa; font-size: 12px;">➕ Eklenen Süre</span>
+                            <span style="color: #aaa; font-size: 12px;">â• Eklenen SÃ¼re</span>
                             <span style="color: #FF9800; font-weight: bold; font-size: 12px;">${currentOrderData.package || '-'}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #aaa; font-size: 12px;">📅 Yeni Bitiş</span>
+                            <span style="color: #aaa; font-size: 12px;">ğŸ“… Yeni BitiÅŸ</span>
                             <span style="color: #4CAF50; font-weight: bold; font-size: 12px;">${newExp}</span>
                         </div>
                     </div>
@@ -15646,7 +12687,7 @@
                 </div>
             `;
         } else {
-            // Normal sipariş görünümü
+            // Normal sipariÅŸ gÃ¶rÃ¼nÃ¼mÃ¼
             html += `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                     <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px;">
@@ -15661,34 +12702,34 @@
             `;
         }
         
-        html += `<div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">📅 ${date}</div>`;
+        html += `<div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">ğŸ“… ${date}</div>`;
 
         if (showLoyaltyBox) {
             html += `
                 <div style="background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); border-radius: 12px; padding: 14px; margin-bottom: 15px;">
-                    <div style="font-size: 13px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">🎁 Sadakat</div>
+                    <div style="font-size: 13px; font-weight: bold; color: #4CAF50; margin-bottom: 10px;">ğŸ Sadakat</div>
                     ${baseAmount !== null ? `
                         <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
                             <span style="color: #aaa;">Tutar (baz)</span>
-                            <span style="color: #fff; font-weight: 600;">${baseAmount}₺</span>
+                            <span style="color: #fff; font-weight: 600;">${baseAmount}â‚º</span>
                         </div>
                     ` : ''}
                     ${usedPoints > 0 ? `
                         <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
-                            <span style="color: #aaa;">Kullanılan puan</span>
+                            <span style="color: #aaa;">KullanÄ±lan puan</span>
                             <span style="color: #FFD700; font-weight: 600;">${usedPoints}</span>
                         </div>
                     ` : ''}
                     ${discountDisplay > 0 ? `
                         <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px; margin-bottom: 6px;">
-                            <span style="color: #aaa;">İndirim</span>
-                            <span style="color: #4CAF50; font-weight: 600;">-${discountDisplay}₺</span>
+                            <span style="color: #aaa;">Ä°ndirim</span>
+                            <span style="color: #4CAF50; font-weight: 600;">-${discountDisplay}â‚º</span>
                         </div>
                     ` : ''}
                     ${payableAmount !== null ? `
                         <div style="display: flex; justify-content: space-between; gap: 10px; font-size: 12px;">
-                            <span style="color: #aaa;">Ödenecek</span>
-                            <span style="color: #4CAF50; font-weight: 700;">${payableAmount}₺</span>
+                            <span style="color: #aaa;">Ã–denecek</span>
+                            <span style="color: #4CAF50; font-weight: 700;">${payableAmount}â‚º</span>
                         </div>
                     ` : ''}
                 </div>
@@ -15698,35 +12739,35 @@
         const dekontSrc = (currentOrderData && (currentOrderData.dekontUrl || currentOrderData.dekont)) || '';
         if (dekontSrc) {
             html += `
-                <div style="font-size: 13px; font-weight: bold; margin: 15px 0 10px;">📸 Dekont:</div>
+                <div style="font-size: 13px; font-weight: bold; margin: 15px 0 10px;">ğŸ“¸ Dekont:</div>
                 <img src="${dekontSrc}" style="width: 100%; border-radius: 10px; margin-bottom: 15px;">
             `;
         }
         
         if (isExtension) {
-            // Süre uzatma için basit onay/red butonları
+            // SÃ¼re uzatma iÃ§in basit onay/red butonlarÄ±
             html += `
                 <div style="background: rgba(76,175,80,0.1); border: 2px solid #4CAF50; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                    <div style="font-size: 13px; color: #aaa; margin-bottom: 8px;">⚠️ Bu sipariş onaylandığında kullanıcının mevcut key'ine otomatik olarak süre eklenecektir.</div>
+                    <div style="font-size: 13px; color: #aaa; margin-bottom: 8px;">âš ï¸ Bu sipariÅŸ onaylandÄ±ÄŸÄ±nda kullanÄ±cÄ±nÄ±n mevcut key'ine otomatik olarak sÃ¼re eklenecektir.</div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-                    <button class="btn btn-primary btn-small" onclick="approveExtensionOrder()">✅ Süre Uzat</button>
-                    <button class="btn btn-small" style="background: rgba(244,67,54,0.3); color: #f44336;" onclick="rejectOrder()">❌ Reddet</button>
+                    <button class="btn btn-primary btn-small" onclick="approveExtensionOrder()">âœ… SÃ¼re Uzat</button>
+                    <button class="btn btn-small" style="background: rgba(244,67,54,0.3); color: #f44336;" onclick="rejectOrder()">âŒ Reddet</button>
                 </div>
             `;
         } else {
-            // Normal sipariş için key üretme
+            // Normal sipariÅŸ iÃ§in key Ã¼retme
             html += `
                 <div style="background: rgba(255,152,0,0.1); border: 2px solid #FF9800; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                    <div style="font-size: 13px; font-weight: bold; margin-bottom: 10px;">🔑 Key Üretimi</div>
-                    <button onclick="window.open('https://newthebestmod.xyz/app/user/cheat/order', '_blank')" style="background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px;">🔗 Paneli Aç (Key Üret)</button>
-                    <input type="text" id="manualKeyInput" class="auth-input" placeholder="Panelden aldığın key'i yapıştır" style="margin-bottom: 0;">
+                    <div style="font-size: 13px; font-weight: bold; margin-bottom: 10px;">ğŸ”‘ Key Ãœretimi</div>
+                    <button onclick="window.open('https://newthebestmod.xyz/app/user/cheat/order', '_blank')" style="background: linear-gradient(135deg, #FF9800, #F57C00); border: none; color: #fff; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px;">ğŸ”— Paneli AÃ§ (Key Ãœret)</button>
+                    <input type="text" id="manualKeyInput" class="auth-input" placeholder="Panelden aldÄ±ÄŸÄ±n key'i yapÄ±ÅŸtÄ±r" style="margin-bottom: 0;">
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-                    <button class="btn btn-primary btn-small" onclick="approveOrderWithKey()">✅ Onayla</button>
-                    <button class="btn btn-small" style="background: rgba(244,67,54,0.3); color: #f44336;" onclick="rejectOrder()">❌ Reddet</button>
+                    <button class="btn btn-primary btn-small" onclick="approveOrderWithKey()">âœ… Onayla</button>
+                    <button class="btn btn-small" style="background: rgba(244,67,54,0.3); color: #f44336;" onclick="rejectOrder()">âŒ Reddet</button>
                 </div>
             `;
         }
@@ -15736,7 +12777,7 @@
     }
     
     async function approveOrder() {
-        // Eski fonksiyon - artık kullanılmıyor
+        // Eski fonksiyon - artÄ±k kullanÄ±lmÄ±yor
     }
 
     function parsePriceToAmount(priceValue) {
@@ -15766,23 +12807,23 @@
     }
     
     async function approveOrderWithKey() {
-        if (!requirePermission('orders', 'siparişi onaylamak')) return;
+        if (!requirePermission('orders', 'sipariÅŸi onaylamak')) return;
         if (!currentOrderId || !currentOrderData) return;
         
         const keyCode = document.getElementById('manualKeyInput').value.trim();
         if (!keyCode) {
-            showToast('❌ Key kodu girin!');
+            showToast('âŒ Key kodu girin!');
             return;
         }
         
-        // Email alanını al
+        // Email alanÄ±nÄ± al
         const userEmail = currentOrderData.resolvedEmail || currentOrderData.email || currentOrderData.userEmail;
         if (!userEmail || userEmail === 'Bilinmiyor') {
-            showToast('❌ Kullanıcı email bulunamadı!');
+            showToast('âŒ KullanÄ±cÄ± email bulunamadÄ±!');
             return;
         }
         
-        // Paket süresini belirle (Worker payload'ında sayı/string karışık gelebilir)
+        // Paket sÃ¼resini belirle (Worker payload'Ä±nda sayÄ±/string karÄ±ÅŸÄ±k gelebilir)
         let days = 30;
         const pkgRaw = (typeof currentOrderData.package !== 'undefined') ? currentOrderData.package : currentOrderData.days;
         const pkgStr = String(pkgRaw || '').toLowerCase();
@@ -15795,17 +12836,17 @@
         else if (pkgNum === 90) days = 90;
         
         try {
-            // Kullanıcıyı bul
+            // KullanÄ±cÄ±yÄ± bul
             const users = await db.collection('users').where('email', '==', userEmail).get();
             if (users.empty) {
-                showToast('❌ Kullanıcı bulunamadı: ' + userEmail);
+                showToast('âŒ KullanÄ±cÄ± bulunamadÄ±: ' + userEmail);
                 return;
             }
             
             const userDoc = users.docs[0];
             const userRef = db.collection('users').doc(userDoc.id);
 
-            // Worker/D1 ile gelen siparişlerde Firestore orders dokümanı olmayabilir.
+            // Worker/D1 ile gelen sipariÅŸlerde Firestore orders dokÃ¼manÄ± olmayabilir.
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             let ordersApiBase = '';
             try { ordersApiBase = (typeof getOrdersApiBase === 'function') ? getOrdersApiBase() : ''; } catch (e) {}
@@ -15814,22 +12855,22 @@
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + days);
             
-            // Oyun ve hile bilgisini al (dinamik siparişler için)
+            // Oyun ve hile bilgisini al (dinamik sipariÅŸler iÃ§in)
             const gameName = currentOrderData.game || 'Mobile Legends';
             const cheatName = currentOrderData.cheat || 'TheBestML IMGUI';
 
             let earnedPoints = 0;
             if (isWorkerOrder) {
-                // Önce D1 tarafında onayla
+                // Ã–nce D1 tarafÄ±nda onayla
                 await workerApiFetch(ordersApiBase, '/v1/admin/orders/' + encodeURIComponent(currentOrderId) + '/approve', {
                     method: 'POST',
                     body: { keyCode: keyCode }
                 });
 
-                // Sonra uygulama uyumluluğu için Firestore user.keys güncelle
+                // Sonra uygulama uyumluluÄŸu iÃ§in Firestore user.keys gÃ¼ncelle
                 await db.runTransaction(async (tx) => {
                     const userSnap = await tx.get(userRef);
-                    if (!userSnap.exists) throw new Error('Kullanıcı bulunamadı');
+                    if (!userSnap.exists) throw new Error('KullanÄ±cÄ± bulunamadÄ±');
 
                     const orderData = currentOrderData || {};
                     earnedPoints = computeLoyaltyEarnedPoints(orderData);
@@ -15862,8 +12903,8 @@
             } else {
                 await db.runTransaction(async (tx) => {
                     const [orderSnap, userSnap] = await Promise.all([tx.get(orderRef), tx.get(userRef)]);
-                    if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
-                    if (!userSnap.exists) throw new Error('Kullanıcı bulunamadı');
+                    if (!orderSnap.exists) throw new Error('SipariÅŸ bulunamadÄ±');
+                    if (!userSnap.exists) throw new Error('KullanÄ±cÄ± bulunamadÄ±');
 
                     const orderData = orderSnap.data() || {};
                     const alreadyGranted = !!orderData.loyaltyGrantedAt || typeof orderData.loyaltyPointsGranted === 'number';
@@ -15909,7 +12950,7 @@
                 });
             }
 
-            // Arşive yaz: sipariş silinse bile ay özetinde kalsın
+            // ArÅŸive yaz: sipariÅŸ silinse bile ay Ã¶zetinde kalsÄ±n
             try {
                 await archiveApprovedOrderSnapshot(currentOrderId, {
                     ...currentOrderData,
@@ -15922,51 +12963,51 @@
                 });
             } catch (e) {}
             
-            // Kullanıcıya bildirim gönder
+            // KullanÄ±cÄ±ya bildirim gÃ¶nder
             const packageNames = {
-                '1gun': '1 Günlük',
-                '30gun': '30 Günlük',
-                '60gun': '60 Günlük',
-                '90gun': '90 Günlük',
-                'sinirsiz': 'Sınırsız'
+                '1gun': '1 GÃ¼nlÃ¼k',
+                '30gun': '30 GÃ¼nlÃ¼k',
+                '60gun': '60 GÃ¼nlÃ¼k',
+                '90gun': '90 GÃ¼nlÃ¼k',
+                'sinirsiz': 'SÄ±nÄ±rsÄ±z'
             };
-            const pkgName = packageNames[currentOrderData.package] || currentOrderData.packageName || currentOrderData.label || `${days} Günlük`;
+            const pkgName = packageNames[currentOrderData.package] || currentOrderData.packageName || currentOrderData.label || `${days} GÃ¼nlÃ¼k`;
             await sendOrderApprovalNotification(
                 userEmail, 
                 keyCode, 
                 pkgName
             );
             
-            // Başarılı popup
+            // BaÅŸarÄ±lÄ± popup
             closeModal('orderDetailModal');
             showKeyCodePopup(keyCode, userEmail, days);
             loadPendingOrders();
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Süre uzatma siparişini onayla
+    // SÃ¼re uzatma sipariÅŸini onayla
     async function approveExtensionOrder() {
         if (!currentOrderId || !currentOrderData) return;
         
         const userEmail = currentOrderData.resolvedEmail || currentOrderData.email || currentOrderData.userEmail;
         if (!userEmail || userEmail === 'Bilinmiyor') {
-            showToast('❌ Kullanıcı email bulunamadı!');
+            showToast('âŒ KullanÄ±cÄ± email bulunamadÄ±!');
             return;
         }
         
         const keyCode = currentOrderData.keyCode;
         if (!keyCode) {
-            showToast('❌ Key kodu bulunamadı!');
+            showToast('âŒ Key kodu bulunamadÄ±!');
             return;
         }
         
         try {
-            // Kullanıcıyı bul
+            // KullanÄ±cÄ±yÄ± bul
             const users = await db.collection('users').where('email', '==', userEmail).get();
             if (users.empty) {
-                showToast('❌ Kullanıcı bulunamadı: ' + userEmail);
+                showToast('âŒ KullanÄ±cÄ± bulunamadÄ±: ' + userEmail);
                 return;
             }
             
@@ -15980,16 +13021,16 @@
             // Mevcut key'i bul
             const keyIndex = keys.findIndex(k => k.keyCode === keyCode || k.code === keyCode);
             if (keyIndex === -1) {
-                showToast('❌ Key bulunamadı: ' + keyCode);
+                showToast('âŒ Key bulunamadÄ±: ' + keyCode);
                 return;
             }
             
-            // Yeni bitiş tarihini hesapla (siparişteki newExpiry)
+            // Yeni bitiÅŸ tarihini hesapla (sipariÅŸteki newExpiry)
             const newExpiry = currentOrderData.newExpiry?.toDate ? 
                 currentOrderData.newExpiry.toDate() : 
                 new Date(currentOrderData.newExpiry);
             
-            // Key'in süresini güncelle
+            // Key'in sÃ¼resini gÃ¼ncelle
             keys[keyIndex].expiresAt = newExpiry;
             keys[keyIndex].extendedAt = new Date();
             keys[keyIndex].extendedBy = currentUser.email;
@@ -15997,8 +13038,8 @@
             let earnedPoints = 0;
             await db.runTransaction(async (tx) => {
                 const [orderSnap, userSnap] = await Promise.all([tx.get(orderRef), tx.get(userRef)]);
-                if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
-                if (!userSnap.exists) throw new Error('Kullanıcı bulunamadı');
+                if (!orderSnap.exists) throw new Error('SipariÅŸ bulunamadÄ±');
+                if (!userSnap.exists) throw new Error('KullanÄ±cÄ± bulunamadÄ±');
 
                 const orderData = orderSnap.data() || {};
                 const alreadyGranted = !!orderData.loyaltyGrantedAt || typeof orderData.loyaltyPointsGranted === 'number';
@@ -16023,7 +13064,7 @@
                 tx.update(orderRef, orderUpdate);
             });
 
-            // Arşive yaz: sipariş silinse bile ay özetinde kalsın
+            // ArÅŸive yaz: sipariÅŸ silinse bile ay Ã¶zetinde kalsÄ±n
             try {
                 await archiveApprovedOrderSnapshot(currentOrderId, {
                     ...currentOrderData,
@@ -16035,15 +13076,15 @@
 
             try { await incrementAdminStatField('approvedOrdersCount', 1); } catch (e) {}
             
-            // Kullanıcıya bildirim gönder (Firestore)
+            // KullanÄ±cÄ±ya bildirim gÃ¶nder (Firestore)
             const normalizedEmail = userEmail.toLowerCase().trim();
             await db.collection('notifications').add({
                 targetType: normalizedEmail,
                 targetEmail: normalizedEmail,
                 userId: userEmail,
                 email: userEmail,
-                title: '⏰ Süre Uzatma Onaylandı!',
-                message: `${currentOrderData.game} - ${currentOrderData.cheat} için ${currentOrderData.package} süre eklendi. Yeni bitiş: ${newExpiry.toLocaleDateString('tr-TR')}`,
+                title: 'â° SÃ¼re Uzatma OnaylandÄ±!',
+                message: `${currentOrderData.game} - ${currentOrderData.cheat} iÃ§in ${currentOrderData.package} sÃ¼re eklendi. Yeni bitiÅŸ: ${newExpiry.toLocaleDateString('tr-TR')}`,
                 type: 'order',
                 keyCode: keyCode,
                 read: false,
@@ -16051,35 +13092,35 @@
                 notifiedAt: new Date().toISOString()
             });
             
-            // Native push notification gönder (kullanıcının FCM token'ı varsa)
+            // Native push notification gÃ¶nder (kullanÄ±cÄ±nÄ±n FCM token'Ä± varsa)
             try {
                 const userDocs = await db.collection('users').where('email', '==', userEmail).get();
                 if (!userDocs.empty) {
                     const userData = userDocs.docs[0].data();
                     if (userData.fcmToken) {
-                        // Gerçek push notification gönder (Vercel sunucu üzerinden)
+                        // GerÃ§ek push notification gÃ¶nder (Vercel sunucu Ã¼zerinden)
                         await sendPushNotification(
                             userData.fcmToken,
-                            '⏰ Süre Uzatma Onaylandı!',
-                            `${currentOrderData.game} - ${currentOrderData.cheat} için süre eklendi. Yeni bitiş: ${newExpiry.toLocaleDateString('tr-TR')}`,
+                            'â° SÃ¼re Uzatma OnaylandÄ±!',
+                            `${currentOrderData.game} - ${currentOrderData.cheat} iÃ§in sÃ¼re eklendi. Yeni bitiÅŸ: ${newExpiry.toLocaleDateString('tr-TR')}`,
                             { type: 'extension_approved', orderId: currentOrderId }
                         );
                     }
                 }
             } catch(pushErr) {
-                console.log('Push bildirim gönderilemedi:', pushErr);
+                console.log('Push bildirim gÃ¶nderilemedi:', pushErr);
             }
             
             closeModal('orderDetailModal');
-            showToast('✅ Süre uzatma onaylandı!');
+            showToast('âœ… SÃ¼re uzatma onaylandÄ±!');
             
-            // Başarılı popup göster
+            // BaÅŸarÄ±lÄ± popup gÃ¶ster
             document.getElementById('orderSuccessContent').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
-                    <div style="font-size: 60px; margin-bottom: 20px;">⏰</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Süre Uzatıldı!</div>
+                    <div style="font-size: 60px; margin-bottom: 20px;">â°</div>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">SÃ¼re UzatÄ±ldÄ±!</div>
                     <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px; margin: 15px 0;">
-                        <div style="color: #aaa; font-size: 12px; margin-bottom: 5px;">Kullanıcı</div>
+                        <div style="color: #aaa; font-size: 12px; margin-bottom: 5px;">KullanÄ±cÄ±</div>
                         <div style="font-weight: bold;">${userEmail}</div>
                     </div>
                     <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px; margin: 15px 0;">
@@ -16087,7 +13128,7 @@
                         <code style="font-size: 14px; color: #4CAF50;">${keyCode}</code>
                     </div>
                     <div style="background: rgba(76,175,80,0.2); border-radius: 10px; padding: 15px; margin: 15px 0;">
-                        <div style="color: #aaa; font-size: 12px; margin-bottom: 5px;">Yeni Bitiş Tarihi</div>
+                        <div style="color: #aaa; font-size: 12px; margin-bottom: 5px;">Yeni BitiÅŸ Tarihi</div>
                         <div style="font-weight: bold; font-size: 18px; color: #4CAF50;">${newExpiry.toLocaleDateString('tr-TR')}</div>
                     </div>
                     <button class="success-btn" onclick="closeOrderSuccessModal()" style="margin-top: 15px;">Tamam</button>
@@ -16096,12 +13137,12 @@
             showOrderSuccessModal();
             loadPendingOrders();
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
             console.error(e);
         }
     }
     
-    // Rastgele key kodu üret
+    // Rastgele key kodu Ã¼ret
     function generateKeyCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let code = '';
@@ -16114,21 +13155,21 @@
         return code;
     }
     
-    // Key kodu popup göster
+    // Key kodu popup gÃ¶ster
     function showKeyCodePopup(code, email, days) {
         const html = `
             <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="this.remove()">
                 <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-radius: 20px; padding: 30px; max-width: 400px; text-align: center; border: 2px solid #4CAF50;" onclick="event.stopPropagation()">
-                    <div style="font-size: 50px; margin-bottom: 15px;">✅</div>
-                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Key Üretildi!</div>
+                    <div style="font-size: 50px; margin-bottom: 15px;">âœ…</div>
+                    <div style="font-size: 18px; font-weight: bold; margin-bottom: 10px;">Key Ãœretildi!</div>
                     <div style="color: #aaa; font-size: 13px; margin-bottom: 20px;">${email}</div>
                     
                     <div style="background: rgba(76,175,80,0.2); border: 2px solid #4CAF50; border-radius: 15px; padding: 20px; margin-bottom: 20px;">
-                        <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">Key Kodu (${days} Gün)</div>
+                        <div style="font-size: 12px; color: #aaa; margin-bottom: 8px;">Key Kodu (${days} GÃ¼n)</div>
                         <div id="generatedKeyCode" style="font-size: 24px; font-weight: bold; font-family: monospace; letter-spacing: 2px; color: #4CAF50;">${code}</div>
                     </div>
                     
-                    <button onclick="copyKeyCode('${code}')" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px 30px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px;">📋 Kodu Kopyala</button>
+                    <button onclick="copyKeyCode('${code}')" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 15px 30px; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px;">ğŸ“‹ Kodu Kopyala</button>
                     <button onclick="this.parentElement.parentElement.remove()" style="background: rgba(255,255,255,0.1); border: none; color: #aaa; padding: 12px; border-radius: 10px; cursor: pointer; width: 100%;">Kapat</button>
                 </div>
             </div>
@@ -16138,7 +13179,7 @@
     
     function copyKeyCode(code) {
         navigator.clipboard.writeText(code).then(() => {
-            showToast('📋 Key kodu kopyalandı!');
+            showToast('ğŸ“‹ Key kodu kopyalandÄ±!');
         }).catch(() => {
             // Fallback
             const input = document.createElement('input');
@@ -16147,18 +13188,18 @@
             input.select();
             document.execCommand('copy');
             document.body.removeChild(input);
-            showToast('📋 Key kodu kopyalandı!');
+            showToast('ğŸ“‹ Key kodu kopyalandÄ±!');
         });
     }
     
     async function rejectOrder() {
-        if (!requirePermission('orders', 'siparişi reddetmek')) return;
+        if (!requirePermission('orders', 'sipariÅŸi reddetmek')) return;
         if (!currentOrderId) return;
         
-        if (!confirm('Bu siparişi reddetmek istediğinize emin misiniz?')) return;
+        if (!confirm('Bu sipariÅŸi reddetmek istediÄŸinize emin misiniz?')) return;
         
         try {
-            // Worker/D1 varsa önce oradan reddet (Firestore orders dokümanı olmayabilir)
+            // Worker/D1 varsa Ã¶nce oradan reddet (Firestore orders dokÃ¼manÄ± olmayabilir)
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = (typeof getOrdersApiBase === 'function') ? getOrdersApiBase() : '';
             if (ordersApiBase) {
@@ -16167,7 +13208,7 @@
                     body: { rejectReason: 'Reddedildi' }
                 });
 
-                // Kullanıcıya red bildirimi (best-effort)
+                // KullanÄ±cÄ±ya red bildirimi (best-effort)
                 try {
                     const email = (currentOrderData && (currentOrderData.email || currentOrderData.userEmail || currentOrderData.resolvedEmail)) || null;
                     if (email) {
@@ -16178,7 +13219,7 @@
                     }
                 } catch (e) {}
 
-                showToast('❌ Sipariş reddedildi');
+                showToast('âŒ SipariÅŸ reddedildi');
                 closeModal('orderDetailModal');
                 loadPendingOrders();
                 return;
@@ -16189,7 +13230,7 @@
 
             await db.runTransaction(async (tx) => {
                 const orderSnap = await tx.get(orderRef);
-                if (!orderSnap.exists) throw new Error('Sipariş bulunamadı');
+                if (!orderSnap.exists) throw new Error('SipariÅŸ bulunamadÄ±');
                 orderData = orderSnap.data() || {};
 
                 const usedPoints = normalizeNonNegativeInt(orderData.loyaltyUsedPoints, 0);
@@ -16217,7 +13258,7 @@
                 });
             });
             
-            // Kullanıcıya red bildirimi gönder
+            // KullanÄ±cÄ±ya red bildirimi gÃ¶nder
             if (orderData && orderData.email) {
                 await sendOrderRejectionNotification(
                     orderData.email, 
@@ -16225,18 +13266,18 @@
                 );
             }
             
-            showToast('❌ Sipariş reddedildi');
+            showToast('âŒ SipariÅŸ reddedildi');
             closeModal('orderDetailModal');
             loadPendingOrders();
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Sipariş reddedildiğinde bildirim gönder
+    // SipariÅŸ reddedildiÄŸinde bildirim gÃ¶nder
     async function sendOrderRejectionNotification(userEmail, packageName) {
         try {
-            console.log('📩 Sipariş red bildirimi gönderiliyor:', userEmail);
+            console.log('ğŸ“© SipariÅŸ red bildirimi gÃ¶nderiliyor:', userEmail);
             
             const normalizedEmail = userEmail.toLowerCase().trim();
             
@@ -16244,8 +13285,8 @@
             await db.collection('notifications').add({
                 targetType: normalizedEmail,
                 targetEmail: normalizedEmail,
-                title: '❌ Siparişiniz Reddedildi',
-                message: `${packageName} paketi siparişiniz reddedildi. Detaylar için iletişime geçin.`,
+                title: 'âŒ SipariÅŸiniz Reddedildi',
+                message: `${packageName} paketi sipariÅŸiniz reddedildi. Detaylar iÃ§in iletiÅŸime geÃ§in.`,
                 type: 'order_rejected',
                 packageName: packageName,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -16253,7 +13294,7 @@
                 read: false
             });
             
-            // Push notification gönder
+            // Push notification gÃ¶nder
             try {
                 const userDocs = await db.collection('users').where('email', '==', normalizedEmail).get();
                 if (!userDocs.empty) {
@@ -16261,39 +13302,39 @@
                     if (userData.fcmToken) {
                         await sendPushNotification(
                             userData.fcmToken,
-                            '❌ Siparişiniz Reddedildi',
-                            `${packageName} paketi siparişiniz reddedildi.`,
+                            'âŒ SipariÅŸiniz Reddedildi',
+                            `${packageName} paketi sipariÅŸiniz reddedildi.`,
                             { type: 'order_rejected' }
                         );
-                        console.log('📱 Red bildirimi gönderildi!');
+                        console.log('ğŸ“± Red bildirimi gÃ¶nderildi!');
                     }
                 }
             } catch(pushErr) {
-                console.log('Push bildirim gönderilemedi:', pushErr);
+                console.log('Push bildirim gÃ¶nderilemedi:', pushErr);
             }
             
         } catch(e) {
-            console.error('Red bildirimi hatası:', e);
+            console.error('Red bildirimi hatasÄ±:', e);
         }
     }
     
-    // Yeni sipariş olduğunda tüm admin'lere bildirim gönder
+    // Yeni sipariÅŸ olduÄŸunda tÃ¼m admin'lere bildirim gÃ¶nder
     async function sendNewOrderNotificationToAdmins(userEmail, packageName, price) {
         try {
-            console.log('📩 Admin\'lere yeni sipariş bildirimi gönderiliyor...');
+            console.log('ğŸ“© Admin\'lere yeni sipariÅŸ bildirimi gÃ¶nderiliyor...');
 
-            // Push: topic tabanlı (admin_users)
+            // Push: topic tabanlÄ± (admin_users)
             await sendPushToAdmins(
-                '🛒 Yeni Sipariş!',
-                `${userEmail} - ${packageName} (${price}₺)`,
+                'ğŸ›’ Yeni SipariÅŸ!',
+                `${userEmail} - ${packageName} (${price}â‚º)`,
                 { type: 'order_new', page: 'admin' }
             );
             
             // Firestore'a da admin bildirimi kaydet
             await db.collection('notifications').add({
                 targetType: 'admins',
-                title: '🛒 Yeni Sipariş Geldi!',
-                message: `${userEmail} kullanıcısı ${packageName} paketi sipariş etti. Fiyat: ${price}₺`,
+                title: 'ğŸ›’ Yeni SipariÅŸ Geldi!',
+                message: `${userEmail} kullanÄ±cÄ±sÄ± ${packageName} paketi sipariÅŸ etti. Fiyat: ${price}â‚º`,
                 type: 'order_new',
                 userEmail: userEmail,
                 packageName: packageName,
@@ -16303,7 +13344,7 @@
             });
             
         } catch(e) {
-            console.error('Admin bildirim hatası:', e);
+            console.error('Admin bildirim hatasÄ±:', e);
         }
     }
 
@@ -16349,14 +13390,14 @@
             if (!claimedByEmail) {
                 // Unclaimed: notify all admins (topic + Firestore admins)
                 await sendPushToAdmins(
-                    '💬 Yeni Destek Mesajı',
+                    'ğŸ’¬ Yeni Destek MesajÄ±',
                     bodyText,
                     { type: 'support_new', page: 'admin' }
                 );
 
                 await db.collection('notifications').add({
                     targetType: 'admins',
-                    title: '💬 Yeni Destek Mesajı',
+                    title: 'ğŸ’¬ Yeni Destek MesajÄ±',
                     message: bodyText,
                     type: 'support_new',
                     userEmail: safeEmail,
@@ -16376,7 +13417,7 @@
                     await db.collection('notifications').add({
                         targetType: targetEmail,
                         targetEmail: targetEmail,
-                        title: '💬 Yeni Destek Mesajı',
+                        title: 'ğŸ’¬ Yeni Destek MesajÄ±',
                         message: bodyText,
                         type: 'support_new',
                         userEmail: safeEmail,
@@ -16393,7 +13434,7 @@
                         if (userData.fcmToken) {
                             await sendPushNotification(
                                 userData.fcmToken,
-                                '💬 Yeni Destek Mesajı',
+                                'ğŸ’¬ Yeni Destek MesajÄ±',
                                 bodyText,
                                 { type: 'support_new', page: 'admin', chatId: chatId || null }
                             );
@@ -16402,11 +13443,11 @@
                 } catch(e) {}
             }
         } catch (e) {
-            console.error('Destek admin bildirimi hatası:', e);
+            console.error('Destek admin bildirimi hatasÄ±:', e);
         }
     }
 
-    // Admin destek yanıtı: kullanıcıya tek seferlik tüm bildirimler (Firestore + FCM)
+    // Admin destek yanÄ±tÄ±: kullanÄ±cÄ±ya tek seferlik tÃ¼m bildirimler (Firestore + FCM)
     async function sendSupportReplyNotificationToUser(userId, userEmail, lastMessagePreview, adminInfo = null) {
         try {
             let normalizedEmail = (userEmail || '').toLowerCase().trim();
@@ -16414,7 +13455,7 @@
             let skipInAppNotification = false;
             let supportOpenHint = false;
 
-            // Önce userId (chatId = uid) üzerinden kullanıcı kaydını çöz
+            // Ã–nce userId (chatId = uid) Ã¼zerinden kullanÄ±cÄ± kaydÄ±nÄ± Ã§Ã¶z
             try {
                 if (userId) {
                     const userDoc = await db.collection('users').doc(userId).get();
@@ -16429,7 +13470,7 @@
             // userId yok + email yoksa hedef bulunamaz
             if (!userId && !normalizedEmail) return;
 
-            // Kullanıcı destek ekranındaysa bildirimleri durdur
+            // KullanÄ±cÄ± destek ekranÄ±ndaysa bildirimleri durdur
             try {
                 if (userId) {
                     const chatSnap = await db.collection('chats').doc(userId).get();
@@ -16438,8 +13479,8 @@
                         const isOpen = !!cd.userSupportOpen;
                         const lastActiveMs = getFirestoreTimeMs(cd.userSupportLastActiveAt || cd.userSupportOpenAt);
                         if (isOpen && lastActiveMs > 0 && (Date.now() - lastActiveMs) < 45000) {
-                            // Not: Bu alan bazen "takılı" kalabiliyor; FCM'i tamamen engellemiyoruz.
-                            console.log('🔕 Kullanıcı destek ekranında görünüyor: uygulama içi bildirim atlanacak, FCM devam edecek');
+                            // Not: Bu alan bazen "takÄ±lÄ±" kalabiliyor; FCM'i tamamen engellemiyoruz.
+                            console.log('ğŸ”• KullanÄ±cÄ± destek ekranÄ±nda gÃ¶rÃ¼nÃ¼yor: uygulama iÃ§i bildirim atlanacak, FCM devam edecek');
                             skipInAppNotification = true;
                             supportOpenHint = true;
                         }
@@ -16450,11 +13491,11 @@
             const role = adminInfo?.role || 'Destek';
             const name = adminInfo?.name || 'Destek Ekibi';
 
-            const title = '💬 Destekten Yanıt Var';
+            const title = 'ğŸ’¬ Destekten YanÄ±t Var';
             const preview = (lastMessagePreview || '').toString().trim() || 'Yeni mesaj';
             const message = `${role}: ${preview}`;
 
-            // 1) Uygulama içi + native local bildirim zinciri (client listener tetikler)
+            // 1) Uygulama iÃ§i + native local bildirim zinciri (client listener tetikler)
             try {
                 if (!skipInAppNotification && normalizedEmail) {
                     await db.collection('notifications').add({
@@ -16474,10 +13515,10 @@
                     });
                 }
             } catch (e) {
-                // Firestore bildirimi olmasa da FCM gönderimi denenir
+                // Firestore bildirimi olmasa da FCM gÃ¶nderimi denenir
             }
 
-            // 2) FCM push (uygulama kapalıyken de gitsin)
+            // 2) FCM push (uygulama kapalÄ±yken de gitsin)
             if (!token) {
                 try {
                     if (normalizedEmail) {
@@ -16505,7 +13546,7 @@
                 pushAttempt = { success: false, error: 'missing_or_short_token', tokenLength: (token || '').length };
             }
 
-            // Debug log (best-effort): chat push denemesini kayıt altına al
+            // Debug log (best-effort): chat push denemesini kayÄ±t altÄ±na al
             try {
                 if (userId && db) {
                     const tokenPrefix = token ? token.substring(0, 12) : '';
@@ -16526,18 +13567,18 @@
                 }
             } catch (e) {}
         } catch (e) {
-            console.error('Kullanıcı destek yanıt bildirimi hatası:', e);
+            console.error('KullanÄ±cÄ± destek yanÄ±t bildirimi hatasÄ±:', e);
         }
     }
     
-    // Key Kodu Oluştur (Admin)
+    // Key Kodu OluÅŸtur (Admin)
     async function createKeyCode() {
-        if (!requirePermission('keys_add', 'key kodu oluşturmak')) return;
+        if (!requirePermission('keys_add', 'key kodu oluÅŸturmak')) return;
         
         const code = document.getElementById('adminKeyCode').value.trim().toUpperCase();
         const days = parseInt(document.getElementById('adminKeyDays').value);
         
-        if (!code) { showToast('❌ Key kodu girin'); return; }
+        if (!code) { showToast('âŒ Key kodu girin'); return; }
         
         try {
             await db.collection('keyCodes').doc(code).set({
@@ -16546,43 +13587,43 @@
                 createdAt: new Date(),
                 createdBy: currentUser.email
             });
-            showToast('✅ Key kodu eklendi: ' + code);
+            showToast('âœ… Key kodu eklendi: ' + code);
             document.getElementById('adminKeyCode').value = '';
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Key Kodu Kullan (Kullanıcı)
+    // Key Kodu Kullan (KullanÄ±cÄ±)
     async function redeemKey() {
-        if (!currentUser) { showToast('❌ Önce giriş yapın'); return; }
+        if (!currentUser) { showToast('âŒ Ã–nce giriÅŸ yapÄ±n'); return; }
         
         const code = document.getElementById('redeemKeyInput').value.trim().toUpperCase();
-        if (!code) { showToast('❌ Key kodu girin'); return; }
+        if (!code) { showToast('âŒ Key kodu girin'); return; }
         
         try {
-            showToast('⏳ Kontrol ediliyor...');
+            showToast('â³ Kontrol ediliyor...');
             const keyDoc = await db.collection('keyCodes').doc(code).get();
             
             if (!keyDoc.exists) {
-                showToast('❌ Geçersiz key kodu');
+                showToast('âŒ GeÃ§ersiz key kodu');
                 return;
             }
             
             const keyData = keyDoc.data();
             if (keyData.used) {
-                showToast('❌ Bu key zaten kullanılmış');
+                showToast('âŒ Bu key zaten kullanÄ±lmÄ±ÅŸ');
                 return;
             }
             
-            // Key'i kullanıldı olarak işaretle
+            // Key'i kullanÄ±ldÄ± olarak iÅŸaretle
             await db.collection('keyCodes').doc(code).update({
                 used: true,
                 usedBy: currentUser.email,
                 usedAt: new Date()
             });
             
-            // Kullanıcıya key ekle
+            // KullanÄ±cÄ±ya key ekle
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + keyData.days);
             
@@ -16598,32 +13639,32 @@
             
             await db.collection('users').doc(currentUser.uid).update({ keys });
             
-            showToast('✅ Key aktifleştirildi! ' + keyData.days + ' gün');
+            showToast('âœ… Key aktifleÅŸtirildi! ' + keyData.days + ' gÃ¼n');
             closeModal('redeemKeyModal');
             document.getElementById('redeemKeyInput').value = '';
             loadUserData();
         } catch(e) {
-            showToast('❌ Hata: ' + e.message);
+            showToast('âŒ Hata: ' + e.message);
         }
     }
     
-    // Sayfa yüklendiğinde
+    // Sayfa yÃ¼klendiÄŸinde
     document.addEventListener('DOMContentLoaded', async function() {
-        console.log('[APP] DOMContentLoaded başladı');
+        console.log('[APP] DOMContentLoaded baÅŸladÄ±');
         
-        // Profil butonunu sağa sabitle (CSS override güvenliği)
+        // Profil butonunu saÄŸa sabitle (CSS override gÃ¼venliÄŸi)
         const profileBtn = document.getElementById('profileToggleBtn');
         if (profileBtn) {
             profileBtn.style.cssText = 'position: fixed !important; top: calc(15px + env(safe-area-inset-top, 0px)) !important; right: 15px !important; left: auto !important; z-index: 999;';
         }
         
-        // Bildirim kanallarını HEMEN oluştur (Android için önemli)
+        // Bildirim kanallarÄ±nÄ± HEMEN oluÅŸtur (Android iÃ§in Ã¶nemli)
         try {
             await createNotificationChannel();
             await requestNotificationPermission();
-            console.log('[APP] Bildirim kanalları hazır');
+            console.log('[APP] Bildirim kanallarÄ± hazÄ±r');
         } catch(e) {
-            console.log('[APP] Bildirim kanal hatası:', e);
+            console.log('[APP] Bildirim kanal hatasÄ±:', e);
         }
         
         try {
@@ -16638,77 +13679,77 @@
             var verEl = document.getElementById('currentVersion');
             if (verEl) verEl.textContent = APP_VERSION;
             
-            // Buton sürümünü de güncelle
+            // Buton sÃ¼rÃ¼mÃ¼nÃ¼ de gÃ¼ncelle
             const versionBtn = document.getElementById('currentVersionBtn');
             if (versionBtn) versionBtn.textContent = APP_VERSION;
             
-            // Firebase kontrolü
+            // Firebase kontrolÃ¼
             if (typeof firebase === 'undefined') {
-                console.error('[APP] Firebase SDK yüklenemedi!');
-                showToast('❌ Firebase bağlantı hatası');
+                console.error('[APP] Firebase SDK yÃ¼klenemedi!');
+                showToast('âŒ Firebase baÄŸlantÄ± hatasÄ±');
                 return;
             }
             
             if (!firebaseReady) {
-                console.error('[APP] Firebase başlatılamadı!');
-                showToast('❌ Firebase başlatılamadı');
+                console.error('[APP] Firebase baÅŸlatÄ±lamadÄ±!');
+                showToast('âŒ Firebase baÅŸlatÄ±lamadÄ±');
                 return;
             }
             
             console.log('[APP] Firebase OK');
             
-            // Admin listesini yükle
+            // Admin listesini yÃ¼kle
             try {
                 await loadAdminList();
                 console.log('[APP] Admin listesi OK');
             } catch(e) {
-                console.error('[APP] Admin hatası:', e.message);
+                console.error('[APP] Admin hatasÄ±:', e.message);
             }
             
-            // GitHub token'ı yükle
+            // GitHub token'Ä± yÃ¼kle
             try {
                 await loadGithubToken();
                 console.log('[APP] GitHub token OK');
             } catch(e) {
-                console.error('[APP] GitHub token hatası:', e.message);
+                console.error('[APP] GitHub token hatasÄ±:', e.message);
             }
             
-            // Ödeme ayarlarını yükle
+            // Ã–deme ayarlarÄ±nÄ± yÃ¼kle
             try {
                 await loadPaymentSettings();
-                console.log('[APP] Ödeme ayarları OK');
+                console.log('[APP] Ã–deme ayarlarÄ± OK');
             } catch(e) {
-                console.error('[APP] Ödeme hatası:', e.message);
+                console.error('[APP] Ã–deme hatasÄ±:', e.message);
             }
             
-            // Oyunları yükle (ana sayfa için)
+            // OyunlarÄ± yÃ¼kle (ana sayfa iÃ§in)
             try {
                 await loadGamesAndCheats();
                 console.log('[APP] Oyunlar OK');
             } catch(e) {
-                console.error('[APP] Oyunlar hatası:', e.message);
+                console.error('[APP] Oyunlar hatasÄ±:', e.message);
             }
             
-            // Kurulum modallarını yükle
+            // Kurulum modallarÄ±nÄ± yÃ¼kle
             try {
                 await loadSetupModals();
-                console.log('[APP] Kurulum modalları OK');
+                console.log('[APP] Kurulum modallarÄ± OK');
             } catch(e) {
-                console.error('[APP] Kurulum modalları hatası:', e.message);
+                console.error('[APP] Kurulum modallarÄ± hatasÄ±:', e.message);
             }
             
-            // Uygulama ayarlarını yükle
+            // Uygulama ayarlarÄ±nÄ± yÃ¼kle
             try {
                 await loadAppSettings();
-                console.log('[APP] Uygulama ayarları OK');
+                console.log('[APP] Uygulama ayarlarÄ± OK');
             } catch(e) {
-                console.error('[APP] Uygulama ayarları hatası:', e.message);
+                console.error('[APP] Uygulama ayarlarÄ± hatasÄ±:', e.message);
             }
             
-            // Hatırlanan giriş bilgilerini doldur
+            // HatÄ±rlanan giriÅŸ bilgilerini doldur
             loadRememberedCredentials();
             
-            // Dekont önizleme
+            // Dekont Ã¶nizleme
             setTimeout(() => {
                 const fileInput = document.getElementById('dekontFile');
                 if (fileInput) {
@@ -16726,45 +13767,45 @@
                 }
             }, 1000);
             
-            // Hoşgeldin mesajı - HER ZAMAN APP_VERSION kullan
+            // HoÅŸgeldin mesajÄ± - HER ZAMAN APP_VERSION kullan
             setTimeout(() => {
-                showToast('✅ Game Store v' + APP_VERSION);
+                showToast('âœ… Game Store v' + APP_VERSION);
             }, 1500);
             
-            // Otomatik güncelleme kontrolü başlat (30 saniyede bir)
+            // Otomatik gÃ¼ncelleme kontrolÃ¼ baÅŸlat (30 saniyede bir)
             startAutoUpdateCheck();
             
-            console.log('[APP] Başlatma tamamlandı');
+            console.log('[APP] BaÅŸlatma tamamlandÄ±');
             
         } catch (initError) {
-            console.error('[APP] Init hatası:', initError);
-            alert('Başlatma hatası: ' + initError.message);
+            console.error('[APP] Init hatasÄ±:', initError);
+            alert('BaÅŸlatma hatasÄ±: ' + initError.message);
         }
     });
     
-    // Otomatik güncelleme kontrolü
+    // Otomatik gÃ¼ncelleme kontrolÃ¼
     let autoUpdateInterval = null;
     let uiRefreshInterval = null;
     let notificationCheckInterval = null;
     let lastCheckedVersion = APP_VERSION;
     
     function startAutoUpdateCheck() {
-        // İlk sessiz kontrol 5 saniye sonra
+        // Ä°lk sessiz kontrol 5 saniye sonra
         setTimeout(checkUpdateSilently, 5000);
         
-        // Güncelleme popup kontrolü 15 saniye sonra
+        // GÃ¼ncelleme popup kontrolÃ¼ 15 saniye sonra
         setTimeout(checkForUpdates, 15000);
         
         // Sonra her 2 dakikada bir kontrol
         autoUpdateInterval = setInterval(checkForUpdates, 120000);
         
-        // UI REFRESH - HER 1 SANİYEDE BİR
+        // UI REFRESH - HER 1 SANÄ°YEDE BÄ°R
         startUIRefresh();
         
-        // BİLDİRİM KONTROLÜ - HER 3 SANİYEDE BİR
+        // BÄ°LDÄ°RÄ°M KONTROLÃœ - HER 3 SANÄ°YEDE BÄ°R
         startNotificationPolling();
         
-        // Sayfa görünür olduğunda kontrol et
+        // Sayfa gÃ¶rÃ¼nÃ¼r olduÄŸunda kontrol et
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 checkUpdateSilently();
@@ -16774,7 +13815,7 @@
         });
     }
     
-    // Sürekli UI Refresh (Her 1 saniye)
+    // SÃ¼rekli UI Refresh (Her 1 saniye)
     function startUIRefresh() {
         if (uiRefreshInterval) clearInterval(uiRefreshInterval);
         
@@ -16782,7 +13823,7 @@
             refreshUIBadges();
         }, 1000); // Her 1 saniye
         
-        console.log('🔄 UI refresh başlatıldı (1 saniye)');
+        console.log('ğŸ”„ UI refresh baÅŸlatÄ±ldÄ± (1 saniye)');
     }
     
     // UI Badge'leri yenile
@@ -16806,10 +13847,10 @@
             }
         }, 3000); // Her 3 saniye
         
-        console.log('🔔 Bildirim polling başlatıldı (3 saniye)');
+        console.log('ğŸ”” Bildirim polling baÅŸlatÄ±ldÄ± (3 saniye)');
     }
     
-    // Anlık bildirim kontrolü (polling)
+    // AnlÄ±k bildirim kontrolÃ¼ (polling)
     async function checkNewNotificationsNow() {
         if (!currentUser) return;
         
@@ -16821,7 +13862,7 @@
             // Son 5 dakikadaki bildirimleri kontrol et
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
             
-            // Kullanıcıya özel bildirimleri çek
+            // KullanÄ±cÄ±ya Ã¶zel bildirimleri Ã§ek
             const userNotifs = await db.collection('notifications')
                 .where('targetType', '==', userEmail)
                 .limit(10)
@@ -16830,13 +13871,13 @@
             userNotifs.forEach(doc => {
                 const notif = { id: doc.id, ...doc.data() };
                 
-                // Bu bildirim daha önce gösterildi mi?
+                // Bu bildirim daha Ã¶nce gÃ¶sterildi mi?
                 if (notifiedIds.includes(notif.id)) return;
                 
                 // Okundu mu?
                 if (readNotifs.includes(notif.id)) return;
                 
-                // Bildirim tarihi kontrolü
+                // Bildirim tarihi kontrolÃ¼
                 let notifDate = null;
                 if (notif.createdAt && notif.createdAt.toDate) {
                     notifDate = notif.createdAt.toDate();
@@ -16844,11 +13885,11 @@
                     notifDate = new Date(notif.notifiedAt);
                 }
                 
-                // Son 5 dakika içinde mi?
+                // Son 5 dakika iÃ§inde mi?
                 if (notifDate && notifDate > fiveMinutesAgo) {
-                    console.log('🆕 Yeni bildirim tespit edildi (polling):', notif.title);
+                    console.log('ğŸ†• Yeni bildirim tespit edildi (polling):', notif.title);
                     
-                    // Bildirim işle
+                    // Bildirim iÅŸle
                     processNewNotification(notif);
                     
                     // ID'yi kaydet
@@ -16858,26 +13899,26 @@
             });
             
         } catch(e) {
-            // Sessizce devam et - bağlantı sorunu olabilir
+            // Sessizce devam et - baÄŸlantÄ± sorunu olabilir
         }
     }
     
-    // Yeni bildirimi işle (popup, ses, native)
+    // Yeni bildirimi iÅŸle (popup, ses, native)
     function processNewNotification(notif) {
-        // Listede zaten var mı?
+        // Listede zaten var mÄ±?
         const existingIndex = userNotifications.findIndex(n => n.id === notif.id);
         if (existingIndex === -1) {
             userNotifications.push(notif);
         }
         
-        // Sipariş onayı ise özel popup
+        // SipariÅŸ onayÄ± ise Ã¶zel popup
         if (notif.type === 'order' && notif.keyCode) {
             showOrderApprovalPopup(notif);
         } else {
             showNotificationPopup(notif);
         }
         
-        // Ses çal
+        // Ses Ã§al
         playNotificationSound();
         
         // Native push notification
@@ -16887,11 +13928,11 @@
             { type: notif.type, keyCode: notif.keyCode }
         );
         
-        // Badge güncelle
+        // Badge gÃ¼ncelle
         updateProfileNotifBadge();
         updateNotificationBadge();
         
-        // Titreşim (sipariş ise daha uzun)
+        // TitreÅŸim (sipariÅŸ ise daha uzun)
         if (navigator.vibrate) {
             if (notif.type === 'order') {
                 navigator.vibrate([200, 100, 200, 100, 200, 100, 400]);
@@ -16901,9 +13942,9 @@
         }
     }
     
-    // Semantik versiyon karşılaştırma fonksiyonu
+    // Semantik versiyon karÅŸÄ±laÅŸtÄ±rma fonksiyonu
     function compareVersions(v1, v2) {
-        // v1 > v2 ise 1, v1 < v2 ise -1, eşitse 0 döner
+        // v1 > v2 ise 1, v1 < v2 ise -1, eÅŸitse 0 dÃ¶ner
         const parts1 = v1.split('.').map(Number);
         const parts2 = v2.split('.').map(Number);
         
@@ -16922,11 +13963,11 @@
             const timestamp = Date.now();
             const random = Math.random().toString(36).substring(7);
             
-            // SADECE GitHub'dan kontrol et - Firestore kullanılmıyor
+            // SADECE GitHub'dan kontrol et - Firestore kullanÄ±lmÄ±yor
             let manifest = null;
             
             try {
-                // GitHub API kullan - cache sorunu yok, anında güncellenir
+                // GitHub API kullan - cache sorunu yok, anÄ±nda gÃ¼ncellenir
                 const manifestUrl = `https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?_t=${timestamp}`;
                 const response = await fetch(manifestUrl, { 
                     cache: 'no-store',
@@ -16938,58 +13979,58 @@
                 
                 if (response.ok) {
                     manifest = await response.json();
-                    console.log('🐙 GitHub manifest:', manifest.version);
+                    console.log('ğŸ™ GitHub manifest:', manifest.version);
                 }
             } catch(e) {
-                console.log('GitHub manifest kontrolü başarısız:', e.message);
+                console.log('GitHub manifest kontrolÃ¼ baÅŸarÄ±sÄ±z:', e.message);
             }
             
             if (!manifest) return;
             
-            // Yeni versiyon kontrolü - sadece APP_VERSION ile karşılaştır
+            // Yeni versiyon kontrolÃ¼ - sadece APP_VERSION ile karÅŸÄ±laÅŸtÄ±r
             const versionCompare = compareVersions(manifest.version, APP_VERSION);
             
             if (versionCompare > 0 && manifest.version !== lastCheckedVersion) {
                 lastCheckedVersion = manifest.version;
                 
-                console.log('🆕 Yeni versiyon bulundu:', manifest.version, '(Gösterilen:', currentDisplayedVersion + ')');
+                console.log('ğŸ†• Yeni versiyon bulundu:', manifest.version, '(GÃ¶sterilen:', currentDisplayedVersion + ')');
                 
-                // Zorunlu güncelleme kontrolü
+                // Zorunlu gÃ¼ncelleme kontrolÃ¼
                 if (manifest.required || manifest.forceUpdate) {
                     showForceUpdateScreen(manifest);
                 } else {
-                    // Kullanıcıya sor
+                    // KullanÄ±cÄ±ya sor
                     showUpdateNotification(manifest);
                 }
             } else if (versionCompare <= 0) {
-                console.log('✅ Uygulama güncel (v' + currentDisplayedVersion + ')');
+                console.log('âœ… Uygulama gÃ¼ncel (v' + currentDisplayedVersion + ')');
             }
         } catch (e) {
-            console.log('Güncelleme kontrolü başarısız:', e.message);
+            console.log('GÃ¼ncelleme kontrolÃ¼ baÅŸarÄ±sÄ±z:', e.message);
         }
     }
     
-    // Zorunlu güncelleme ekranı
+    // Zorunlu gÃ¼ncelleme ekranÄ±
     function showForceUpdateScreen(manifest) {
         const hasChangelog = manifest.changelog && manifest.changelog.length > 0 && manifest.changelog.some(c => c.trim());
         const changelogHtml = hasChangelog ? `
                     <div style="background: rgba(76,175,80,0.1); border: 1px solid #4CAF50; border-radius: 10px; padding: 15px; margin-bottom: 20px; text-align: left;">
-                        <div style="color: #4CAF50; font-weight: bold; margin-bottom: 10px;">📋 Yenilikler:</div>
-                        <div style="color: #ccc; font-size: 13px; line-height: 1.8;">• ${manifest.changelog.join('<br>• ')}</div>
+                        <div style="color: #4CAF50; font-weight: bold; margin-bottom: 10px;">ğŸ“‹ Yenilikler:</div>
+                        <div style="color: #ccc; font-size: 13px; line-height: 1.8;">â€¢ ${manifest.changelog.join('<br>â€¢ ')}</div>
                     </div>` : '';
         
         document.body.innerHTML = `
             <div style="min-height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px;">
                 <div style="text-align: center; max-width: 400px;">
-                    <div style="font-size: 80px; margin-bottom: 20px;">🚀</div>
-                    <h1 style="color: #fff; margin-bottom: 10px;">Güncelleme Gerekli</h1>
+                    <div style="font-size: 80px; margin-bottom: 20px;">ğŸš€</div>
+                    <h1 style="color: #fff; margin-bottom: 10px;">GÃ¼ncelleme Gerekli</h1>
                     <div style="color: #4CAF50; font-size: 24px; font-weight: bold; margin-bottom: 15px;">v${manifest.version}</div>
                     <p style="color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
-                        Uygulamayı kullanmaya devam etmek için güncelleme yapmanız gerekmektedir.
+                        UygulamayÄ± kullanmaya devam etmek iÃ§in gÃ¼ncelleme yapmanÄ±z gerekmektedir.
                     </p>
                     ${changelogHtml}
                     <button onclick="applyUpdate()" style="background: linear-gradient(135deg, #4CAF50, #45a049); color: #fff; border: none; padding: 15px 40px; border-radius: 25px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%;">
-                        🔄 Şimdi Güncelle
+                        ğŸ”„ Åimdi GÃ¼ncelle
                     </button>
                 </div>
             </div>
@@ -16997,26 +14038,26 @@
     }
     
     function showUpdateNotification(manifest) {
-        // Güncelleme bildirimi göster
+        // GÃ¼ncelleme bildirimi gÃ¶ster
         const hasChangelog = manifest.changelog && manifest.changelog.length > 0 && manifest.changelog.some(c => c.trim());
-        const changelogText = hasChangelog ? `<div style="font-size: 11px; opacity: 0.9; margin-top: 2px;">• ${manifest.changelog.join(' • ')}</div>` : '';
+        const changelogText = hasChangelog ? `<div style="font-size: 11px; opacity: 0.9; margin-top: 2px;">â€¢ ${manifest.changelog.join(' â€¢ ')}</div>` : '';
         
         const updateBanner = document.createElement('div');
         updateBanner.id = 'updateBanner';
         updateBanner.innerHTML = `
             <div style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #4CAF50, #45a049); padding: calc(12px + env(safe-area-inset-top, 0px)) 15px 12px 15px; z-index: 10000; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">
                 <div style="flex: 1;">
-                    <div style="font-weight: bold; font-size: 14px;">🆕 Yeni Güncelleme: v${manifest.version}</div>
+                    <div style="font-weight: bold; font-size: 14px;">ğŸ†• Yeni GÃ¼ncelleme: v${manifest.version}</div>
                     ${changelogText}
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="applyUpdate()" style="background: #fff; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer;">Güncelle</button>
-                    <button onclick="dismissUpdate()" style="background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">✕</button>
+                    <button onclick="applyUpdate()" style="background: #fff; color: #4CAF50; border: none; padding: 8px 15px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer;">GÃ¼ncelle</button>
+                    <button onclick="dismissUpdate()" style="background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">âœ•</button>
                 </div>
             </div>
         `;
         
-        // Eski banner varsa kaldır
+        // Eski banner varsa kaldÄ±r
         const oldBanner = document.getElementById('updateBanner');
         if (oldBanner) oldBanner.remove();
         
@@ -17024,9 +14065,9 @@
     }
     
     async function applyUpdate() {
-        showToast('🔄 Güncelleme uygulanıyor...');
+        showToast('ğŸ”„ GÃ¼ncelleme uygulanÄ±yor...');
         
-        // Banner'ı kaldır
+        // Banner'Ä± kaldÄ±r
         const banner = document.getElementById('updateBanner');
         if (banner) banner.remove();
         
@@ -17040,12 +14081,12 @@
             });
             const appHtml = await response.text();
             
-            // İçerik kontrolü
+            // Ä°Ã§erik kontrolÃ¼
             if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {
-                throw new Error('Geçersiz güncelleme içeriği');
+                throw new Error('GeÃ§ersiz gÃ¼ncelleme iÃ§eriÄŸi');
             }
             
-            // Sürüm çıkar
+            // SÃ¼rÃ¼m Ã§Ä±kar
             const match = appHtml.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
             const downloadedVersion = match ? match[1] : 'Bilinmiyor';
             
@@ -17053,16 +14094,16 @@
             localStorage.setItem('ota_app_html', appHtml);
             localStorage.setItem('ota_app_version', downloadedVersion);
             
-            showToast('✅ v' + downloadedVersion + ' başarıyla güncellendi!');
+            showToast('âœ… v' + downloadedVersion + ' baÅŸarÄ±yla gÃ¼ncellendi!');
             
-            // Güncellemeyi uygula - index.html'e yönlendir
+            // GÃ¼ncellemeyi uygula - index.html'e yÃ¶nlendir
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1500);
             
         } catch(e) {
-            console.error('Güncelleme hatası:', e);
-            showToast('❌ Güncelleme hatası: ' + e.message);
+            console.error('GÃ¼ncelleme hatasÄ±:', e);
+            showToast('âŒ GÃ¼ncelleme hatasÄ±: ' + e.message);
         }
     }
     
@@ -17071,25 +14112,25 @@
         if (banner) banner.remove();
     }
     
-    // Uygulamayı Yenile - Zorla güncelle
+    // UygulamayÄ± Yenile - Zorla gÃ¼ncelle
     async function refreshApp() {
-        showToast('🔄 Güncelleme kontrol ediliyor...');
+        showToast('ğŸ”„ GÃ¼ncelleme kontrol ediliyor...');
 
         try {
-            // Önce manifest'i kontrol et
+            // Ã–nce manifest'i kontrol et
             const manifestUrl = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?t=' + Date.now();
             const manifestRes = await fetch(manifestUrl, { cache: 'no-store' });
             const manifest = await manifestRes.json();
             
-            console.log('[OTA] Manifest sürümü:', manifest.version);
+            console.log('[OTA] Manifest sÃ¼rÃ¼mÃ¼:', manifest.version);
             console.log('[OTA] Mevcut APP_VERSION:', APP_VERSION);
             
-            // Yeni sürüm var veya ZORLA güncelle
-            if (manifest.version !== APP_VERSION || true) {  // true = her zaman güncelle
-                // Yeni sürüm var - OTA güncelleme
-                showToast('🆕 Yeni sürüm: v' + manifest.version + ' - İndiriliyor...');
+            // Yeni sÃ¼rÃ¼m var veya ZORLA gÃ¼ncelle
+            if (manifest.version !== APP_VERSION || true) {  // true = her zaman gÃ¼ncelle
+                // Yeni sÃ¼rÃ¼m var - OTA gÃ¼ncelleme
+                showToast('ğŸ†• Yeni sÃ¼rÃ¼m: v' + manifest.version + ' - Ä°ndiriliyor...');
                 
-                // app.html'i indir (GitHub API - anında güncelleme)
+                // app.html'i indir (GitHub API - anÄ±nda gÃ¼ncelleme)
                 const appUrl = 'https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=' + Date.now();
                 const appRes = await fetch(appUrl, { 
                     cache: 'no-store',
@@ -17097,12 +14138,12 @@
                 });
                 const appHtml = await appRes.text();
                 
-                // İçerik kontrolü
+                // Ä°Ã§erik kontrolÃ¼
                 if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {
-                    throw new Error('Geçersiz güncelleme içeriği');
+                    throw new Error('GeÃ§ersiz gÃ¼ncelleme iÃ§eriÄŸi');
                 }
                 
-                // Sürüm çıkar
+                // SÃ¼rÃ¼m Ã§Ä±kar
                 const match = appHtml.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
                 const downloadedVersion = match ? match[1] : manifest.version;
                 
@@ -17110,28 +14151,28 @@
                 localStorage.setItem('ota_app_html', appHtml);
                 localStorage.setItem('ota_app_version', downloadedVersion);
                 
-                showToast('✅ v' + downloadedVersion + ' yüklendi! Yeniden başlatılıyor...');
+                showToast('âœ… v' + downloadedVersion + ' yÃ¼klendi! Yeniden baÅŸlatÄ±lÄ±yor...');
                 
-                // Güncellemeyi uygula - index.html'e yönlendir (o cache'den yükler)
+                // GÃ¼ncellemeyi uygula - index.html'e yÃ¶nlendir (o cache'den yÃ¼kler)
                 setTimeout(() => {
                     window.location.href = 'index.html';
                 }, 1500);
             }
             
         } catch(e) {
-            console.error('Güncelleme hatası:', e);
-            showToast('❌ Güncelleme hatası: ' + e.message);
+            console.error('GÃ¼ncelleme hatasÄ±:', e);
+            showToast('âŒ GÃ¼ncelleme hatasÄ±: ' + e.message);
         }
     }
     
-    // Otomatik güncelleme kontrolü (arka planda)
+    // Otomatik gÃ¼ncelleme kontrolÃ¼ (arka planda)
     async function checkUpdateSilently() {
         try {
             const manifestUrl = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?t=' + Date.now();
             const res = await fetch(manifestUrl, { cache: 'no-store' });
             const manifest = await res.json();
             
-            // Versiyon karşılaştırma - sadece manifest daha yeniyse göster
+            // Versiyon karÅŸÄ±laÅŸtÄ±rma - sadece manifest daha yeniyse gÃ¶ster
             const currentParts = APP_VERSION.split('.').map(Number);
             const manifestParts = manifest.version.split('.').map(Number);
             
@@ -17148,46 +14189,46 @@
             }
             
             if (isNewer) {
-                // Güncelleme butonu badge'i göster
+                // GÃ¼ncelleme butonu badge'i gÃ¶ster
                 const updateBtn = document.querySelector('[onclick="refreshApp()"]');
                 if (updateBtn) {
-                    updateBtn.innerHTML = '🆕 GÜNCELLEME MEVCUT<span class="btn-subtext">v' + APP_VERSION + ' → v' + manifest.version + '</span>';
+                    updateBtn.innerHTML = 'ğŸ†• GÃœNCELLEME MEVCUT<span class="btn-subtext">v' + APP_VERSION + ' â†’ v' + manifest.version + '</span>';
                     updateBtn.style.background = 'linear-gradient(135deg, #4CAF50, #45a049)';
                     updateBtn.style.animation = 'pulse 2s infinite';
                 }
-                console.log('[OTA] Yeni sürüm mevcut: v' + manifest.version);
+                console.log('[OTA] Yeni sÃ¼rÃ¼m mevcut: v' + manifest.version);
             } else {
-                console.log('[OTA] Güncel sürümdesiniz: v' + APP_VERSION);
+                console.log('[OTA] GÃ¼ncel sÃ¼rÃ¼mdesiniz: v' + APP_VERSION);
             }
         } catch(e) {
-            console.log('[OTA] Sessiz kontrol hatası:', e.message);
+            console.log('[OTA] Sessiz kontrol hatasÄ±:', e.message);
         }
     }
 
-    // Navigasyon geçmişi
+    // Navigasyon geÃ§miÅŸi
     let navigationHistory = ['homePage'];
     let currentPageId = 'homePage';
     
-    // Sayfa göster (history'siz)
+    // Sayfa gÃ¶ster (history'siz)
     function showPage(pageId) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById(pageId).classList.add('active');
         currentPageId = pageId;
         window.scrollTo(0, 0);
         
-        // Admin sayfasına geçildiğinde
+        // Admin sayfasÄ±na geÃ§ildiÄŸinde
         if (pageId === 'adminPage' && isAdmin()) {
             loadGamesAndCheats();
             loadGameCheatList();
             loadPaymentSettingsAdmin();
             loadSetupModalsList();
             
-            // Yetki bazlı bölüm gösterme
+            // Yetki bazlÄ± bÃ¶lÃ¼m gÃ¶sterme
             updateAdminPanelPermissions();
         }
     }
     
-    // Admin bölümü açma/kapama
+    // Admin bÃ¶lÃ¼mÃ¼ aÃ§ma/kapama
     function toggleAdminSection(headerEl) {
         const section = headerEl.parentElement;
         section.classList.toggle('open');
@@ -17199,7 +14240,7 @@
         localStorage.setItem('adminOpenSections', JSON.stringify(openSections));
     }
     
-    // Kayıtlı açık bölümleri yükle
+    // KayÄ±tlÄ± aÃ§Ä±k bÃ¶lÃ¼mleri yÃ¼kle
     function loadOpenAdminSections() {
         const openSections = JSON.parse(localStorage.getItem('adminOpenSections') || '{}');
         Object.entries(openSections).forEach(([sectionId, isOpen]) => {
@@ -17210,9 +14251,9 @@
         });
     }
     
-    // Admin panelinde yetki bazlı bölüm gizleme/gösterme
+    // Admin panelinde yetki bazlÄ± bÃ¶lÃ¼m gizleme/gÃ¶sterme
     function updateAdminPanelPermissions() {
-        // Tüm permission-section bölümlerini data-permission'a göre gizle/göster
+        // TÃ¼m permission-section bÃ¶lÃ¼mlerini data-permission'a gÃ¶re gizle/gÃ¶ster
         document.querySelectorAll('.permission-section').forEach(section => {
             const permission = section.dataset.permission;
             if (permission) {
@@ -17220,72 +14261,72 @@
             }
         });
         
-        // Kayıtlı açık bölümleri yükle
+        // KayÄ±tlÄ± aÃ§Ä±k bÃ¶lÃ¼mleri yÃ¼kle
         loadOpenAdminSections();
         
-        // Kurulum modalları listesini yükle
+        // Kurulum modallarÄ± listesini yÃ¼kle
         if (hasPermission('modals')) {
             loadSetupModalsList();
         }
         
-        // Uygulama ayarları bilgisini yükle
+        // Uygulama ayarlarÄ± bilgisini yÃ¼kle
         if (hasPermission('app_settings')) {
             loadAppSettings();
         }
 
-        // Sadakat ayarlarını arkaplanda yükle (sipariş onayında kullanılıyor)
+        // Sadakat ayarlarÄ±nÄ± arkaplanda yÃ¼kle (sipariÅŸ onayÄ±nda kullanÄ±lÄ±yor)
         if (hasPermission('orders') || hasPermission('app_settings')) {
             try { refreshLoyaltyConfig(false); } catch (e) {}
         }
         
-        // Kurucu değilse panel başlığını değiştir ve yetkileri göster
+        // Kurucu deÄŸilse panel baÅŸlÄ±ÄŸÄ±nÄ± deÄŸiÅŸtir ve yetkileri gÃ¶ster
         const panelSubtitle = document.querySelector('#adminPage .subtitle');
         const myPermsBadge = document.getElementById('myPermissionsBadge');
         
         if (panelSubtitle) {
             if (isOwner()) {
                 panelSubtitle.textContent = 'Tam Yetki (Kurucu)';
-                if (myPermsBadge) myPermsBadge.innerHTML = '👑 Tüm yetkiler aktif';
+                if (myPermsBadge) myPermsBadge.innerHTML = 'ğŸ‘‘ TÃ¼m yetkiler aktif';
             } else {
                 const myPerms = getAdminPermissions(currentUser?.email || '');
                 const permCount = myPerms.length;
                 panelSubtitle.textContent = `${permCount} Yetki (Admin)`;
                 
-                // Yetki rozetlerini göster
+                // Yetki rozetlerini gÃ¶ster
                 if (myPermsBadge) {
                     const permHtml = myPerms.map(p => {
                         const info = PERMISSIONS[p];
-                        return `<span style="background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 10px; margin: 2px; font-size: 11px; display: inline-block;">${info?.icon || '❓'} ${info?.name || p}</span>`;
+                        return `<span style="background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 10px; margin: 2px; font-size: 11px; display: inline-block;">${info?.icon || 'â“'} ${info?.name || p}</span>`;
                     }).join('');
                     myPermsBadge.innerHTML = permHtml || '<span style="color: #f44336;">Yetki yok</span>';
                 }
             }
         }
         
-        // Permission badge'larını gizle (kurucu için)
+        // Permission badge'larÄ±nÄ± gizle (kurucu iÃ§in)
         document.querySelectorAll('.permission-badge').forEach(badge => {
             badge.style.display = isOwner() ? 'none' : 'inline';
         });
         
-        // Kurucu ise admin listesini yükle
+        // Kurucu ise admin listesini yÃ¼kle
         if (isOwner()) {
             loadAdminListUI();
         }
         
-        console.log('Admin yetkileri güncellendi:', isOwner() ? 'Kurucu' : 'Admin');
+        console.log('Admin yetkileri gÃ¼ncellendi:', isOwner() ? 'Kurucu' : 'Admin');
     }
     
-    // Admin listesi UI'ını yükle
+    // Admin listesi UI'Ä±nÄ± yÃ¼kle
     async function loadAdminListUI() {
         const container = document.getElementById('adminListContainer');
         if (!container) return;
         
-        // Admin yönetimi yetkisi yoksa gösterme
+        // Admin yÃ¶netimi yetkisi yoksa gÃ¶sterme
         if (!hasPermission('admin_management')) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: #888;">
-                    <div style="font-size: 30px; margin-bottom: 10px;">🔒</div>
-                    <div>Admin yönetimi yetkiniz yok</div>
+                    <div style="font-size: 30px; margin-bottom: 10px;">ğŸ”’</div>
+                    <div>Admin yÃ¶netimi yetkiniz yok</div>
                 </div>
             `;
             return;
@@ -17294,9 +14335,9 @@
         if (adminList.length === 0) {
             container.innerHTML = `
                 <div style="text-align: center; padding: 20px; color: #888;">
-                    <div style="font-size: 30px; margin-bottom: 10px;">👮</div>
-                    <div>Henüz admin eklenmedi</div>
-                    <div style="font-size: 11px; margin-top: 5px;">➕ Ekle butonuna tıklayarak admin ekleyebilirsiniz</div>
+                    <div style="font-size: 30px; margin-bottom: 10px;">ğŸ‘®</div>
+                    <div>HenÃ¼z admin eklenmedi</div>
+                    <div style="font-size: 11px; margin-top: 5px;">â• Ekle butonuna tÄ±klayarak admin ekleyebilirsiniz</div>
                 </div>
             `;
             return;
@@ -17316,7 +14357,7 @@
         adminList.forEach((admin, index) => {
             const permissions = admin.permissions || [];
             const permCount = permissions.length;
-            const permIcons = permissions.slice(0, 4).map(p => PERMISSIONS[p]?.icon || '❓').join('');
+            const permIcons = permissions.slice(0, 4).map(p => PERMISSIONS[p]?.icon || 'â“').join('');
             const moreCount = permCount > 4 ? ` +${permCount - 4}` : '';
 
             const emailKey = normalizeEmail(admin.email);
@@ -17329,33 +14370,33 @@
                 <div style="background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 12px; margin-bottom: 10px; overflow: hidden;">
                     <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px;">
                         <div style="display: flex; align-items: center; gap: 12px;">
-                            <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #FF9800, #F57C00); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">👤</div>
+                            <div style="width: 45px; height: 45px; background: linear-gradient(135deg, #FF9800, #F57C00); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;">ğŸ‘¤</div>
                             <div>
                                 <div style="font-size: 14px; font-weight: bold;">${admin.email}</div>
                                 <div style="font-size: 11px; color: #FF9800; margin-top: 2px;">
                                     ${permCount} Yetki: ${permIcons}${moreCount}
                                 </div>
                                 <div style="font-size: 11px; color: #aaa; margin-top: 6px; line-height: 1.4;">
-                                    ⏱️ Süre: <b style="color:#fff;">${durationLabel}</b> • ✅ Onay: <b style="color:#fff;">${approvedLabel}</b> • 💬 Devralma: <b style="color:#fff;">${claimedLabel}</b>
+                                    â±ï¸ SÃ¼re: <b style="color:#fff;">${durationLabel}</b> â€¢ âœ… Onay: <b style="color:#fff;">${approvedLabel}</b> â€¢ ğŸ’¬ Devralma: <b style="color:#fff;">${claimedLabel}</b>
                                 </div>
                             </div>
                         </div>
                         <div style="display: flex; gap: 6px;">
-                            <button onclick="openPermissionModal('${admin.email}')" style="background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">⚙️</button>
-                            <button onclick="removeAdmin('${admin.email}')" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">❌</button>
+                            <button onclick="openPermissionModal('${admin.email}')" style="background: linear-gradient(135deg, #2196F3, #1976D2); border: none; color: white; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">âš™ï¸</button>
+                            <button onclick="removeAdmin('${admin.email}')" style="background: rgba(244,67,54,0.2); border: 1px solid #f44336; color: #f44336; padding: 8px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;">âŒ</button>
                         </div>
                     </div>
                     
-                    <!-- Yetki Detayları (Açılır) -->
+                    <!-- Yetki DetaylarÄ± (AÃ§Ä±lÄ±r) -->
                     <div id="adminPerms_${index}" style="display: none; padding: 12px; background: rgba(0,0,0,0.2); border-top: 1px solid rgba(255,152,0,0.2);">
                         <div style="font-size: 11px; color: #aaa; margin-bottom: 8px;">Aktif Yetkiler:</div>
                         <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                             ${permissions.map(p => `
                                 <span style="background: rgba(255,152,0,0.2); border: 1px solid rgba(255,152,0,0.4); padding: 4px 10px; border-radius: 15px; font-size: 11px;">
-                                    ${PERMISSIONS[p]?.icon || '❓'} ${PERMISSIONS[p]?.name || p}
+                                    ${PERMISSIONS[p]?.icon || 'â“'} ${PERMISSIONS[p]?.name || p}
                                 </span>
                             `).join('')}
-                            ${permissions.length === 0 ? '<span style="color: #888; font-size: 11px;">Yetki verilmemiş</span>' : ''}
+                            ${permissions.length === 0 ? '<span style="color: #888; font-size: 11px;">Yetki verilmemiÅŸ</span>' : ''}
                         </div>
                     </div>
                 </div>
@@ -17365,10 +14406,10 @@
         container.innerHTML = html;
     }
     
-    // Admin ekle modal'ını aç
+    // Admin ekle modal'Ä±nÄ± aÃ§
     function openAddAdminModal() {
         if (!hasPermission('admin_management')) {
-            showToast('❌ Admin yönetimi yetkiniz yok');
+            showToast('âŒ Admin yÃ¶netimi yetkiniz yok');
             return;
         }
         
@@ -17377,11 +14418,11 @@
         
         document.getElementById('addAdminEmailInput').value = email;
         
-        // Yetki checkbox'larını oluştur
+        // Yetki checkbox'larÄ±nÄ± oluÅŸtur
         const container = document.getElementById('newAdminPermissionsCheckboxList');
         let html = '';
         
-        const defaultPerms = ['orders', 'support', 'members_view']; // Varsayılan yetkiler
+        const defaultPerms = ['orders', 'support', 'members_view']; // VarsayÄ±lan yetkiler
         
         Object.entries(PERMISSIONS).forEach(([key, perm]) => {
             const isDefault = defaultPerms.includes(key);
@@ -17400,16 +14441,16 @@
         openModal('addAdminModal');
     }
     
-    // Yetki modal'ını aç
+    // Yetki modal'Ä±nÄ± aÃ§
     function openPermissionModal(email) {
         if (!hasPermission('admin_management')) {
-            showToast('❌ Admin yönetimi yetkiniz yok');
+            showToast('âŒ Admin yÃ¶netimi yetkiniz yok');
             return;
         }
         
         const admin = adminList.find(a => a.email === email);
         if (!admin) {
-            showToast('❌ Admin bulunamadı');
+            showToast('âŒ Admin bulunamadÄ±');
             return;
         }
         
@@ -17417,7 +14458,7 @@
         document.getElementById('permissionAdminEmailDisplay').textContent = email;
         document.getElementById('permissionAdminName').textContent = email.split('@')[0];
         
-        // Yetki checkbox'larını oluştur
+        // Yetki checkbox'larÄ±nÄ± oluÅŸtur
         const container = document.getElementById('permissionsCheckboxList');
         const currentPerms = admin.permissions || [];
         
@@ -17443,7 +14484,7 @@
     async function saveAdminPermissions() {
         const email = document.getElementById('permissionAdminEmail').value;
         
-        // Seçili yetkileri topla
+        // SeÃ§ili yetkileri topla
         const selectedPerms = [];
         Object.keys(PERMISSIONS).forEach(key => {
             const checkbox = document.getElementById(`perm_${key}`);
@@ -17464,11 +14505,11 @@
         const email = document.getElementById('addAdminEmailInput').value.trim();
         
         if (!email || !email.includes('@')) {
-            showToast('❌ Geçerli e-posta girin');
+            showToast('âŒ GeÃ§erli e-posta girin');
             return;
         }
         
-        // Seçili yetkileri topla
+        // SeÃ§ili yetkileri topla
         const selectedPerms = [];
         Object.keys(PERMISSIONS).forEach(key => {
             const checkbox = document.getElementById(`newAdminPerm_${key}`);
@@ -17490,9 +14531,9 @@
         openAddAdminModal();
     }
     
-    // Sayfa için üyelik kontrolü
+    // Sayfa iÃ§in Ã¼yelik kontrolÃ¼
     async function checkMembershipForPage(cheatName) {
-        // Önce kullanıcı verilerini yükle (eğer aktif key yoksa)
+        // Ã–nce kullanÄ±cÄ± verilerini yÃ¼kle (eÄŸer aktif key yoksa)
         if (currentUser && userActiveKeys.length === 0) {
             try {
                 const doc = await db.collection('users').doc(currentUser.uid).get();
@@ -17503,21 +14544,21 @@
                     userActiveKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
                 }
             } catch(e) {
-                console.log('Üyelik kontrolü hatası:', e);
+                console.log('Ãœyelik kontrolÃ¼ hatasÄ±:', e);
             }
         }
         
         const now = new Date();
         
-        // Bu hile için aktif key var mı kontrol et
+        // Bu hile iÃ§in aktif key var mÄ± kontrol et
         const hasActiveKey = userActiveKeys.some(key => {
             const keyCheat = key.cheat || 'TheBestML';
             return keyCheat.toLowerCase().includes(cheatName.toLowerCase()) || 
                    cheatName.toLowerCase().includes(keyCheat.toLowerCase()) ||
-                   keyCheat === 'TheBestML'; // Mobile Legends için
+                   keyCheat === 'TheBestML'; // Mobile Legends iÃ§in
         });
         
-        console.log('Üyelik kontrolü:', cheatName, 'Aktif key var mı:', hasActiveKey, 'Toplam key:', userActiveKeys.length);
+        console.log('Ãœyelik kontrolÃ¼:', cheatName, 'Aktif key var mÄ±:', hasActiveKey, 'Toplam key:', userActiveKeys.length);
         
         // Element'leri al
         const setupLocked = document.getElementById('setupInstructionsLocked');
@@ -17527,13 +14568,13 @@
         const membershipInfo = document.getElementById('activeMembershipInfo');
         
         if (hasActiveKey) {
-            // Aktif üyelik var - kurulum talimatlarını göster
+            // Aktif Ã¼yelik var - kurulum talimatlarÄ±nÄ± gÃ¶ster
             if (setupLocked) setupLocked.style.display = 'none';
             if (setupUnlocked) setupUnlocked.style.display = 'block';
             if (pricesLocked) pricesLocked.style.display = 'none';
             if (activeMembership) activeMembership.style.display = 'block';
             
-            // Aktif key bilgisini göster
+            // Aktif key bilgisini gÃ¶ster
             if (membershipInfo && userActiveKeys.length > 0) {
                 const key = userActiveKeys.find(k => (k.cheat || 'TheBestML').toLowerCase().includes(cheatName.toLowerCase())) || userActiveKeys[0];
                 const exp = key.expiresAt.toDate();
@@ -17541,12 +14582,12 @@
                 const keyCode = key.keyCode || key.code || '***';
                 
                 membershipInfo.innerHTML = `
-                    <div style="margin-bottom: 8px;">🔑 Key: <code style="color: #4CAF50;">${keyCode}</code></div>
-                    <div>⏱️ Kalan Süre: <strong style="color: #4CAF50;">${remainingDays} gün</strong></div>
+                    <div style="margin-bottom: 8px;">ğŸ”‘ Key: <code style="color: #4CAF50;">${keyCode}</code></div>
+                    <div>â±ï¸ Kalan SÃ¼re: <strong style="color: #4CAF50;">${remainingDays} gÃ¼n</strong></div>
                 `;
             }
         } else {
-            // Aktif üyelik yok - kurulum kilitli, fiyatları göster
+            // Aktif Ã¼yelik yok - kurulum kilitli, fiyatlarÄ± gÃ¶ster
             if (setupLocked) setupLocked.style.display = 'block';
             if (setupUnlocked) setupUnlocked.style.display = 'none';
             if (pricesLocked) pricesLocked.style.display = 'block';
@@ -17554,14 +14595,14 @@
         }
     }
     
-    // Hesabım butonuna tıklayınca ana sayfaya git ve kullanıcı kartına scroll et
+    // HesabÄ±m butonuna tÄ±klayÄ±nca ana sayfaya git ve kullanÄ±cÄ± kartÄ±na scroll et
     function goToAccount() {
         navigateTo('homePage');
         setTimeout(() => {
             const loggedInCard = document.getElementById('loggedInCard');
             if (loggedInCard) {
                 loggedInCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                // Kısa bir highlight efekti
+                // KÄ±sa bir highlight efekti
                 loggedInCard.style.boxShadow = '0 0 20px rgba(76,175,80,0.5)';
                 setTimeout(() => {
                     loggedInCard.style.boxShadow = '';
@@ -17570,7 +14611,7 @@
         }, 100);
     }
     
-    // Navigasyon ile sayfa geçişi
+    // Navigasyon ile sayfa geÃ§iÅŸi
     function navigateTo(pageId) {
         if (currentPageId !== pageId) {
             navigationHistory.push(pageId);
@@ -17588,7 +14629,7 @@
         }
     }
     
-    // Açık modal var mı kontrol et ve kapat
+    // AÃ§Ä±k modal var mÄ± kontrol et ve kapat
     function closeOpenModal() {
         const modals = document.querySelectorAll('.modal-overlay.show');
         if (modals.length > 0) {
@@ -17596,16 +14637,16 @@
                 modal.classList.remove('show');
             });
             document.body.style.overflow = 'auto';
-            return true; // Modal kapatıldı
+            return true; // Modal kapatÄ±ldÄ±
         }
-        return false; // Açık modal yok
+        return false; // AÃ§Ä±k modal yok
     }
     
-    // Android geri tuşu desteği
+    // Android geri tuÅŸu desteÄŸi
     window.addEventListener('popstate', function(event) {
-        // Önce açık modal var mı kontrol et
+        // Ã–nce aÃ§Ä±k modal var mÄ± kontrol et
         if (closeOpenModal()) {
-            // Modal kapatıldı, history'yi geri al
+            // Modal kapatÄ±ldÄ±, history'yi geri al
             history.pushState({ page: navigationHistory[navigationHistory.length - 1] }, '', '');
             return;
         }
@@ -17615,19 +14656,19 @@
             const prevPage = navigationHistory[navigationHistory.length - 1];
             showPage(prevPage);
         } else {
-            // Ana sayfadaysa uygulama kapansın
+            // Ana sayfadaysa uygulama kapansÄ±n
             history.back();
         }
     });
     
-    // Başlangıçta history state ekle
+    // BaÅŸlangÄ±Ã§ta history state ekle
     history.replaceState({ page: 'homePage' }, '', '');
 
-    // Modal aç/kapat
+    // Modal aÃ§/kapat
     function openModal(modalId) {
         document.getElementById(modalId).classList.add('show');
         document.body.style.overflow = 'hidden';
-        // Geri tuşu için history state ekle
+        // Geri tuÅŸu iÃ§in history state ekle
         history.pushState({ modal: modalId }, '', '');
     }
     
@@ -17637,12 +14678,12 @@
         const video = document.getElementById('certVideo');
         if (video) video.pause();
         
-        // YouTube video modal kapatılıyorsa iframe'i temizle
+        // YouTube video modal kapatÄ±lÄ±yorsa iframe'i temizle
         if (modalId === 'youtubeVideoModal') {
             document.getElementById('youtubeVideoContainer').innerHTML = '';
         }
         
-        // Chat modal kapatılıyorsa interval'ı durdur
+        // Chat modal kapatÄ±lÄ±yorsa interval'Ä± durdur
         if (modalId === 'userChatModal') {
             stopChatRefreshInterval();
             stopSupportPresenceInterval();
@@ -17656,23 +14697,23 @@
         }
     }
     
-    // Sipariş başarılı modalını göster
+    // SipariÅŸ baÅŸarÄ±lÄ± modalÄ±nÄ± gÃ¶ster
     function showOrderSuccessModal() {
         document.getElementById('orderSuccessModal').classList.add('show');
         document.body.style.overflow = 'hidden';
     }
     
-    // Sipariş başarılı modalını kapat
+    // SipariÅŸ baÅŸarÄ±lÄ± modalÄ±nÄ± kapat
     function closeOrderSuccessModal() {
         document.getElementById('orderSuccessModal').classList.remove('show');
         document.body.style.overflow = 'auto';
     }
     
-    // Oyun seçim modalını aç
+    // Oyun seÃ§im modalÄ±nÄ± aÃ§
     function openGameSelectModal() {
         const gameList = document.getElementById('gameSelectList');
         
-        // Oyunları listele
+        // OyunlarÄ± listele
         let html = '';
         
         // Mobile Legends (sabit)
@@ -17687,11 +14728,11 @@
                         <div style="font-size: 12px; color: #aaa;">Bang Bang</div>
                     </div>
                 </div>
-                <div style="font-size: 20px; color: #4CAF50;">›</div>
+                <div style="font-size: 20px; color: #4CAF50;">â€º</div>
             </button>
         `;
         
-        // Dinamik oyunları da ekle (gamesData'dan)
+        // Dinamik oyunlarÄ± da ekle (gamesData'dan)
         if (gamesData) {
             Object.entries(gamesData).forEach(([gameId, game]) => {
                 if (gameId !== 'mobile_legends' && game.name) {
@@ -17700,13 +14741,13 @@
                             <div style="display: flex; align-items: center; gap: 15px;">
                                 <img src="${game.icon || ''}" 
                                      style="width: 50px; height: 50px; border-radius: 12px;" 
-                                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23673AB7%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🎮</text></svg>'">
+                                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23673AB7%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>ğŸ®</text></svg>'">
                                 <div style="text-align: left;">
                                     <div style="font-weight: bold; font-size: 16px;">${game.name}</div>
                                     <div style="font-size: 12px; color: #aaa;">${game.description || ''}</div>
                                 </div>
                             </div>
-                            <div style="font-size: 20px; color: #4CAF50;">›</div>
+                            <div style="font-size: 20px; color: #4CAF50;">â€º</div>
                         </button>
                     `;
                 }
@@ -17717,10 +14758,10 @@
         openModal('gameSelectModal');
     }
     
-    // Seçilen oyun için geçici değişken
+    // SeÃ§ilen oyun iÃ§in geÃ§ici deÄŸiÅŸken
     let selectedGameForPurchase = null;
     
-    // Oyun seçildi - hile seçim modalını aç
+    // Oyun seÃ§ildi - hile seÃ§im modalÄ±nÄ± aÃ§
     function selectGameForPurchase(gameId, gameName) {
         selectedGameForPurchase = { id: gameId, name: gameName };
         closeModal('gameSelectModal');
@@ -17738,10 +14779,10 @@
                              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%234CAF50%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2240%22>ML</text></svg>'">
                         <div style="text-align: left;">
                             <div style="font-weight: bold; font-size: 16px;">TheBestML IMGUI</div>
-                            <div style="font-size: 12px; color: #aaa;">ESP, Map Hack ve daha fazlası</div>
+                            <div style="font-size: 12px; color: #aaa;">ESP, Map Hack ve daha fazlasÄ±</div>
                         </div>
                     </div>
-                    <div style="font-size: 20px; color: #4CAF50;">›</div>
+                    <div style="font-size: 20px; color: #4CAF50;">â€º</div>
                 </button>
             `;
             
@@ -17754,20 +14795,20 @@
                                 <div style="display: flex; align-items: center; gap: 15px;">
                                     <img src="${cheat.icon || ''}" 
                                          style="width: 50px; height: 50px; border-radius: 12px;" 
-                                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23FF9800%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🗡</text></svg>'">
+                                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23FF9800%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>ğŸ—¡</text></svg>'">
                                     <div style="text-align: left;">
                                         <div style="font-weight: bold; font-size: 16px;">${cheat.name}</div>
                                         <div style="font-size: 12px; color: #aaa;">${cheat.description || ''}</div>
                                     </div>
                                 </div>
-                                <div style="font-size: 20px; color: #4CAF50;">›</div>
+                                <div style="font-size: 20px; color: #4CAF50;">â€º</div>
                             </button>
                         `;
                     }
                 });
             }
         } else {
-            // Diğer oyunların hileleri
+            // DiÄŸer oyunlarÄ±n hileleri
             const gameData = gamesData[gameId];
             if (gameData?.cheats) {
                 Object.entries(gameData.cheats).forEach(([cheatId, cheat]) => {
@@ -17777,13 +14818,13 @@
                                 <div style="display: flex; align-items: center; gap: 15px;">
                                     <img src="${cheat.icon || ''}" 
                                          style="width: 50px; height: 50px; border-radius: 12px;" 
-                                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23FF9800%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🗡</text></svg>'">
+                                         onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23FF9800%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>ğŸ—¡</text></svg>'">
                                     <div style="text-align: left;">
                                         <div style="font-weight: bold; font-size: 16px;">${cheat.name}</div>
                                         <div style="font-size: 12px; color: #aaa;">${cheat.description || ''}</div>
                                     </div>
                                 </div>
-                                <div style="font-size: 20px; color: #4CAF50;">›</div>
+                                <div style="font-size: 20px; color: #4CAF50;">â€º</div>
                             </button>
                         `;
                     }
@@ -17792,28 +14833,28 @@
         }
         
         if (!html) {
-            html = `<div style="text-align: center; padding: 30px; color: #aaa;">Bu oyun için henüz hile eklenmemiş.</div>`;
+            html = `<div style="text-align: center; padding: 30px; color: #aaa;">Bu oyun iÃ§in henÃ¼z hile eklenmemiÅŸ.</div>`;
         }
         
         cheatList.innerHTML = html;
         openModal('cheatSelectModal');
     }
     
-    // Hile seçildi - sayfaya yönlendir
+    // Hile seÃ§ildi - sayfaya yÃ¶nlendir
     function selectCheatForPurchase(cheatId, cheatName, pageId) {
         closeModal('cheatSelectModal');
         navigateTo(pageId);
     }
     
-    // Dinamik hile seçildi - dinamik hile sayfasını aç
+    // Dinamik hile seÃ§ildi - dinamik hile sayfasÄ±nÄ± aÃ§
     function openDynamicCheatFromSelect(gameId, cheatId) {
         closeModal('cheatSelectModal');
         openDynamicCheatPage(gameId, cheatId);
     }
 
-    // APK İndir
+    // APK Ä°ndir
     function downloadAPK() {
-        showToast('📥 İndirme başlatılıyor...');
+        showToast('ğŸ“¥ Ä°ndirme baÅŸlatÄ±lÄ±yor...');
 
         const overrideUrl = window.imguiApkUrlOverride;
         const url = overrideUrl || appConfig.apkUrl;
@@ -17825,23 +14866,23 @@
         window.open(appConfig.playStoreUrl, '_blank');
     }
     
-    // Fiyat seçimi
+    // Fiyat seÃ§imi
     let selectedPriceData = null;
     
     function selectPrice(id, label, price) {
-        // Giriş kontrolü
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        // GiriÅŸ kontrolÃ¼
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
-        // Önceki seçimi kaldır
+        // Ã–nceki seÃ§imi kaldÄ±r
         document.querySelectorAll('.price-btn').forEach(btn => btn.classList.remove('selected'));
         
-        // Yeni seçimi işaretle
+        // Yeni seÃ§imi iÅŸaretle
         event.target.closest('.price-btn').classList.add('selected');
         
         // Verileri kaydet
         selectedPriceData = { id, label, price };
         
-        // Kartı güncelle ve göster
+        // KartÄ± gÃ¼ncelle ve gÃ¶ster
         const card = document.getElementById('selectedPriceCard');
         const labelEl = document.getElementById('selectedPriceLabel');
         const valueEl = document.getElementById('selectedPriceValue');
@@ -17849,7 +14890,7 @@
         labelEl.textContent = label + ' Paket';
         valueEl.textContent = price;
         
-        // Premium için özel stil
+        // Premium iÃ§in Ã¶zel stil
         if (id === 'sinirsiz') {
             card.classList.add('premium');
         } else {
@@ -17864,16 +14905,16 @@
         openTelegramSupport();
     }
     
-    // Ödeme modal'ını aç (Merkezi sistemi kullan)
+    // Ã–deme modal'Ä±nÄ± aÃ§ (Merkezi sistemi kullan)
     function openPaymentModal() {
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
         if (!selectedPriceData) {
-            showToast('❌ Önce bir paket seçin');
+            showToast('âŒ Ã–nce bir paket seÃ§in');
             return;
         }
         
-        // Günleri belirle
+        // GÃ¼nleri belirle
         let days = 30;
         if (selectedPriceData.id === '1gun') days = 1;
         else if (selectedPriceData.id === '30gun') days = 30;
@@ -17881,7 +14922,7 @@
         else if (selectedPriceData.id === '90gun') days = 90;
         else if (selectedPriceData.id === 'sinirsiz') days = 365;
         
-        // Merkezi ödeme sistemini kullan
+        // Merkezi Ã¶deme sistemini kullan
         openUnifiedPaymentModal({
             type: 'purchase',
             game: 'Mobile Legends',
@@ -17893,26 +14934,26 @@
         });
     }
     
-    // Ödeme yöntemi seç (eski - geriye uyumluluk)
+    // Ã–deme yÃ¶ntemi seÃ§ (eski - geriye uyumluluk)
     function selectPaymentMethod(method) {
         closeModal('paymentModal');
         
         if (method === 'shopier') {
-            // Kredi kartı geçici olarak devre dışı
-            showToast('⚠️ Kredi kartı ile ödeme yakında aktif olacak!');
+            // Kredi kartÄ± geÃ§ici olarak devre dÄ±ÅŸÄ±
+            showToast('âš ï¸ Kredi kartÄ± ile Ã¶deme yakÄ±nda aktif olacak!');
             return;
         } else if (method === 'havale') {
-            // TheBestML siparişi olduğunu işaretle
+            // TheBestML sipariÅŸi olduÄŸunu iÅŸaretle
             window.isDynamicOrder = false;
             
-            // Havale modal'ını aç
+            // Havale modal'Ä±nÄ± aÃ§
             document.getElementById('havalePackageInfo').textContent = selectedPriceData.label + ' Paket';
             document.getElementById('havaleAmount').textContent = selectedPriceData.price;
             openModal('havaleModal');
         }
     }
     
-    // Dekont önizleme
+    // Dekont Ã¶nizleme
     function previewDekont(input) {
         const file = input.files[0];
         if (file) {
@@ -17926,31 +14967,31 @@
     }
     
     function startPurchase() {
-        // Eski fonksiyon - artık openPaymentModal kullanılıyor
+        // Eski fonksiyon - artÄ±k openPaymentModal kullanÄ±lÄ±yor
         openPaymentModal();
     }
     
     function payWithCard() {
-        showToast('💳 Kredi kartı yakında!');
+        showToast('ğŸ’³ Kredi kartÄ± yakÄ±nda!');
     }
     
-    // TheBestML Pro fiyat seçimi
+    // TheBestML Pro fiyat seÃ§imi
     let selectedProPriceData = null;
     
     function selectProPrice(id, label, price) {
-        // Giriş kontrolü
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        // GiriÅŸ kontrolÃ¼
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
-        // Önceki seçimi kaldır
+        // Ã–nceki seÃ§imi kaldÄ±r
         document.querySelectorAll('#proPricesSectionLocked .price-btn').forEach(btn => btn.classList.remove('selected'));
         
-        // Yeni seçimi işaretle
+        // Yeni seÃ§imi iÅŸaretle
         event.target.closest('.price-btn').classList.add('selected');
         
         // Verileri kaydet
         selectedProPriceData = { id, label, price };
         
-        // Kartı güncelle ve göster
+        // KartÄ± gÃ¼ncelle ve gÃ¶ster
         const card = document.getElementById('selectedProPriceCard');
         const labelEl = document.getElementById('selectedProPriceLabel');
         const valueEl = document.getElementById('selectedProPriceValue');
@@ -17958,7 +14999,7 @@
         labelEl.textContent = label + ' Paket';
         valueEl.textContent = price;
         
-        // Premium için özel stil
+        // Premium iÃ§in Ã¶zel stil
         if (id === 'sinirsiz') {
             card.classList.add('premium');
         } else {
@@ -17969,14 +15010,14 @@
     }
     
     function openProPaymentModal() {
-        if (!requireLogin('satın alma işlemi yapmak')) return;
+        if (!requireLogin('satÄ±n alma iÅŸlemi yapmak')) return;
         
         if (!selectedProPriceData) {
-            showToast('❌ Önce bir paket seçin');
+            showToast('âŒ Ã–nce bir paket seÃ§in');
             return;
         }
         
-        // Günleri belirle
+        // GÃ¼nleri belirle
         let days = 30;
         if (selectedProPriceData.id === '1gun') days = 1;
         else if (selectedProPriceData.id === '30gun') days = 30;
@@ -17984,7 +15025,7 @@
         else if (selectedProPriceData.id === '90gun') days = 90;
         else if (selectedProPriceData.id === 'sinirsiz') days = 365;
         
-        // Merkezi ödeme sistemini kullan
+        // Merkezi Ã¶deme sistemini kullan
         openUnifiedPaymentModal({
             type: 'purchase',
             game: 'Mobile Legends',
@@ -17997,52 +15038,52 @@
     }
     
     async function payWithTransfer() {
-        // Artık kullanılmıyor
+        // ArtÄ±k kullanÄ±lmÄ±yor
     }
     
-    // Dekont önizleme - moved to main DOMContentLoaded
+    // Dekont Ã¶nizleme - moved to main DOMContentLoaded
     
-    // Sipariş gönder
+    // SipariÅŸ gÃ¶nder
     async function submitOrder() {
-        if (!currentUser) { showToast('❌ Önce giriş yapın'); return; }
+        if (!currentUser) { showToast('âŒ Ã–nce giriÅŸ yapÄ±n'); return; }
 
-        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'Sipariş göndermeden önce lütfen ban riski bilgilendirmesini onaylayın.' });
+        const canProceed = await ensureBanRiskAccepted({ prompt: true, reason: 'SipariÅŸ gÃ¶ndermeden Ã¶nce lÃ¼tfen ban riski bilgilendirmesini onaylayÄ±n.' });
         if (!canProceed) return;
         
-        // Dinamik sipariş mi yoksa TheBestML siparişi mi kontrol et
+        // Dinamik sipariÅŸ mi yoksa TheBestML sipariÅŸi mi kontrol et
         const isDynamic = window.isDynamicOrder && window.pendingDynamicOrder;
         const orderData = isDynamic ? window.pendingDynamicOrder : selectedPriceData;
         
         if (!orderData) { 
-            showToast('❌ Paket seçin'); 
+            showToast('âŒ Paket seÃ§in'); 
             return; 
         }
         
         const fileInput = document.getElementById('dekontFile');
-        if (!fileInput.files[0]) { showToast('❌ Dekont fotoğrafı seçin'); return; }
+        if (!fileInput.files[0]) { showToast('âŒ Dekont fotoÄŸrafÄ± seÃ§in'); return; }
 
         const dekontFile = fileInput.files[0];
         if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
-            showToast('❌ Sadece resim dosyası seçin');
+            showToast('âŒ Sadece resim dosyasÄ± seÃ§in');
             return;
         }
         if (dekontFile.size > 10 * 1024 * 1024) {
-            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            showToast('âŒ Dekont dosyasÄ± Ã§ok bÃ¼yÃ¼k (max 10MB)');
             return;
         }
         
-        showToast('⏳ Gönderiliyor...');
+        showToast('â³ GÃ¶nderiliyor...');
         
         try {
             // Prefer Cloudflare Worker API (Firestore-free)
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = getOrdersApiBase();
 
-            // Worker için order id üret (Storage path için)
+            // Worker iÃ§in order id Ã¼ret (Storage path iÃ§in)
             const generatedOrderId = (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()));
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: generatedOrderId, userId: currentUser.uid });
 
-            // Worker modu aktifse: Firestore'a hiç dokunma
+            // Worker modu aktifse: Firestore'a hiÃ§ dokunma
             if (ordersApiBase) {
                 const payload = isDynamic ? {
                     userId: currentUser.uid,
@@ -18080,18 +15121,18 @@
                 };
 
                 // Client-side validation for strict Worker schema
-                if (!payload.game) { showToast('❌ Oyun seçin'); return; }
-                if (!payload.package) { showToast('❌ Paket seçin'); return; }
-                if (!payload.packageName) { showToast('❌ Paket adı bulunamadı'); return; }
-                if (!payload.price) { showToast('❌ Fiyat bulunamadı'); return; }
+                if (!payload.game) { showToast('âŒ Oyun seÃ§in'); return; }
+                if (!payload.package) { showToast('âŒ Paket seÃ§in'); return; }
+                if (!payload.packageName) { showToast('âŒ Paket adÄ± bulunamadÄ±'); return; }
+                if (!payload.price) { showToast('âŒ Fiyat bulunamadÄ±'); return; }
 
                 await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload });
 
-                // Modal'ları kapat
+                // Modal'larÄ± kapat
                 closeModal('havaleModal');
                 closeModal('paymentModal');
 
-                // Formu sıfırla
+                // Formu sÄ±fÄ±rla
                 const selectedCard = document.getElementById('selectedPriceCard');
                 if (selectedCard) selectedCard.style.display = 'none';
 
@@ -18104,31 +15145,31 @@
                 document.querySelectorAll('.price-btn').forEach(btn => btn.classList.remove('selected'));
                 document.querySelectorAll('#dynamicCheatPrices .price-card').forEach(card => card.classList.remove('selected'));
 
-                // Değişkenleri sıfırla
+                // DeÄŸiÅŸkenleri sÄ±fÄ±rla
                 selectedPriceData = null;
                 window.isDynamicOrder = false;
                 window.pendingDynamicOrder = null;
                 selectedDynamicPrice = null;
 
                 const dynamicSelectedPrice = document.getElementById('dynamicSelectedPrice');
-                if (dynamicSelectedPrice) dynamicSelectedPrice.textContent = 'Fiyat seçin';
+                if (dynamicSelectedPrice) dynamicSelectedPrice.textContent = 'Fiyat seÃ§in';
 
                 // Worker listemeyi tetikle
                 try { await updateOrderBadge(); } catch (e) {}
 
-                // Başarı modalını göster
+                // BaÅŸarÄ± modalÄ±nÄ± gÃ¶ster
                 showOrderSuccessModal();
-                showToast('✅ Siparişiniz alındı!');
+                showToast('âœ… SipariÅŸiniz alÄ±ndÄ±!');
                 return;
             }
 
-            // Firestore fallback (Worker kapalıysa)
+            // Firestore fallback (Worker kapalÄ±ysa)
             const orderRef = db.collection('orders').doc();
             const receiptFs = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
             
-            // Siparişi kaydet
+            // SipariÅŸi kaydet
             if (isDynamic) {
-                // Dinamik sipariş
+                // Dinamik sipariÅŸ
                 await orderRef.set({
                     userId: currentUser.uid,
                     email: currentUser.email,
@@ -18149,7 +15190,7 @@
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             } else {
-                // TheBestML siparişi
+                // TheBestML sipariÅŸi
                 await orderRef.set({
                     userId: currentUser.uid,
                     email: currentUser.email,
@@ -18168,11 +15209,11 @@
                 });
             }
             
-            // Modal'ları kapat
+            // Modal'larÄ± kapat
             closeModal('havaleModal');
             closeModal('paymentModal');
             
-            // Formu sıfırla
+            // Formu sÄ±fÄ±rla
             const selectedCard = document.getElementById('selectedPriceCard');
             if (selectedCard) selectedCard.style.display = 'none';
             
@@ -18185,27 +15226,27 @@
             document.querySelectorAll('.price-btn').forEach(btn => btn.classList.remove('selected'));
             document.querySelectorAll('#dynamicCheatPrices .price-card').forEach(card => card.classList.remove('selected'));
             
-            // Değişkenleri sıfırla
+            // DeÄŸiÅŸkenleri sÄ±fÄ±rla
             selectedPriceData = null;
             window.isDynamicOrder = false;
             window.pendingDynamicOrder = null;
             selectedDynamicPrice = null;
             
             const dynamicSelectedPrice = document.getElementById('dynamicSelectedPrice');
-            if (dynamicSelectedPrice) dynamicSelectedPrice.textContent = 'Fiyat seçin';
+            if (dynamicSelectedPrice) dynamicSelectedPrice.textContent = 'Fiyat seÃ§in';
             
-            // Sipariş badge'ini güncelle
+            // SipariÅŸ badge'ini gÃ¼ncelle
             updateOrderBadge();
             
-            // Admin'lere yeni sipariş bildirimi gönder
+            // Admin'lere yeni sipariÅŸ bildirimi gÃ¶nder
             const packageName = isDynamic ? orderData.cheat : orderData.label;
             await sendNewOrderNotificationToAdmins(currentUser.email, packageName, orderData.price);
             
-            // Başarı modalını göster
+            // BaÅŸarÄ± modalÄ±nÄ± gÃ¶ster
             showOrderSuccessModal();
             
         } catch(e) {
-            console.error('Sipariş hatası:', e);
+            console.error('SipariÅŸ hatasÄ±:', e);
             const friendly = getFriendlyOrderErrorMessage(e);
             let debug = '';
             try {
@@ -18214,21 +15255,21 @@
                 const payloadShort = payload ? payload.slice(0, 220) : '';
                 debug = (http || payloadShort) ? ` (${[http, payloadShort].filter(Boolean).join(' ')})` : '';
             } catch (err) {}
-            showToast('❌ Hata: ' + friendly + debug);
+            showToast('âŒ Hata: ' + friendly + debug);
         }
     }
     
     // Telegram
     function openTelegram() {
         const telegramUrl = 'https://t.me/CheatsStoreTR';
-        showToast('📩 Telegram açılıyor...');
+        showToast('ğŸ“© Telegram aÃ§Ä±lÄ±yor...');
         
         const startTime = Date.now();
         window.location.href = 'tg://resolve?domain=CheatsStoreTR';
         
         setTimeout(() => {
             if (Date.now() - startTime < 2500) {
-                if (confirm('📱 Telegram uygulaması bulunamadı!\n\nTelegram\'ı Play Store\'dan indirmek ister misiniz?')) {
+                if (confirm('ğŸ“± Telegram uygulamasÄ± bulunamadÄ±!\n\nTelegram\'Ä± Play Store\'dan indirmek ister misiniz?')) {
                     window.open('https://play.google.com/store/apps/details?id=org.telegram.messenger', '_blank');
                 } else {
                     window.open(telegramUrl, '_blank');
@@ -18237,40 +15278,40 @@
         }, 2000);
     }
     
-    // Sertifika ayarları
+    // Sertifika ayarlarÄ±
     async function openSecuritySettings() {
-        showToast('🔒 Ayarlar açılıyor...');
+        showToast('ğŸ”’ Ayarlar aÃ§Ä±lÄ±yor...');
         
         let opened = false;
         if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CertificateManager) {
             try {
                 await window.Capacitor.Plugins.CertificateManager.openTrustedCredentials();
                 opened = true;
-                showToast('✅ Sertifika ayarları açıldı!');
+                showToast('âœ… Sertifika ayarlarÄ± aÃ§Ä±ldÄ±!');
             } catch (e) {}
         }
         
         if (!opened) {
-            alert(`📍 Sertifika ayarlarını manuel açın:
+            alert(`ğŸ“ Sertifika ayarlarÄ±nÄ± manuel aÃ§Ä±n:
 
-1️⃣ Telefonunuzun AYARLAR'ını açın
-2️⃣ "Güvenlik" veya "Güvenlik ve gizlilik" bulun
-3️⃣ "Şifreleme ve kimlik bilgileri" tıklayın
-4️⃣ "Güvenilen kimlik bilgileri" tıklayın
-5️⃣ "SİSTEM" sekmesine geçin
+1ï¸âƒ£ Telefonunuzun AYARLAR'Ä±nÄ± aÃ§Ä±n
+2ï¸âƒ£ "GÃ¼venlik" veya "GÃ¼venlik ve gizlilik" bulun
+3ï¸âƒ£ "Åifreleme ve kimlik bilgileri" tÄ±klayÄ±n
+4ï¸âƒ£ "GÃ¼venilen kimlik bilgileri" tÄ±klayÄ±n
+5ï¸âƒ£ "SÄ°STEM" sekmesine geÃ§in
 
-⚠️ GlobalSign NV-SA AÇIK kalmalı!`);
+âš ï¸ GlobalSign NV-SA AÃ‡IK kalmalÄ±!`);
         }
     }
     
-    // ŞİFRE DEĞİŞTİRME FONKSİYONLARI
+    // ÅÄ°FRE DEÄÄ°ÅTÄ°RME FONKSÄ°YONLARI
     function openChangePasswordModal() {
         if (!currentUser) {
-            showLoginRequiredModal('şifre değiştirmek');
+            showLoginRequiredModal('ÅŸifre deÄŸiÅŸtirmek');
             return;
         }
         
-        // Input alanlarını temizle
+        // Input alanlarÄ±nÄ± temizle
         document.getElementById('currentPasswordInput').value = '';
         document.getElementById('newPasswordInput').value = '';
         document.getElementById('confirmNewPasswordInput').value = '';
@@ -18287,96 +15328,96 @@
         
         // Validasyon
         if (!currentPassword) {
-            errorDiv.textContent = '❌ Lütfen mevcut şifrenizi girin.';
+            errorDiv.textContent = 'âŒ LÃ¼tfen mevcut ÅŸifrenizi girin.';
             errorDiv.style.display = 'block';
             return;
         }
         
         if (!newPassword) {
-            errorDiv.textContent = '❌ Lütfen yeni şifrenizi girin.';
+            errorDiv.textContent = 'âŒ LÃ¼tfen yeni ÅŸifrenizi girin.';
             errorDiv.style.display = 'block';
             return;
         }
         
         if (newPassword.length < 6) {
-            errorDiv.textContent = '❌ Yeni şifre en az 6 karakter olmalıdır.';
+            errorDiv.textContent = 'âŒ Yeni ÅŸifre en az 6 karakter olmalÄ±dÄ±r.';
             errorDiv.style.display = 'block';
             return;
         }
         
         if (newPassword !== confirmPassword) {
-            errorDiv.textContent = '❌ Yeni şifreler eşleşmiyor.';
+            errorDiv.textContent = 'âŒ Yeni ÅŸifreler eÅŸleÅŸmiyor.';
             errorDiv.style.display = 'block';
             return;
         }
         
         if (currentPassword === newPassword) {
-            errorDiv.textContent = '❌ Yeni şifre mevcut şifreden farklı olmalıdır.';
+            errorDiv.textContent = 'âŒ Yeni ÅŸifre mevcut ÅŸifreden farklÄ± olmalÄ±dÄ±r.';
             errorDiv.style.display = 'block';
             return;
         }
         
         try {
             errorDiv.style.display = 'none';
-            showToast('🔄 Şifre değiştiriliyor...');
+            showToast('ğŸ”„ Åifre deÄŸiÅŸtiriliyor...');
             
             const user = firebase.auth().currentUser;
             
             if (!user || !user.email) {
-                errorDiv.textContent = '❌ Oturum bilgisi alınamadı. Lütfen tekrar giriş yapın.';
+                errorDiv.textContent = 'âŒ Oturum bilgisi alÄ±namadÄ±. LÃ¼tfen tekrar giriÅŸ yapÄ±n.';
                 errorDiv.style.display = 'block';
                 return;
             }
             
-            // Önce mevcut şifreyle yeniden kimlik doğrulama yap
+            // Ã–nce mevcut ÅŸifreyle yeniden kimlik doÄŸrulama yap
             const credential = firebase.auth.EmailAuthProvider.credential(user.email, currentPassword);
             
             await user.reauthenticateWithCredential(credential);
             
-            // Şifreyi güncelle
+            // Åifreyi gÃ¼ncelle
             await user.updatePassword(newPassword);
             
-            // Başarılı
+            // BaÅŸarÄ±lÄ±
             closeModal('changePasswordModal');
-            showToast('✅ Şifreniz başarıyla değiştirildi!');
+            showToast('âœ… Åifreniz baÅŸarÄ±yla deÄŸiÅŸtirildi!');
             
-            // Güvenlik için Firestore'a log kaydı (isteğe bağlı)
+            // GÃ¼venlik iÃ§in Firestore'a log kaydÄ± (isteÄŸe baÄŸlÄ±)
             try {
                 await db.collection('users').doc(user.uid).update({
                     lastPasswordChange: firebase.firestore.FieldValue.serverTimestamp()
                 });
             } catch (e) {
-                // Log kaydı başarısız olsa bile devam et
+                // Log kaydÄ± baÅŸarÄ±sÄ±z olsa bile devam et
                 console.log('Password change log failed:', e);
             }
             
         } catch (error) {
             console.error('Password change error:', error);
             
-            // Hata mesajlarını Türkçeleştir
-            let errorMessage = '❌ Şifre değiştirilemedi.';
+            // Hata mesajlarÄ±nÄ± TÃ¼rkÃ§eleÅŸtir
+            let errorMessage = 'âŒ Åifre deÄŸiÅŸtirilemedi.';
             
             switch (error.code) {
                 case 'auth/wrong-password':
-                    errorMessage = '❌ Mevcut şifre yanlış. Lütfen kontrol edin.';
+                    errorMessage = 'âŒ Mevcut ÅŸifre yanlÄ±ÅŸ. LÃ¼tfen kontrol edin.';
                     break;
                 case 'auth/weak-password':
-                    errorMessage = '❌ Yeni şifre çok zayıf. Daha güçlü bir şifre seçin.';
+                    errorMessage = 'âŒ Yeni ÅŸifre Ã§ok zayÄ±f. Daha gÃ¼Ã§lÃ¼ bir ÅŸifre seÃ§in.';
                     break;
                 case 'auth/requires-recent-login':
-                    errorMessage = '❌ Bu işlem için yakın zamanda giriş yapmanız gerekiyor. Lütfen çıkış yapıp tekrar girin.';
+                    errorMessage = 'âŒ Bu iÅŸlem iÃ§in yakÄ±n zamanda giriÅŸ yapmanÄ±z gerekiyor. LÃ¼tfen Ã§Ä±kÄ±ÅŸ yapÄ±p tekrar girin.';
                     break;
                 case 'auth/too-many-requests':
-                    errorMessage = '❌ Çok fazla deneme yaptınız. Lütfen birkaç dakika bekleyin.';
+                    errorMessage = 'âŒ Ã‡ok fazla deneme yaptÄ±nÄ±z. LÃ¼tfen birkaÃ§ dakika bekleyin.';
                     break;
                 case 'auth/network-request-failed':
-                    errorMessage = '❌ İnternet bağlantınızı kontrol edin.';
+                    errorMessage = 'âŒ Ä°nternet baÄŸlantÄ±nÄ±zÄ± kontrol edin.';
                     break;
                 case 'auth/invalid-credential':
-                    errorMessage = '❌ Mevcut şifre yanlış. Lütfen kontrol edin.';
+                    errorMessage = 'âŒ Mevcut ÅŸifre yanlÄ±ÅŸ. LÃ¼tfen kontrol edin.';
                     break;
                 default:
-                    errorMessage = `❌ Hata: ${error.message}`;
+                    errorMessage = `âŒ Hata: ${error.message}`;
             }
             
             errorDiv.textContent = errorMessage;
@@ -18391,48 +15432,3 @@
         toast.classList.add('show');
         setTimeout(() => toast.classList.remove('show'), 3000);
     }
-</script>
-
-<!-- DESTEK BUTONU (SAĞ ALT) -->
-<div class="support-fab" onclick="openFloatingSupport()">
-    💬
-</div>
-
-<script>
-// Sağ alttaki destek butonuna tıklayınca
-function openFloatingSupport() {
-    if (currentUser) {
-        // Giriş yapmışsa destek mesaj modalnı aç
-        openUserChatModal();
-    } else {
-        // Giriş yapmamışsa giriş yapmasını iste
-        showLoginRequiredModal('destek almak');
-    }
-}
-</script>
-
-<style>
-.support-fab {
-    position: fixed;
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #0088cc, #0077b5);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    box-shadow: 0 4px 15px rgba(0, 136, 204, 0.4);
-    cursor: pointer;
-    z-index: 999;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-.support-fab:active {
-    transform: scale(0.95);
-}
-</style>
-
-</body>
-</html>

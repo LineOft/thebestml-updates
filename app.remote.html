@@ -20,30 +20,6 @@
     <script>
         // Global error handler - TÜM hataları yakala
         window.onerror = function(msg, url, lineNo, columnNo, error) {
-            try {
-                const msgText = String(msg || '');
-                const msgLower = msgText.toLowerCase();
-                const isSyntaxLike = msgLower.includes('syntaxerror') || msgLower.includes('unexpected token');
-
-                // OTA self-heal: If cached OTA HTML is corrupted/old, clear it once and reload.
-                if (isSyntaxLike) {
-                    const alreadyAttempted = (function() {
-                        try { return sessionStorage.getItem('__ota_recover_attempted__') === '1'; } catch (e) { return false; }
-                    })();
-
-                    if (!alreadyAttempted) {
-                        try { sessionStorage.setItem('__ota_recover_attempted__', '1'); } catch (e) {}
-                        try { localStorage.removeItem('ota_app_html'); } catch (e) {}
-                        try { localStorage.removeItem('ota_app_version'); } catch (e) {}
-
-                        // Give UI a moment to render the error box, then restart loader.
-                        setTimeout(() => {
-                            try { window.location.href = 'index.html?ota_recover=' + Date.now(); } catch (e) {}
-                        }, 800);
-                    }
-                }
-            } catch (e) {}
-
             const errorDiv = document.getElementById('homeGamesGrid');
             if (errorDiv) {
                 errorDiv.innerHTML = `
