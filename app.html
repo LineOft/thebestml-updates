@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.4';
+    const APP_VERSION = '4.3.5';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18394,30 +18394,36 @@
     // Harici tarayıcıda URL aç (indirmeler için)
     function openExternalUrl(url) {
         if (!url) return;
+        console.log('[ExtURL] Harici URL açılıyor:', url);
+        
         try {
-            // Capacitor/Cordova için _system kullan
-            // Android Intent ile harici tarayıcıyı zorla
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                window.Capacitor.Plugins.Browser.open({ url: url });
-                return;
-            }
-            
-            // Android WebView için intent URL dene
+            // Android'de her zaman intent URL kullan (harici tarayıcıyı zorla)
             if (/android/i.test(navigator.userAgent)) {
-                const intentUrl = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
-                const opened = window.open(intentUrl, '_system');
-                if (!opened) {
-                    // Fallback: normal _system
-                    window.open(url, '_system');
-                }
+                // URL'yi temizle
+                const cleanUrl = url.trim();
+                const scheme = cleanUrl.startsWith('https://') ? 'https' : 'http';
+                const urlWithoutScheme = cleanUrl.replace(/^https?:\/\//, '');
+                
+                // Intent URL oluştur - harici tarayıcıyı açar
+                const intentUrl = `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`;
+                console.log('[ExtURL] Intent URL:', intentUrl);
+                
+                // window.location ile dene (en güvenilir)
+                window.location.href = intentUrl;
                 return;
             }
             
-            // iOS ve diğerleri için _system
-            window.open(url, '_system');
+            // iOS için
+            if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+                window.open(url, '_system');
+                return;
+            }
+            
+            // Diğerleri için
+            window.open(url, '_blank');
         } catch (e) {
-            console.error('Harici URL açılamadı:', e);
-            // Son çare: _blank
+            console.error('[ExtURL] Hata:', e);
+            // Son çare
             window.open(url, '_blank');
         }
     }
