@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.98';
+    const APP_VERSION = '4.2.99';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8908,19 +8908,34 @@
                             userChatLastUserSeenAtMs = ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
                         }
 
+                        // Always update cursor from server response (even if delta is empty)
+                        const serverCursor = (res && typeof res.cursor === 'string') ? res.cursor : '';
+                        if (serverCursor) {
+                            afterCursor = serverCursor;
+                        }
+
                         if (delta.length > 0) {
                             userChatMessages = mergeSupportMessages(userChatMessages, delta);
-                            const serverCursor = (res && typeof res.cursor === 'string') ? res.cursor : '';
-                            afterCursor = serverCursor || getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
+                            // Fallback: compute cursor from merged messages if server didn't provide one
+                            if (!serverCursor) {
+                                afterCursor = getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
+                            }
                         }
 
                         // Self-heal: if server says there are unread admin messages but we got no delta,
                         // our cursor can be out of sync in rare edge cases. Force-refresh once in a while.
+                        // Also heal if server's lastMessageAtMs is newer than our newest message.
                         try {
                             const unread = ticket ? Number(ticket.unreadUser || 0) : 0;
+                            const serverLastMsgMs = ticket ? Number(ticket.lastMessageAtMs || 0) : 0;
+                            const localLastMsg = userChatMessages[userChatMessages.length - 1];
+                            const localLastMsgMs = localLastMsg ? getFirestoreTimeMs(localLastMsg.createdAt) : 0;
+                            const isMissingMessages = serverLastMsgMs > 0 && localLastMsgMs > 0 && serverLastMsgMs > localLastMsgMs;
                             const nowMs = Date.now();
-                            if (unread > 0 && delta.length === 0 && (nowMs - lastSelfHealAt) > 8000) {
+
+                            if ((unread > 0 || isMissingMessages) && delta.length === 0 && (nowMs - lastSelfHealAt) > 3000) {
                                 lastSelfHealAt = nowMs;
+                                console.log('💬 Self-heal triggered: unread=' + unread + ', serverLastMsgMs=' + serverLastMsgMs + ', localLastMsgMs=' + localLastMsgMs);
                                 const full = await workerApiFetch(getSupportApiBase(), '/v1/support/me');
                                 const fullTicket = full && full.ticket ? full.ticket : null;
                                 const fullMessages = normalizeSupportMessages(full && full.messages ? full.messages : []);
