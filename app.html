@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.91';
+    const APP_VERSION = '4.2.92';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8879,7 +8879,8 @@
 
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
                     try {
-                        const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
+                        // Safety window: Cloudflare edge clocks can skew. Rewind since a bit; mergeSupportMessages dedupes by id.
+                        const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 15000);
                             const res = await workerApiFetch(
                                 getSupportApiBase(),
                                 '/v1/support/poll?since=' + encodeURIComponent(String(sinceParam)),
@@ -9971,7 +9972,8 @@
 
                     while (supportAdminPollToken === token && isSupportWorkerEnabled() && currentAdminChatId === chatId) {
                         try {
-                            const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 1);
+                            // Safety window: Cloudflare edge clocks can skew. Rewind since a bit; mergeSupportMessages dedupes by id.
+                            const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 15000);
                             const res = await workerApiFetch(
                                 getSupportApiBase(),
                                 '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?since=' + encodeURIComponent(String(sinceParam)),
