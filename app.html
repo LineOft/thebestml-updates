@@ -3317,6 +3317,17 @@
         }
     }
 
+    // Worker/D1 modu için: hız öncelikli. Storage upload denemeyip direkt sıkıştırılmış base64 döner.
+    // (Storage upload bazı cihazlarda 25sn timeout'a takılıp UX'i bozuyordu.)
+    async function prepareReceiptForWorkerOrder(dekontFile) {
+        const base64 = await compressReceiptImageToDataUrl(dekontFile, {
+            maxSize: 900,
+            quality: 0.62,
+            passthroughUnderBytes: 220 * 1024
+        });
+        return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
+    }
+
     function getFriendlyOrderErrorMessage(e) {
         const code = String((e && (e.code || e.errorCode)) || '').toLowerCase();
         const msg = String((e && e.message) || e || '').trim();
@@ -4129,21 +4140,20 @@
             const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
             const baseAmount = parsePriceToAmount(currentPaymentOrder.price);
 
-            // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
-            // Worker API için de aynı dekont URL/base64 alanları kullanılır.
-            const receiptStartMs = Date.now();
-            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())), userId: currentUser.uid });
-            try {
-                backgroundClientLog('order_receipt_ready', {
-                    flow: 'unified',
-                    ms: Date.now() - perfStartMs,
-                    receiptMs: Date.now() - receiptStartMs,
-                    receiptMode: (receipt && receipt.dekontUrl) ? 'storage_url' : ((receipt && receipt.dekontBase64) ? 'base64' : 'none')
-                });
-            } catch (e) {}
-
             // Worker modu: sadakat puanı şimdilik devre dışı (Firestore bağımlı)
             if (ordersApiBase) {
+                // Worker için hız öncelikli dekont (Storage upload deneme yok)
+                const receiptStartMs = Date.now();
+                const receipt = await prepareReceiptForWorkerOrder(dekontFile);
+                try {
+                    backgroundClientLog('order_receipt_ready', {
+                        flow: 'unified',
+                        ms: Date.now() - perfStartMs,
+                        receiptMs: Date.now() - receiptStartMs,
+                        receiptMode: (receipt && receipt.dekontUrl) ? 'storage_url' : ((receipt && receipt.dekontBase64) ? 'base64' : 'none')
+                    });
+                } catch (e) {}
+
                 if (requestedPoints > 0) {
                     showToast('⚠️ Sadakat puanı şu an kullanılamıyor');
                     return;
@@ -18227,10 +18237,9 @@
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
             const ordersApiBase = getOrdersApiBase();
 
-            // Worker için order id üret (Storage path için)
-            const generatedOrderId = (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()));
+            // Worker için hız öncelikli dekont (Storage upload deneme yok)
             const receiptStartMs = Date.now();
-            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: generatedOrderId, userId: currentUser.uid });
+            const receipt = await prepareReceiptForWorkerOrder(dekontFile);
             try {
                 backgroundClientLog('order_receipt_ready', {
                     flow: 'legacy',
