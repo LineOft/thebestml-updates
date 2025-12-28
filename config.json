@@ -1,5 +1,5 @@
 {
-    "currentVersion": "4.2.77",
+    "currentVersion": "4.2.78",
     "forceUpdate": true,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
@@ -8,7 +8,7 @@
     "maintenanceMode": true,
     "maintenanceTitle": "🔧 Sistem Bakımda",
     "maintenanceMessage": "Firestore kota dolduğu için sistem geçici olarak durduruldu. Kota yenilendikten sonra tekrar açılacak.",
-    "maintenanceEstimatedTime": "Kota yenilenince (günlük reset)",
+    "maintenanceEstimatedTime": "",
     "maintenanceAllowEmails": ["onurtenk0@gmail.com"],
     "updateMessage": "Acil: Firestore kota doldu. Trafiği kesmek için bakım modu aktif edildi (Firestore bağımsız/GitHub config). Performans: Dekontlar Firebase Storage'a yüklenir; Firestore'da base64 yerine URL tutulur. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
