@@ -3254,8 +3254,14 @@
             return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
         }
 
-        const uploaded = await uploadReceiptToStorage(dekontFile, { orderId, userId });
-        return { ...uploaded, dekontBase64: null };
+        try {
+            const uploaded = await uploadReceiptToStorage(dekontFile, { orderId, userId });
+            return { ...uploaded, dekontBase64: null };
+        } catch (err) {
+            console.warn('Dekont Storage yükleme başarısız, base64 fallback kullanılacak:', err);
+            const base64 = await compressReceiptImageToDataUrl(dekontFile);
+            return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
+        }
     }
 
     function getFriendlyOrderErrorMessage(e) {
