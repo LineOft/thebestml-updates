@@ -1,12 +1,13 @@
 {
-    "version": "4.2.96",
-    "buildNumber": 352,
+    "version": "4.2.97",
+    "buildNumber": 353,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Hotfix: Destek mesaj sıralaması deterministik yapıldı (createdAtMs + id) — admin→kullanıcı mesajları kaçmaz",
         "Hotfix: Destek long-poll artık cursor tabanlı (afterCursor) — admin→kullanıcı mesajları kaçmaz",
         "Hotfix: OTA güncellemeleri hızlandırıldı (30sn kontrol) + online/visible tetikleme",
         "Hotfix: OTA güncellemeleri daha güvenilir (GitHub API rate-limit yerine raw.githubusercontent.com öncelik)",
