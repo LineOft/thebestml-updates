@@ -17775,9 +17775,97 @@
         showToast('⏳ Gönderiliyor...');
         
         try {
-            // Sipariş için id üret (Storage path için)
+            // Prefer Cloudflare Worker API (Firestore-free)
+            try { await loadRemoteRuntimeConfig(); } catch (e) {}
+            const ordersApiBase = getOrdersApiBase();
+
+            // Worker için order id üret (Storage path için)
+            const generatedOrderId = (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()));
+            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: generatedOrderId, userId: currentUser.uid });
+
+            // Worker modu aktifse: Firestore'a hiç dokunma
+            if (ordersApiBase) {
+                const payload = isDynamic ? {
+                    userId: currentUser.uid,
+                    email: currentUser.email,
+                    userEmail: currentUser.email,
+                    type: 'purchase',
+                    game: orderData.game || '',
+                    gameId: orderData.gameId || null,
+                    cheat: orderData.cheat || '',
+                    cheatId: orderData.cheatId || null,
+                    days: orderData.days || null,
+                    package: String(orderData.days || '') + 'gun',
+                    packageName: `${orderData.cheat || ''} - ${orderData.label || ''}`.trim(),
+                    price: orderData.price,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekont: receipt.dekontBase64 || null,
+                    paymentMethod: 'havale',
+                    status: 'pending'
+                } : {
+                    userId: currentUser.uid,
+                    email: currentUser.email,
+                    userEmail: currentUser.email,
+                    type: 'purchase',
+                    game: 'Mobile Legends',
+                    cheat: 'TheBestML IMGUI',
+                    package: orderData.id,
+                    packageName: orderData.label,
+                    price: orderData.price,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekont: receipt.dekontBase64 || null,
+                    paymentMethod: 'havale',
+                    status: 'pending'
+                };
+
+                // Client-side validation for strict Worker schema
+                if (!payload.game) { showToast('❌ Oyun seçin'); return; }
+                if (!payload.package) { showToast('❌ Paket seçin'); return; }
+                if (!payload.packageName) { showToast('❌ Paket adı bulunamadı'); return; }
+                if (!payload.price) { showToast('❌ Fiyat bulunamadı'); return; }
+
+                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload });
+
+                // Modal'ları kapat
+                closeModal('havaleModal');
+                closeModal('paymentModal');
+
+                // Formu sıfırla
+                const selectedCard = document.getElementById('selectedPriceCard');
+                if (selectedCard) selectedCard.style.display = 'none';
+
+                const dekontFileInput = document.getElementById('dekontFile');
+                if (dekontFileInput) dekontFileInput.value = '';
+
+                const dekontPreview = document.getElementById('dekontPreview');
+                if (dekontPreview) dekontPreview.style.display = 'none';
+
+                document.querySelectorAll('.price-btn').forEach(btn => btn.classList.remove('selected'));
+                document.querySelectorAll('#dynamicCheatPrices .price-card').forEach(card => card.classList.remove('selected'));
+
+                // Değişkenleri sıfırla
+                selectedPriceData = null;
+                window.isDynamicOrder = false;
+                window.pendingDynamicOrder = null;
+                selectedDynamicPrice = null;
+
+                const dynamicSelectedPrice = document.getElementById('dynamicSelectedPrice');
+                if (dynamicSelectedPrice) dynamicSelectedPrice.textContent = 'Fiyat seçin';
+
+                // Worker listemeyi tetikle
+                try { await updateOrderBadge(); } catch (e) {}
+
+                // Başarı modalını göster
+                showOrderSuccessModal();
+                showToast('✅ Siparişiniz alındı!');
+                return;
+            }
+
+            // Firestore fallback (Worker kapalıysa)
             const orderRef = db.collection('orders').doc();
-            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
+            const receiptFs = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
             
             // Siparişi kaydet
             if (isDynamic) {
@@ -17794,9 +17882,9 @@
                     package: orderData.days + 'gun',
                     packageName: `${orderData.cheat} - ${orderData.label}`,
                     price: orderData.price,
-                    dekontUrl: receipt.dekontUrl || null,
-                    dekontStoragePath: receipt.dekontStoragePath || null,
-                    dekont: receipt.dekontBase64 || null,
+                    dekontUrl: receiptFs.dekontUrl || null,
+                    dekontStoragePath: receiptFs.dekontStoragePath || null,
+                    dekont: receiptFs.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -17812,9 +17900,9 @@
                     package: orderData.id,
                     packageName: orderData.label,
                     price: orderData.price,
-                    dekontUrl: receipt.dekontUrl || null,
-                    dekontStoragePath: receipt.dekontStoragePath || null,
-                    dekont: receipt.dekontBase64 || null,
+                    dekontUrl: receiptFs.dekontUrl || null,
+                    dekontStoragePath: receiptFs.dekontStoragePath || null,
+                    dekont: receiptFs.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
