@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.20';
+    const APP_VERSION = '4.3.21';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18528,7 +18528,9 @@
         const hasAndroidBridge = !!(typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.openUrl === 'function');
 
         if (window.__extUrlDbg) window.__extUrlDbg('openExternalUrl: ' + url);
-        if (window.__extUrlDbg) window.__extUrlDbg('Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' registerPlugin=' + (hasRegisterPlugin ? 'VAR' : 'YOK') + ' ExternalBrowser=' + (hasExternalBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
+        var inFrame = false;
+        try { inFrame = (window.top && window.top !== window.self); } catch (e) { inFrame = true; }
+        if (window.__extUrlDbg) window.__extUrlDbg('v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown') + ' iframe=' + (inFrame ? 'EVET' : 'HAYIR') + ' | Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' registerPlugin=' + (hasRegisterPlugin ? 'VAR' : 'YOK') + ' ExternalBrowser=' + (hasExternalBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
 
         // Yöntem 1: Custom Capacitor plugin (harici tarayıcı garantisi)
         if (hasExternalBrowserPlugin) {
@@ -18552,9 +18554,43 @@
             }
         }
 
-        // İstenilen davranış: Uygulama içi tarayıcı/açılış olmasın. Burada in-app fallback yapmıyoruz.
-        try { showToast('❌ Harici tarayıcı açılamadı (native plugin/bridge yok)'); } catch (e) {}
-        if (window.__extUrlDbg) window.__extUrlDbg('Harici tarayıcı açılamadı (native plugin/bridge yok)');
+        // Son çare: Native intercept'i tetiklemek için çoklu yöntem
+        try { showToast('⏭️ Harici tarayıcı deneniyor...'); } catch (e) {}
+        if (window.__extUrlDbg) window.__extUrlDbg('Fallback başlatılıyor...');
+
+        // Yöntem A: Dinamik <a> elementi oluşturup click() - shouldOverrideUrlLoading güvenilir tetikler
+        try {
+            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem A: Dinamik anchor click');
+            var a = document.createElement('a');
+            a.href = url;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function() { try { document.body.removeChild(a); } catch(e){} }, 100);
+            // Biraz bekle, eğer sayfa hala buradaysa sonraki yöntemi dene
+            await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+            if (window.__extUrlDbg) window.__extUrlDbg('Anchor click hata: ' + (e && e.message ? e.message : String(e)));
+        }
+
+        // Yöntem B: window.open ile yeni pencere
+        try {
+            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem B: window.open');
+            var win = window.open(url, '_system');
+            if (win) return;
+        } catch (e) {
+            if (window.__extUrlDbg) window.__extUrlDbg('window.open hata: ' + (e && e.message ? e.message : String(e)));
+        }
+
+        // Yöntem C: location.href (son çare)
+        try {
+            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem C: location.href');
+            window.location.href = url;
+        } catch (e) {
+            if (window.__extUrlDbg) window.__extUrlDbg('location.href hata: ' + (e && e.message ? e.message : String(e)));
+        }
     }
 
     function downloadAPK() {
