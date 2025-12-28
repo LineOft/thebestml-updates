@@ -3322,6 +3322,11 @@
         const msg = String((e && e.message) || e || '').trim();
         const msgLower = msg.toLowerCase();
 
+        // Worker/API zaman aşımı
+        if (code === 'api_timeout' || msgLower.includes('api_timeout') || msgLower.includes('aborterror')) {
+            return 'İstek zaman aşımına uğradı. İnternetinizi kontrol edip tekrar deneyin.';
+        }
+
         // Firebase Storage hataları
         if (code.startsWith('storage/')) {
             if (code.includes('unauthorized')) return 'Dekont yükleme yetkisi yok. Lütfen tekrar giriş yapın.';
@@ -4101,7 +4106,20 @@
         }
         
         showToast('⏳ Sipariş gönderiliyor...');
-        
+
+        const perfStartMs = Date.now();
+        try {
+            backgroundClientLog('order_submit_start', {
+                flow: 'unified',
+                type: (currentPaymentOrder && currentPaymentOrder.type) ? String(currentPaymentOrder.type) : 'purchase',
+                game: String((currentPaymentOrder && currentPaymentOrder.game) || ''),
+                cheat: String((currentPaymentOrder && currentPaymentOrder.cheat) || ''),
+                package: String((currentPaymentOrder && currentPaymentOrder.package) || ''),
+                packageName: String((currentPaymentOrder && currentPaymentOrder.packageName) || ''),
+                price: String((currentPaymentOrder && currentPaymentOrder.price) || '')
+            });
+        } catch (e) {}
+
         try {
             // Prefer Cloudflare Worker API (Firestore-free)
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
@@ -4113,7 +4131,16 @@
 
             // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
             // Worker API için de aynı dekont URL/base64 alanları kullanılır.
+            const receiptStartMs = Date.now();
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())), userId: currentUser.uid });
+            try {
+                backgroundClientLog('order_receipt_ready', {
+                    flow: 'unified',
+                    ms: Date.now() - perfStartMs,
+                    receiptMs: Date.now() - receiptStartMs,
+                    receiptMode: (receipt && receipt.dekontUrl) ? 'storage_url' : ((receipt && receipt.dekontBase64) ? 'base64' : 'none')
+                });
+            } catch (e) {}
 
             // Worker modu: sadakat puanı şimdilik devre dışı (Firestore bağımlı)
             if (ordersApiBase) {
@@ -4165,7 +4192,16 @@
                     payload.extensionDays = currentPaymentOrder.days;
                 }
 
-                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload });
+                const apiStartMs = Date.now();
+                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload, timeoutMs: 25000 });
+                try {
+                    backgroundClientLog('order_worker_created', {
+                        flow: 'unified',
+                        ok: true,
+                        apiMs: Date.now() - apiStartMs,
+                        totalMs: Date.now() - perfStartMs
+                    });
+                } catch (e) {}
 
                 closeModal('unifiedHavaleModal');
                 showOrderSuccessModal();
@@ -4244,7 +4280,9 @@
 
             // Admin'lere yeni sipariş bildirimi gönder
             try {
-                await sendNewOrderNotificationToAdmins(currentUser.email, currentPaymentOrder.packageName, currentPaymentOrder.price);
+                // Fire-and-forget: UI'ı bekletmesin (FCM/Firestore yavaşlayabiliyor)
+                sendNewOrderNotificationToAdmins(currentUser.email, currentPaymentOrder.packageName, currentPaymentOrder.price)
+                    .catch(() => {});
             } catch (e) {}
             
             closeModal('unifiedHavaleModal');
@@ -4254,6 +4292,14 @@
             
         } catch(e) {
             console.error('Sipariş hatası:', e);
+            try {
+                backgroundClientLog('order_submit_error', {
+                    flow: 'unified',
+                    totalMs: Date.now() - perfStartMs,
+                    message: String((e && e.message) || e || ''),
+                    httpStatus: (e && e.httpStatus) ? e.httpStatus : null
+                });
+            } catch (err) {}
             const friendly = getFriendlyOrderErrorMessage(e);
             let debug = '';
             try {
@@ -4559,12 +4605,36 @@
             } catch (e) {}
         }
 
-        const res = await fetch(base + path, {
-            method,
-            headers,
-            cache: 'no-store',
-            body: (opts.body && method !== 'GET') ? JSON.stringify(opts.body) : undefined
-        });
+        const timeoutMs = (typeof opts.timeoutMs === 'number' && Number.isFinite(opts.timeoutMs))
+            ? Math.max(1000, Math.floor(opts.timeoutMs))
+            : (method === 'GET' ? 15000 : 25000);
+
+        let res;
+        const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => {
+            try { controller.abort(); } catch (e) {}
+        }, timeoutMs) : null;
+
+        try {
+            res = await fetch(base + path, {
+                method,
+                headers,
+                cache: 'no-store',
+                signal: controller ? controller.signal : undefined,
+                body: (opts.body && method !== 'GET') ? JSON.stringify(opts.body) : undefined
+            });
+        } catch (e) {
+            if (timer) clearTimeout(timer);
+            const name = String((e && e.name) || '');
+            if (name === 'AbortError' || String(e).toLowerCase().includes('aborterror')) {
+                const err = new Error('api_timeout');
+                err.code = 'api_timeout';
+                throw err;
+            }
+            throw e;
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
 
         const text = await res.text();
         let json = null;
@@ -4579,6 +4649,54 @@
         }
 
         return json;
+    }
+
+    // Background telemetry (non-blocking). Never blocks UI.
+    function backgroundClientLog(eventName, data) {
+        try {
+            if (!currentUser) return;
+            const payload = {
+                event: String(eventName || 'event'),
+                data: data || null
+            };
+
+            function sendWithBase(baseUrl, token) {
+                if (!baseUrl || !token) return;
+                try {
+                    fetch(baseUrl + '/v1/client-logs', {
+                        method: 'POST',
+                        cache: 'no-store',
+                        keepalive: true,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'Authorization': 'Bearer ' + token
+                        },
+                        body: JSON.stringify(payload)
+                    }).catch(() => {});
+                } catch (e) {}
+            }
+
+            const base = getOrdersApiBase();
+            if (!base) {
+                // Base URL henüz yüklenmediyse config'i arka planda çekip 1 kez daha dene
+                try {
+                    if (typeof loadRemoteRuntimeConfig === 'function') {
+                        loadRemoteRuntimeConfig().then(() => {
+                            const base2 = getOrdersApiBase();
+                            if (!base2) return;
+                            currentUser.getIdToken().then((token) => sendWithBase(base2, token)).catch(() => {});
+                        }).catch(() => {});
+                    }
+                } catch (e) {}
+                return;
+            }
+
+            // Don't await anything (fire-and-forget)
+            currentUser.getIdToken().then((token) => {
+                sendWithBase(base, token);
+            }).catch(() => {});
+        } catch (e) {}
     }
 
     function isRemoteMaintenanceEnabled() {
@@ -10256,11 +10374,30 @@
         }
         
         showToast('⏳ Sipariş gönderiliyor...');
+
+        const perfStartMs = Date.now();
+        try {
+            backgroundClientLog('order_submit_start', {
+                flow: 'extend_old',
+                type: 'extension',
+                packageName: `Süre Uzatma - ${(selectedExtendOption && selectedExtendOption.label) ? selectedExtendOption.label : ''}`,
+                price: String((selectedExtendOption && selectedExtendOption.price) || '')
+            });
+        } catch (e) {}
         
         try {
             // Sipariş için id üret (Storage path için)
             const orderRef = db.collection('orders').doc();
+            const receiptStartMs = Date.now();
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
+            try {
+                backgroundClientLog('order_receipt_ready', {
+                    flow: 'extend_old',
+                    ms: Date.now() - perfStartMs,
+                    receiptMs: Date.now() - receiptStartMs,
+                    receiptMode: (receipt && receipt.dekontUrl) ? 'storage_url' : ((receipt && receipt.dekontBase64) ? 'base64' : 'none')
+                });
+            } catch (e) {}
             
             // Yeni bitiş tarihi hesapla
             const newExpiry = new Date(currentExtendData.currentExpiry);
@@ -10296,11 +10433,11 @@
 
             // Admin'lere yeni sipariş bildirimi gönder
             try {
-                await sendNewOrderNotificationToAdmins(
+                sendNewOrderNotificationToAdmins(
                     currentUser.email,
                     `Süre Uzatma - ${selectedExtendOption.label}`,
                     selectedExtendOption.price
-                );
+                ).catch(() => {});
             } catch (e) {}
             
             // Modalları kapat
@@ -10309,9 +10446,24 @@
             // Başarı mesajı
             showOrderSuccessModal();
             showToast('✅ Süre uzatma talebiniz alındı!');
+
+            try {
+                backgroundClientLog('order_submit_success', {
+                    flow: 'extend_old',
+                    ok: true,
+                    totalMs: Date.now() - perfStartMs
+                });
+            } catch (e) {}
             
         } catch(e) {
             console.error('Süre uzatma hatası:', e);
+            try {
+                backgroundClientLog('order_submit_error', {
+                    flow: 'extend_old',
+                    totalMs: Date.now() - perfStartMs,
+                    message: String((e && e.message) || e || '')
+                });
+            } catch (err) {}
             const friendly = getFriendlyOrderErrorMessage(e);
             const detail = (typeof isAdmin === 'function' && isAdmin()) ? ` (Kod: ${e && e.code ? e.code : 'yok'})` : '';
             showToast('❌ Hata: ' + friendly + detail);
@@ -12504,7 +12656,16 @@
         const order = window.pendingDynamicOrder;
         if (!order || !currentUser) return;
         
+        const perfStartMs = Date.now();
         try {
+            try {
+                backgroundClientLog('order_submit_start', {
+                    flow: 'dynamic_old',
+                    paymentMethod: String(paymentMethod || ''),
+                    packageName: `${order.cheat || ''} - ${order.label || ''}`.trim(),
+                    price: String(order.price || '')
+                });
+            } catch (e) {}
             const orderData = {
                 userId: currentUser.uid,
                 userEmail: currentUser.email,
@@ -12526,7 +12687,8 @@
 
             // Admin'lere yeni sipariş bildirimi gönder
             try {
-                await sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price);
+                sendNewOrderNotificationToAdmins(currentUser.email, orderData.packageName, orderData.price)
+                    .catch(() => {});
             } catch (e) {}
             
             // Fiyat seçimini sıfırla
@@ -12536,9 +12698,24 @@
             
             // Başarı modalını göster
             showOrderSuccessModal();
+
+            try {
+                backgroundClientLog('order_submit_success', {
+                    flow: 'dynamic_old',
+                    ok: true,
+                    totalMs: Date.now() - perfStartMs
+                });
+            } catch (e) {}
             
         } catch(e) {
             console.error('Sipariş hatası:', e);
+            try {
+                backgroundClientLog('order_submit_error', {
+                    flow: 'dynamic_old',
+                    totalMs: Date.now() - perfStartMs,
+                    message: String((e && e.message) || e || '')
+                });
+            } catch (err) {}
             showToast('❌ Sipariş gönderilemedi: ' + e.message);
         }
     }
@@ -18032,7 +18209,19 @@
         }
         
         showToast('⏳ Gönderiliyor...');
-        
+
+        const perfStartMs = Date.now();
+        try {
+            backgroundClientLog('order_submit_start', {
+                flow: 'legacy',
+                dynamic: !!isDynamic,
+                game: String((isDynamic ? (orderData && orderData.game) : 'Mobile Legends') || ''),
+                cheat: String((isDynamic ? (orderData && orderData.cheat) : 'TheBestML IMGUI') || ''),
+                packageName: String(isDynamic ? ((orderData && orderData.cheat) || '') : ((orderData && orderData.label) || '')),
+                price: String((orderData && orderData.price) || '')
+            });
+        } catch (e) {}
+
         try {
             // Prefer Cloudflare Worker API (Firestore-free)
             try { await loadRemoteRuntimeConfig(); } catch (e) {}
@@ -18040,7 +18229,17 @@
 
             // Worker için order id üret (Storage path için)
             const generatedOrderId = (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()));
+            const receiptStartMs = Date.now();
             const receipt = await prepareReceiptForOrder(dekontFile, { orderId: generatedOrderId, userId: currentUser.uid });
+            try {
+                backgroundClientLog('order_receipt_ready', {
+                    flow: 'legacy',
+                    dynamic: !!isDynamic,
+                    ms: Date.now() - perfStartMs,
+                    receiptMs: Date.now() - receiptStartMs,
+                    receiptMode: (receipt && receipt.dekontUrl) ? 'storage_url' : ((receipt && receipt.dekontBase64) ? 'base64' : 'none')
+                });
+            } catch (e) {}
 
             // Worker modu aktifse: Firestore'a hiç dokunma
             if (ordersApiBase) {
@@ -18085,7 +18284,17 @@
                 if (!payload.packageName) { showToast('❌ Paket adı bulunamadı'); return; }
                 if (!payload.price) { showToast('❌ Fiyat bulunamadı'); return; }
 
-                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload });
+                const apiStartMs = Date.now();
+                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload, timeoutMs: 25000 });
+                try {
+                    backgroundClientLog('order_worker_created', {
+                        flow: 'legacy',
+                        dynamic: !!isDynamic,
+                        ok: true,
+                        apiMs: Date.now() - apiStartMs,
+                        totalMs: Date.now() - perfStartMs
+                    });
+                } catch (e) {}
 
                 // Modal'ları kapat
                 closeModal('havaleModal');
@@ -18199,13 +18408,24 @@
             
             // Admin'lere yeni sipariş bildirimi gönder
             const packageName = isDynamic ? orderData.cheat : orderData.label;
-            await sendNewOrderNotificationToAdmins(currentUser.email, packageName, orderData.price);
+            // Fire-and-forget: UI'ı bekletmesin (FCM/Firestore yavaşlayabiliyor)
+            sendNewOrderNotificationToAdmins(currentUser.email, packageName, orderData.price)
+                .catch(() => {});
             
             // Başarı modalını göster
             showOrderSuccessModal();
             
         } catch(e) {
             console.error('Sipariş hatası:', e);
+            try {
+                backgroundClientLog('order_submit_error', {
+                    flow: 'legacy',
+                    dynamic: !!isDynamic,
+                    totalMs: Date.now() - perfStartMs,
+                    message: String((e && e.message) || e || ''),
+                    httpStatus: (e && e.httpStatus) ? e.httpStatus : null
+                });
+            } catch (err) {}
             const friendly = getFriendlyOrderErrorMessage(e);
             let debug = '';
             try {
