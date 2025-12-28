@@ -4302,9 +4302,125 @@
             try { startAdminUsageTracking(); } catch (e) {}
         }
     });
+
+    // ========== ACİL BAKIM (GitHub config.json) ==========
+    // Firestore kota dolduğunda bile kullanıcı trafiğini kesebilmek için
+    // bakım bayrağını GitHub'daki config.json'dan okur.
+    var remoteRuntimeConfig = null;
+    var remoteRuntimeConfigLoaded = false;
+    var remoteRuntimeConfigPromise = null;
+
+    function getRemoteRuntimeConfigUrl() {
+        return `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/config.json?t=${Date.now()}`;
+    }
+
+    function normalizeEmailQuick(email) {
+        return String(email || '').trim().toLowerCase();
+    }
+
+    async function loadRemoteRuntimeConfig() {
+        if (remoteRuntimeConfigLoaded) return remoteRuntimeConfig;
+        if (remoteRuntimeConfigPromise) return remoteRuntimeConfigPromise;
+
+        remoteRuntimeConfigPromise = (async () => {
+            try {
+                const res = await fetch(getRemoteRuntimeConfigUrl(), { cache: 'no-store' });
+                if (res && res.ok) {
+                    remoteRuntimeConfig = await res.json();
+                }
+            } catch (e) {
+                remoteRuntimeConfig = remoteRuntimeConfig || null;
+            } finally {
+                remoteRuntimeConfigLoaded = true;
+            }
+            return remoteRuntimeConfig;
+        })();
+
+        return remoteRuntimeConfigPromise;
+    }
+
+    function isRemoteMaintenanceEnabled() {
+        return !!(remoteRuntimeConfig && remoteRuntimeConfig.maintenanceMode);
+    }
+
+    function isAllowedDuringRemoteMaintenance(email) {
+        // Owner her zaman serbest
+        try {
+            if (typeof isOwnerEmail === 'function' && isOwnerEmail(email)) return true;
+        } catch (e) {}
+
+        const allow = (remoteRuntimeConfig && Array.isArray(remoteRuntimeConfig.maintenanceAllowEmails))
+            ? remoteRuntimeConfig.maintenanceAllowEmails
+            : [];
+        const e = normalizeEmailQuick(email);
+        if (!e) return false;
+        return allow.map(normalizeEmailQuick).includes(e);
+    }
+
+    function showRemoteMaintenanceScreen() {
+        if (!isRemoteMaintenanceEnabled()) return;
+        const existing = document.getElementById('remoteMaintenanceScreen');
+        if (existing) return;
+
+        const title = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceTitle) || '🔧 Bakım Modu';
+        const message = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceMessage) || 'Sistem şu anda bakımda. Lütfen daha sonra tekrar deneyin.';
+        const estimated = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceEstimatedTime) || '';
+
+        const html = `
+            <div id="remoteMaintenanceScreen" style="min-height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px;">
+                <div style="max-width: 420px; width: 100%; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 22px; text-align: center;">
+                    <div style="font-size: 54px; margin-bottom: 10px;">🔧</div>
+                    <h1 style="color: #fff; margin-bottom: 12px; font-size: 22px;">${title}</h1>
+                    <p style="color: #aaa; font-size: 14px; line-height: 1.6; margin-bottom: 14px;">${message}</p>
+                    ${estimated ? `<div style="color: #ffcc80; font-size: 12px; margin-bottom: 16px;">⏳ Tahmini: ${estimated}</div>` : ''}
+                    <button onclick="tryOpenMaintenanceTeamLogin()" style="background: linear-gradient(135deg, #4CAF50, #45a049); border: none; color: #fff; padding: 12px 16px; border-radius: 10px; font-weight: 700; cursor: pointer; width: 100%;">🔐 Ekip Girişi</button>
+                    <div style="color:#777; font-size: 11px; margin-top: 12px;">Not: Bu ekran acil bakım kilididir (Firestore bağımsız).</div>
+                </div>
+            </div>
+        `;
+
+        // Uygulama root alanına bas
+        document.body.innerHTML = html;
+    }
+
+    function hideRemoteMaintenanceScreen() {
+        const el = document.getElementById('remoteMaintenanceScreen');
+        if (el) el.remove();
+    }
+
+    window.tryOpenMaintenanceTeamLogin = function() {
+        try {
+            // Login ekranına geç
+            if (typeof navigateTo === 'function') {
+                navigateTo('loginPage');
+            }
+        } catch (e) {}
+    };
+    // ========== ACİL BAKIM SON ==========
     
     auth.onAuthStateChanged(async (user) => {
         currentUser = user;
+
+        // Acil bakım kilidi: önce GitHub config'i oku, sonra Firestore'a dokun.
+        try { await loadRemoteRuntimeConfig(); } catch (e) {}
+
+        if (isRemoteMaintenanceEnabled()) {
+            const email = user && user.email ? user.email : null;
+            if (!isAllowedDuringRemoteMaintenance(email)) {
+                try { stopOrderListener(); } catch (e) {}
+                try { stopNotificationListener(); } catch (e) {}
+                try { stopUsersRealtimeListener(); } catch (e) {}
+                try { stopPresenceHeartbeat(); } catch (e) {}
+                try { stopAdminUsageTracking(); } catch (e) {}
+                try { updateAuthUI(); } catch (e) {}
+                showRemoteMaintenanceScreen();
+                return;
+            } else {
+                // Ekip/owner izinli ise ekranı kaldırıp devam et
+                try { hideRemoteMaintenanceScreen(); } catch (e) {}
+            }
+        }
+
         if (user) {
             // Önce admin listesini yükle, sonra UI güncelle
             await loadAdminList();
