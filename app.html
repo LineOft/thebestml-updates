@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.11';
+    const APP_VERSION = '4.3.12';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18392,32 +18392,36 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç (indirmeler için) - v4.3.9
+    // Harici tarayıcıda URL aç - v4.3.12 AndroidBridge
     function openExternalUrl(url) {
         if (!url) return;
-        console.log('[ExtURL] v4.3.9 - URL:', url);
+        console.log('[ExtURL] v4.3.12 - URL:', url);
         
-        // En basit yöntem: <a> elementi oluştur ve tıkla
-        try {
-            var link = document.createElement('a');
-            link.href = url;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            setTimeout(function() {
-                document.body.removeChild(link);
-            }, 100);
-            console.log('[ExtURL] <a> click yapıldı');
-            return;
-        } catch (e) {
-            console.log('[ExtURL] <a> hata:', e);
+        // Yöntem 1: AndroidBridge (Native Java)
+        if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrl) {
+            try {
+                console.log('[ExtURL] AndroidBridge.openUrl kullanılıyor');
+                AndroidBridge.openUrl(url);
+                return;
+            } catch (e) {
+                console.log('[ExtURL] AndroidBridge hata:', e);
+            }
         }
         
-        // Fallback: window.open
+        // Yöntem 2: Android (eski WebView bridge)
+        if (typeof Android !== 'undefined' && Android.openUrl) {
+            try {
+                console.log('[ExtURL] Android.openUrl kullanılıyor');
+                Android.openUrl(url);
+                return;
+            } catch (e) {
+                console.log('[ExtURL] Android hata:', e);
+            }
+        }
+        
+        // Yöntem 3: window.open
         try {
-            var win = window.open(url, '_blank');
+            var win = window.open(url, '_system');
             if (win) {
                 console.log('[ExtURL] window.open başarılı');
                 return;
