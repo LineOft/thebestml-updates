@@ -1,12 +1,13 @@
 {
-    "version": "4.3.19",
-    "buildNumber": 375,
+    "version": "4.3.20",
+    "buildNumber": 376,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-29",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "v4.3.20: APK içi sürüm yükseltildi; eski OTA cache otomatik temizlenir (doğru app.html çalışır)",
         "v4.3.19: Harici tarayıcı açma iyileştirildi (UI thread + BROWSABLE + tarayıcı seçici/chooser + hata toast)",
         "v4.3.18: Harici tarayıcı açma için native WebView intercept + JS son çare yönlendirme (APK güncellemesi gerekebilir)",
         "Hotfix: ExternalBrowser custom plugin JS erişimi (registerPlugin) düzeltildi — harici tarayıcı açılır",
