@@ -3245,21 +3245,50 @@
         };
     }
 
+    function withTimeout(promise, ms, label = 'timeout') {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const t = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                reject(new Error(label));
+            }, ms);
+            Promise.resolve(promise)
+                .then((v) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(t);
+                    resolve(v);
+                })
+                .catch((e) => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(t);
+                    reject(e);
+                });
+        });
+    }
+
     async function prepareReceiptForOrder(dekontFile, { orderId, userId }) {
         // Asıl hedef: Firestore'a base64 yazmamak (kota/limit tasarrufu)
         // Storage yoksa geri uyumluluk için base64'e düş.
         const st = getFirebaseStorageSafe();
         if (!st) {
-            const base64 = await compressReceiptImageToDataUrl(dekontFile);
+            const base64 = await compressReceiptImageToDataUrl(dekontFile, { maxSize: 1024, quality: 0.66, passthroughUnderBytes: 220 * 1024 });
             return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
         }
 
         try {
-            const uploaded = await uploadReceiptToStorage(dekontFile, { orderId, userId });
+            // Mobilde yavaş ağ/Storage takılmalarında sipariş dakikalarca beklemesin
+            const uploaded = await withTimeout(
+                uploadReceiptToStorage(dekontFile, { orderId, userId }),
+                25000,
+                'storage_upload_timeout'
+            );
             return { ...uploaded, dekontBase64: null };
         } catch (err) {
             console.warn('Dekont Storage yükleme başarısız, base64 fallback kullanılacak:', err);
-            const base64 = await compressReceiptImageToDataUrl(dekontFile);
+            const base64 = await compressReceiptImageToDataUrl(dekontFile, { maxSize: 1024, quality: 0.66, passthroughUnderBytes: 220 * 1024 });
             return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
         }
     }
@@ -4411,6 +4440,8 @@
     var remoteRuntimeConfig = null;
     var remoteRuntimeConfigLoaded = false;
     var remoteRuntimeConfigPromise = null;
+    var remoteRuntimeConfigLastAttemptMs = 0;
+    const REMOTE_RUNTIME_CONFIG_RETRY_BACKOFF_MS = 15000;
 
     function getRemoteRuntimeConfigUrl() {
         return `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/config.json?t=${Date.now()}`;
@@ -4421,11 +4452,16 @@
     }
 
     async function loadRemoteRuntimeConfig() {
-        if (remoteRuntimeConfigLoaded) return remoteRuntimeConfig;
+        if (remoteRuntimeConfigLoaded && remoteRuntimeConfig) return remoteRuntimeConfig;
+        // Eğer önceki deneme başarısızsa, kısa backoff uygula
+        if (!remoteRuntimeConfig && remoteRuntimeConfigLastAttemptMs && (Date.now() - remoteRuntimeConfigLastAttemptMs) < REMOTE_RUNTIME_CONFIG_RETRY_BACKOFF_MS) {
+            return remoteRuntimeConfig;
+        }
         if (remoteRuntimeConfigPromise) return remoteRuntimeConfigPromise;
 
         remoteRuntimeConfigPromise = (async () => {
             try {
+                remoteRuntimeConfigLastAttemptMs = Date.now();
                 const res = await fetch(getRemoteRuntimeConfigUrl(), { cache: 'no-store' });
                 if (res && res.ok) {
                     remoteRuntimeConfig = await res.json();
@@ -4434,7 +4470,9 @@
             } catch (e) {
                 remoteRuntimeConfig = remoteRuntimeConfig || null;
             } finally {
-                remoteRuntimeConfigLoaded = true;
+                // Eğer config alınamadıysa loaded=true yapma; sonraki çağrılarda tekrar denensin
+                remoteRuntimeConfigLoaded = !!remoteRuntimeConfig;
+                remoteRuntimeConfigPromise = null;
             }
             return remoteRuntimeConfig;
         })();
@@ -15352,11 +15390,31 @@
                         key,
                         label,
                         year: y,
-                        month: m1,
-                        count: 0,
-                        totalAmount: 0,
-                        adminShareTotal: 0,
-                        orders: []
+                                try {
+                                    const data = await workerApiFetch('/v1/admin/orders?status=pending');
+                                    const list = Array.isArray(data?.orders) ? data.orders : (Array.isArray(data) ? data : []);
+                                    renderPendingOrdersList(list);
+                                    hideLoading();
+                                    return;
+                                } catch (e) {
+                                    const msg = (e && e.message) ? String(e.message) : '';
+                                    const status = e && typeof e.httpStatus === 'number' ? e.httpStatus : null;
+
+                                    if (status === 401 || status === 403) {
+                                        const el = document.getElementById('pendingOrdersList');
+                                        if (el) {
+                                            el.innerHTML = `<div class="text-sm opacity-80">
+                                                Admin yetkisi yok (HTTP ${status}).<br/>
+                                                Bu hesabın e-postası Worker admin listesinde değilse siparişler görünmez.
+                                            </div>`;
+                                        }
+                                        toast('Admin yetkisi yok. (Worker)');
+                                        hideLoading();
+                                        return;
+                                    }
+
+                                    // Worker hata verdi → Firestore fallback dene
+                                    console.warn('Worker pending orders hatası, Firestore fallback:', { msg, status, e });
                     };
                 }
                 const amount = Number.isFinite(Number(o.amount)) ? Math.floor(Number(o.amount)) : computeOrderApprovedAmount(o);
