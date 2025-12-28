@@ -2730,7 +2730,7 @@
             </div>
             
             <!-- İndirme Butonu -->
-            <button class="btn btn-primary" onclick="downloadAPK()" style="margin-bottom: 20px; width: 100%;">
+            <button class="btn btn-primary" onclick="downloadAPK()" data-ext-action="download-apk" style="margin-bottom: 20px; width: 100%;">
                 📥 IMGUI APK İNDİR
                 <span class="btn-subtext">TheBestML IMGUI V2.8</span>
             </button>
@@ -2766,7 +2766,7 @@
                     <div style="flex: 1;">
                         <div style="font-weight: bold; color: #2196F3; margin-bottom: 4px;">Orijinal ML İndirin</div>
                         <div style="font-size: 12px; color: #aaa;">Playstoreden Mobile Legends orijinal sürümünü indirin.</div>
-                        <button onclick="openPlayStore()" style="background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 8px;">
+                        <button onclick="openPlayStore()" data-ext-action="playstore" style="background: linear-gradient(135deg, #4CAF50, #388E3C); border: none; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; margin-top: 8px;">
                             ▶️ Play Store'a Git
                         </button>
                     </div>
@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.15';
+    const APP_VERSION = '4.3.16';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8204,12 +8204,17 @@
             }
         }
         
-        // APK indirme butonu - v4.3.10 (a link olarak)
+        // APK indirme butonu - v4.3.16 (harici tarayıcı için data-ext-url)
         if (modalData.apkButton?.label && modalData.apkButton?.url) {
+            const safeApkUrl = String(modalData.apkButton.url)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
             html += `
-                <a href="${modalData.apkButton.url}" target="_blank" rel="noopener" class="btn btn-primary" style="display: block; text-align: center; margin-bottom: 20px; width: 100%; text-decoration: none;">
+                <button class="btn btn-primary" data-ext-url="${safeApkUrl}" style="display: block; text-align: center; margin-bottom: 20px; width: 100%;">
                     📥 ${modalData.apkButton.label}
-                </a>
+                </button>
             `;
         }
         
@@ -13851,24 +13856,36 @@
         }
     }
     
-    // Adım butonunu render et - v4.3.14 (onclick + ontouchstart)
+    // Adım butonunu render et - v4.3.16 (data-ext-url + event delegation)
     function renderStepButton(step) {
         const actionType = step.actionType || 'none';
         const btnStyle = 'display: inline-block; margin-top: 8px; padding: 8px 16px; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; text-decoration: none;';
         
         if (actionType === 'playstore' && step.btnUrl) {
-            const url = step.btnUrl.replace(/'/g, "\\'");
-            return `<button onclick="openExternalUrl('${url}')" ontouchstart="openExternalUrl('${url}'); return false;" style="${btnStyle} background: linear-gradient(135deg, #34a853, #0f9d58);">
+            const url = String(step.btnUrl)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return `<button class="ext-url-btn" data-ext-url="${url}" style="${btnStyle} background: linear-gradient(135deg, #34a853, #0f9d58);">
                 <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da Aç'}
             </button>`;
         } else if (actionType === 'download' && step.downloadUrl) {
-            const url = step.downloadUrl.replace(/'/g, "\\'");
-            return `<button onclick="openExternalUrl('${url}')" ontouchstart="openExternalUrl('${url}'); return false;" style="${btnStyle} background: linear-gradient(135deg, #667eea, #764ba2);">
+            const url = String(step.downloadUrl)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return `<button class="ext-url-btn" data-ext-url="${url}" style="${btnStyle} background: linear-gradient(135deg, #667eea, #764ba2);">
                 <i class="fas fa-download"></i> ${step.btnText || 'İndir'}
             </button>`;
         } else if (actionType === 'link' && step.btnUrl) {
-            const url = step.btnUrl.replace(/'/g, "\\'");
-            return `<button onclick="openExternalUrl('${url}')" ontouchstart="openExternalUrl('${url}'); return false;" style="${btnStyle} background: linear-gradient(135deg, #00b894, #00cec9);">
+            const url = String(step.btnUrl)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            return `<button class="ext-url-btn" data-ext-url="${url}" style="${btnStyle} background: linear-gradient(135deg, #00b894, #00cec9);">
                 <i class="fas fa-external-link-alt"></i> ${step.btnText || 'Bağlantıya Git'}
             </button>`;
         } else if (actionType === 'modal' && step.modalId) {
@@ -18417,6 +18434,64 @@
                     panel.scrollTop = panel.scrollHeight;
                 } catch (e) {}
             };
+        } catch (e) {}
+    })();
+
+    // Inline onclick bazı WebView/DOM durumlarında hiç tetiklenmeyebiliyor.
+    // Bu yüzden capture-phase event delegation ile her dokunuşu yakalıyoruz.
+    (function initExtUrlDelegation() {
+        try {
+            if (window.__extUrlDelegationInit) return;
+            window.__extUrlDelegationInit = true;
+
+            let lastFireAt = 0;
+            function shouldFireNow() {
+                const now = Date.now();
+                if (now - lastFireAt < 450) return false;
+                lastFireAt = now;
+                return true;
+            }
+
+            function handle(e) {
+                const target = e && e.target && e.target.closest ? e.target.closest('[data-ext-url],[data-ext-action]') : null;
+                if (!target) return;
+
+                if (window.__extUrlDbg) window.__extUrlDbg('EVENT yakalandı');
+                try { if (typeof showToast === 'function') showToast('🔗 Açılıyor...'); } catch (err) {}
+
+                // Görsel feedback
+                try {
+                    const prevOutline = target.style.outline;
+                    target.style.outline = '2px solid rgba(76,175,80,0.9)';
+                    setTimeout(() => { try { target.style.outline = prevOutline; } catch (x) {} }, 350);
+                } catch (err) {}
+
+                try { if (e.preventDefault) e.preventDefault(); } catch (err) {}
+                try { if (e.stopPropagation) e.stopPropagation(); } catch (err) {}
+
+                if (!shouldFireNow()) return;
+
+                if (target.dataset.extUrl) {
+                    if (window.__extUrlDbg) window.__extUrlDbg('ext-url: ' + target.dataset.extUrl);
+                    void openExternalUrl(target.dataset.extUrl);
+                    return;
+                }
+
+                const action = target.dataset.extAction;
+                if (window.__extUrlDbg) window.__extUrlDbg('ext-action: ' + action);
+                if (action === 'download-apk') {
+                    try { downloadAPK(); } catch (err) {}
+                    return;
+                }
+                if (action === 'playstore') {
+                    try { openPlayStore(); } catch (err) {}
+                    return;
+                }
+            }
+
+            document.addEventListener('click', handle, true);
+            document.addEventListener('touchend', handle, { capture: true, passive: false });
+            if (window.__extUrlDbg) window.__extUrlDbg('Delegation aktif');
         } catch (e) {}
     })();
 
