@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.0';
+    const APP_VERSION = '4.3.1';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -9112,6 +9112,34 @@
     // Kullanıcı: Chat modalını aç
     let chatRefreshInterval = null;
     
+    // Modal açıkken kısa aralıklı polling için interval
+    let userChatModalPollInterval = null;
+
+    function startUserChatModalPolling() {
+        stopUserChatModalPolling();
+        console.log('💬 Modal polling başlatıldı (2sn aralık)');
+        userChatModalPollInterval = setInterval(async () => {
+            try {
+                const modal = document.getElementById('userChatModal');
+                if (!modal || !modal.classList.contains('show')) {
+                    stopUserChatModalPolling();
+                    return;
+                }
+                await refreshUserChatMessages(true);
+            } catch (e) {
+                console.error('Modal polling hatası:', e);
+            }
+        }, 2000);
+    }
+
+    function stopUserChatModalPolling() {
+        if (userChatModalPollInterval) {
+            clearInterval(userChatModalPollInterval);
+            userChatModalPollInterval = null;
+            console.log('💬 Modal polling durduruldu');
+        }
+    }
+
     async function openUserChatModal() {
         if (!currentUser) {
             showToast('⚠️ Giriş yapmanız gerekiyor');
@@ -9129,6 +9157,9 @@
         
         // Mesajları Firestore'dan taze olarak çek
         await refreshUserChatMessages();
+
+        // Modal açıkken kısa aralıklı polling başlat (long-poll'a ek güvenlik)
+        startUserChatModalPolling();
         
         // Okunmamış mesajları sıfırla + görüldü
         try {
@@ -18127,6 +18158,7 @@
         
         // Chat modal kapatılıyorsa interval'ı durdur
         if (modalId === 'userChatModal') {
+            stopUserChatModalPolling();
             stopChatRefreshInterval();
             stopSupportPresenceInterval();
             setUserSupportPresence(false);
