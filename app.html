@@ -4037,9 +4037,10 @@
     let orderListener = null; // Real-time listener
 
     // Presence / Online durum takibi
+    // NOT: Firestore kota tüketimini azaltmak için heartbeat sadece admin/owner için çalışır.
     let presenceHeartbeatInterval = null;
     let presenceInitializedUid = null;
-    const PRESENCE_HEARTBEAT_MS = 30000;
+    const PRESENCE_HEARTBEAT_MS = 60000;
 
     // Ban riski bilgilendirme (tek seferlik kabul)
     const BAN_RISK_DISCLOSURE_VERSION = '1';
@@ -4197,6 +4198,9 @@
     function startPresenceHeartbeat() {
         stopPresenceHeartbeat();
         if (!currentUser) return;
+
+        // Normal kullanıcılar için periyodik presence yazımı kapalı (kota tüketimini ciddi azaltır)
+        if (!(isAdmin() || isOwner())) return;
 
         touchPresence({ isLogin: false });
         presenceHeartbeatInterval = setInterval(() => {
@@ -7936,10 +7940,9 @@
     }
 
     function startSupportPresenceInterval() {
+        // Firestore kota tüketimini azaltmak için periyodik presence yazımı kapalı.
+        // Presence sadece aç/kapat ve gerçek aktivite anlarında güncellenir.
         stopSupportPresenceInterval();
-        supportPresenceInterval = setInterval(() => {
-            setUserSupportPresence(true);
-        }, 20000);
     }
 
     async function markUserSupportSeen(force = false) {
@@ -8148,7 +8151,6 @@
 
         // Destek açık: presence + heartbeat
         setUserSupportPresence(true);
-        startSupportPresenceInterval();
         
         // Mesajları Firestore'dan taze olarak çek
         await refreshUserChatMessages();
@@ -8167,17 +8169,6 @@
         
         // En alta kaydır
         scrollChatToBottom('userChatMessages');
-        
-        // Modal açıkken her 3 saniyede bir mesajları yenile (onSnapshot çalışmazsa diye)
-        stopChatRefreshInterval();
-        chatRefreshInterval = setInterval(async () => {
-            const modal = document.getElementById('userChatModal');
-            if (modal && modal.classList.contains('show')) {
-                await refreshUserChatMessages(true); // silent mode
-            } else {
-                stopChatRefreshInterval();
-            }
-        }, 3000);
     }
 
     // Destek FAQ (S.S.S)

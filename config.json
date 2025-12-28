@@ -4,7 +4,7 @@
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "📢 v4.2.74 – Quota/dekont düzeltme",
+    "announcement": "📢 v4.2.74 – Kota sorunu kök fix",
     "maintenanceMode": false,
-    "updateMessage": "Düzeltme: Sipariş oluştururken görülen 'Quota exceeded' hatası için dekont otomatik sıkıştırma + daha açıklayıcı hata mesajı eklendi. Düzeltme: Admin > Aylık Onaylanan Siparişler bölümünde 'Sil' sonrası kayıt silindi yazsa bile listede kalma sorunu düzeltildi (arşiv kaydı da silinir). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "updateMessage": "Performans: Firestore kota tüketimini azaltmak için online/presence heartbeat ve destek sohbeti yenileme (polling) optimize edildi. Düzeltme: Sipariş oluştururken görülen 'Quota exceeded' hatası için dekont otomatik sıkıştırma + daha açıklayıcı hata mesajı eklendi. Düzeltme: Admin > Aylık Onaylanan Siparişler bölümünde 'Sil' sonrası kayıt silindi yazsa bile listede kalma sorunu düzeltildi (arşiv kaydı da silinir). (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
 }
