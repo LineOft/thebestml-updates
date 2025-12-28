@@ -16,6 +16,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
     <script>
         // Global error handler - TÜM hataları yakala
         window.onerror = function(msg, url, lineNo, columnNo, error) {
@@ -36,6 +37,7 @@
         var firebaseReady = false;
         var auth = null;
         var db = null;
+        var storage = null;
         
         try {
             const firebaseConfig = {
@@ -51,10 +53,18 @@
                 firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
                 db = firebase.firestore();
+                try {
+                    if (typeof firebase.storage === 'function') {
+                        storage = firebase.storage();
+                    }
+                } catch (e) {
+                    storage = null;
+                }
                 firebaseReady = true;
                 console.log('✅ Firebase başlatıldı');
                 console.log('✅ db:', db ? 'OK' : 'NULL');
                 console.log('✅ auth:', auth ? 'OK' : 'NULL');
+                console.log('✅ storage:', storage ? 'OK' : 'NULL');
             } else {
                 console.error('❌ Firebase SDK yüklenemedi');
                 const grid = document.getElementById('homeGamesGrid');
@@ -3195,10 +3205,72 @@
         });
     }
 
+    function getFirebaseStorageSafe() {
+        try {
+            if (storage) return storage;
+            if (typeof firebase !== 'undefined' && typeof firebase.storage === 'function') return firebase.storage();
+        } catch (e) {}
+        return null;
+    }
+
+    async function compressReceiptImageToJpegBlob(file, opts = {}) {
+        const dataUrl = await compressReceiptImageToDataUrl(file, {
+            ...opts,
+            mimeType: 'image/jpeg'
+        });
+        const res = await fetch(dataUrl);
+        return await res.blob();
+    }
+
+    async function uploadReceiptToStorage(dekontFile, { orderId, userId }) {
+        const st = getFirebaseStorageSafe();
+        if (!st) throw new Error('Storage hazır değil');
+        if (!userId) throw new Error('Kullanıcı bulunamadı');
+        if (!orderId) throw new Error('Sipariş kimliği oluşturulamadı');
+
+        const blob = await compressReceiptImageToJpegBlob(dekontFile);
+        const filename = `${orderId}_${Date.now()}.jpg`;
+        const path = `receipts/${userId}/${filename}`;
+        const ref = st.ref().child(path);
+
+        const snapshot = await ref.put(blob, {
+            contentType: 'image/jpeg',
+            cacheControl: 'public, max-age=31536000'
+        });
+        const url = await snapshot.ref.getDownloadURL();
+
+        return {
+            dekontUrl: url,
+            dekontStoragePath: path
+        };
+    }
+
+    async function prepareReceiptForOrder(dekontFile, { orderId, userId }) {
+        // Asıl hedef: Firestore'a base64 yazmamak (kota/limit tasarrufu)
+        // Storage yoksa geri uyumluluk için base64'e düş.
+        const st = getFirebaseStorageSafe();
+        if (!st) {
+            const base64 = await compressReceiptImageToDataUrl(dekontFile);
+            return { dekontUrl: null, dekontStoragePath: null, dekontBase64: base64 };
+        }
+
+        const uploaded = await uploadReceiptToStorage(dekontFile, { orderId, userId });
+        return { ...uploaded, dekontBase64: null };
+    }
+
     function getFriendlyOrderErrorMessage(e) {
         const code = String((e && (e.code || e.errorCode)) || '').toLowerCase();
         const msg = String((e && e.message) || e || '').trim();
         const msgLower = msg.toLowerCase();
+
+        // Firebase Storage hataları
+        if (code.startsWith('storage/')) {
+            if (code.includes('unauthorized')) return 'Dekont yükleme yetkisi yok. Lütfen tekrar giriş yapın.';
+            if (code.includes('canceled')) return 'Dekont yükleme iptal edildi.';
+            if (code.includes('retry-limit-exceeded')) return 'Dekont yükleme başarısız. Lütfen tekrar deneyin.';
+            if (code.includes('quota-exceeded')) return 'Depolama kotası dolu. Lütfen daha sonra tekrar deneyin.';
+            return 'Dekont yüklenemedi. Lütfen tekrar deneyin.';
+        }
 
         // Firebase/Firestore RESOURCE_EXHAUSTED genelde "Quota exceeded." olarak gelir
         if (code === 'resource-exhausted' || msgLower.includes('quota exceeded')) {
@@ -3946,9 +4018,6 @@
         showToast('⏳ Sipariş gönderiliyor...');
         
         try {
-            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
-            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
-            
             // Sipariş objesi
             const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
             const baseAmount = parsePriceToAmount(currentPaymentOrder.price);
@@ -3956,6 +4025,9 @@
             const userRef = db.collection('users').doc(currentUser.uid);
             const orderRef = db.collection('orders').doc();
             let pointsUsed = 0;
+
+            // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
+            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
 
             await db.runTransaction(async (tx) => {
                 const userSnap = await tx.get(userRef);
@@ -3984,7 +4056,10 @@
                     loyaltyUsedPoints: pointsUsed,
                     loyaltyDiscountAmount: pointsUsed,
                     days: currentPaymentOrder.days,
-                    dekont: dekontBase64,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    // Storage yoksa geri uyumluluk için base64 alanı dolabilir
+                    dekont: receipt.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -9348,8 +9423,9 @@
         showToast('⏳ Sipariş gönderiliyor...');
         
         try {
-            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
-            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
+            // Sipariş için id üret (Storage path için)
+            const orderRef = db.collection('orders').doc();
+            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
             
             // Yeni bitiş tarihi hesapla
             const newExpiry = new Date(currentExtendData.currentExpiry);
@@ -9360,7 +9436,7 @@
             }
             
             // Siparişi kaydet
-            await db.collection('orders').add({
+            await orderRef.set({
                 userId: currentUser.uid,
                 email: currentUser.email,
                 userEmail: currentUser.email,
@@ -9375,7 +9451,9 @@
                 package: selectedExtendOption.label,
                 packageName: `Süre Uzatma - ${selectedExtendOption.label}`,
                 price: selectedExtendOption.price,
-                dekont: dekontBase64,
+                dekontUrl: receipt.dekontUrl || null,
+                dekontStoragePath: receipt.dekontStoragePath || null,
+                dekont: receipt.dekontBase64 || null,
                 paymentMethod: 'havale',
                 status: 'pending',
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -14682,10 +14760,11 @@
             `;
         }
         
-        if (currentOrderData.dekont) {
+        const dekontSrc = (currentOrderData && (currentOrderData.dekontUrl || currentOrderData.dekont)) || '';
+        if (dekontSrc) {
             html += `
                 <div style="font-size: 13px; font-weight: bold; margin: 15px 0 10px;">📸 Dekont:</div>
-                <img src="${currentOrderData.dekont}" style="width: 100%; border-radius: 10px; margin-bottom: 15px;">
+                <img src="${dekontSrc}" style="width: 100%; border-radius: 10px; margin-bottom: 15px;">
             `;
         }
         
@@ -16943,13 +17022,14 @@
         showToast('⏳ Gönderiliyor...');
         
         try {
-            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
-            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
+            // Sipariş için id üret (Storage path için)
+            const orderRef = db.collection('orders').doc();
+            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
             
             // Siparişi kaydet
             if (isDynamic) {
                 // Dinamik sipariş
-                await db.collection('orders').add({
+                await orderRef.set({
                     userId: currentUser.uid,
                     email: currentUser.email,
                     userEmail: currentUser.email,
@@ -16961,14 +17041,16 @@
                     package: orderData.days + 'gun',
                     packageName: `${orderData.cheat} - ${orderData.label}`,
                     price: orderData.price,
-                    dekont: dekontBase64,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekont: receipt.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
             } else {
                 // TheBestML siparişi
-                await db.collection('orders').add({
+                await orderRef.set({
                     userId: currentUser.uid,
                     email: currentUser.email,
                     userEmail: currentUser.email,
@@ -16977,7 +17059,9 @@
                     package: orderData.id,
                     packageName: orderData.label,
                     price: orderData.price,
-                    dekont: dekontBase64,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekont: receipt.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
