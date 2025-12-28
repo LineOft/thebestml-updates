@@ -1,12 +1,13 @@
 {
     "version": "4.2.74",
-    "buildNumber": 324,
+    "buildNumber": 325,
     "minBuildNumber": 150,
     "required": false,
-    "releaseDate": "2025-12-27",
+    "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Düzeltme: Sipariş oluştururken görülen 'Quota exceeded' hatası için dekont otomatik sıkıştırma + daha açıklayıcı hata mesajı eklendi",
         "Düzeltme: Aylık özet sipariş silme artık arşiv kaydını da siler (listede kalma sorunu giderildi)",
         "Düzeltme: Bildirimleri temizle sonrası 9+ rozetinin takılı kalması düzeltildi",
         "Güvenlik (Admin): Aylık özet sipariş silme yetkisi sadece OWNER",

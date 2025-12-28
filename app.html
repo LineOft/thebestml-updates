@@ -3135,6 +3135,92 @@
             reader.readAsDataURL(file);
         });
     }
+
+    // Dekont/resim gibi büyük görselleri Firestore'a daha uygun hale getir
+    function compressReceiptImageToDataUrl(file, opts = {}) {
+        const {
+            maxSize = 1280,
+            quality = 0.72,
+            mimeType = 'image/jpeg',
+            passthroughUnderBytes = 350 * 1024
+        } = opts || {};
+
+        return new Promise((resolve, reject) => {
+            if (!file) return reject(new Error('Dosya seçilmedi'));
+            if (!file.type || !file.type.startsWith('image/')) return reject(new Error('Sadece resim dosyası seçin'));
+
+            // Çok küçük dosyaları olduğu gibi geçir (okunabilirliği koru)
+            if (Number.isFinite(file.size) && file.size > 0 && file.size <= passthroughUnderBytes) {
+                const passthroughReader = new FileReader();
+                passthroughReader.onload = (e) => resolve(e.target.result);
+                passthroughReader.onerror = () => reject(new Error('Dosya okunamadı'));
+                passthroughReader.readAsDataURL(file);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return reject(new Error('Canvas desteklenmiyor'));
+
+                    let width = img.width;
+                    let height = img.height;
+
+                    const maxDim = Math.max(width, height);
+                    if (maxDim > maxSize) {
+                        const ratio = maxSize / maxDim;
+                        width = Math.max(1, Math.round(width * ratio));
+                        height = Math.max(1, Math.round(height * ratio));
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    try {
+                        const dataUrl = canvas.toDataURL(mimeType, quality);
+                        resolve(dataUrl);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                img.onerror = () => reject(new Error('Resim okunamadı'));
+                img.src = e.target.result;
+            };
+            reader.onerror = () => reject(new Error('Dosya okunamadı'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function getFriendlyOrderErrorMessage(e) {
+        const code = String((e && (e.code || e.errorCode)) || '').toLowerCase();
+        const msg = String((e && e.message) || e || '').trim();
+        const msgLower = msg.toLowerCase();
+
+        // Firebase/Firestore RESOURCE_EXHAUSTED genelde "Quota exceeded." olarak gelir
+        if (code === 'resource-exhausted' || msgLower.includes('quota exceeded')) {
+            return 'Sistem yoğun veya kota doldu. Lütfen birkaç dakika sonra tekrar deneyin.';
+        }
+
+        // Firestore doküman / istek boyutu limitleri
+        if (
+            msgLower.includes('request message must not be larger') ||
+            msgLower.includes('payload too large') ||
+            msgLower.includes('entity too large') ||
+            msgLower.includes('too large')
+        ) {
+            return 'Dekont fotoğrafı çok büyük. Daha küçük bir fotoğraf deneyin (ekran görüntüsü veya kırpma işe yarar).';
+        }
+
+        if (code === 'permission-denied' || msgLower.includes('missing or insufficient permissions')) {
+            return 'Yetki hatası. Lütfen çıkış yapıp tekrar giriş yapın.';
+        }
+
+        return msg || 'Bilinmeyen hata';
+    }
     
     // Sidebar badge'lerini güncelle
     function updateSidebarBadges() {
@@ -3844,17 +3930,24 @@
             showToast('❌ Dekont fotoğrafı seçin');
             return;
         }
+
+        const dekontFile = fileInput.files[0];
+        if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
+            showToast('❌ Sadece resim dosyası seçin');
+            return;
+        }
+
+        // Çok büyük dosyalarda cihaz/webview bellek sorunları yaşanabiliyor
+        if (dekontFile.size > 10 * 1024 * 1024) {
+            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            return;
+        }
         
         showToast('⏳ Sipariş gönderiliyor...');
         
         try {
-            // Dekont'u base64'e çevir
-            const dekontBase64 = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = () => reject(new Error('Dosya okunamadı'));
-                reader.readAsDataURL(fileInput.files[0]);
-            });
+            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
+            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
             
             // Sipariş objesi
             const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
@@ -3932,7 +4025,9 @@
             
         } catch(e) {
             console.error('Sipariş hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            const friendly = getFriendlyOrderErrorMessage(e);
+            const detail = (typeof isAdmin === 'function' && isAdmin()) ? ` (Kod: ${e && e.code ? e.code : 'yok'})` : '';
+            showToast('❌ Hata: ' + friendly + detail);
         }
     }
     // ==================== MERKEZİ ÖDEME SİSTEMİ SON ====================
@@ -9248,17 +9343,22 @@
             showToast('❌ Dekont fotoğrafı seçin');
             return;
         }
+
+        const dekontFile = fileInput.files[0];
+        if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
+            showToast('❌ Sadece resim dosyası seçin');
+            return;
+        }
+        if (dekontFile.size > 10 * 1024 * 1024) {
+            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            return;
+        }
         
         showToast('⏳ Sipariş gönderiliyor...');
         
         try {
-            // Dekont'u base64'e çevir
-            const dekontBase64 = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = () => reject(new Error('Dosya okunamadı'));
-                reader.readAsDataURL(fileInput.files[0]);
-            });
+            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
+            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
             
             // Yeni bitiş tarihi hesapla
             const newExpiry = new Date(currentExtendData.currentExpiry);
@@ -9308,7 +9408,9 @@
             
         } catch(e) {
             console.error('Süre uzatma hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            const friendly = getFriendlyOrderErrorMessage(e);
+            const detail = (typeof isAdmin === 'function' && isAdmin()) ? ` (Kod: ${e && e.code ? e.code : 'yok'})` : '';
+            showToast('❌ Hata: ' + friendly + detail);
         }
     }
     
@@ -16841,20 +16943,22 @@
         
         const fileInput = document.getElementById('dekontFile');
         if (!fileInput.files[0]) { showToast('❌ Dekont fotoğrafı seçin'); return; }
+
+        const dekontFile = fileInput.files[0];
+        if (!dekontFile.type || !dekontFile.type.startsWith('image/')) {
+            showToast('❌ Sadece resim dosyası seçin');
+            return;
+        }
+        if (dekontFile.size > 10 * 1024 * 1024) {
+            showToast('❌ Dekont dosyası çok büyük (max 10MB)');
+            return;
+        }
         
         showToast('⏳ Gönderiliyor...');
         
         try {
-            // Dekont'u base64'e çevir
-            const file = fileInput.files[0];
-            
-            // Promise ile FileReader kullan
-            const dekontBase64 = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(new Error('Dosya okunamadı'));
-                reader.readAsDataURL(file);
-            });
+            // Dekont'u sıkıştırıp base64'e çevir (Firestore limitlerine daha uyumlu)
+            const dekontBase64 = await compressReceiptImageToDataUrl(dekontFile);
             
             // Siparişi kaydet
             if (isDynamic) {
@@ -16932,7 +17036,9 @@
             
         } catch(e) {
             console.error('Sipariş hatası:', e);
-            showToast('❌ Hata: ' + e.message);
+            const friendly = getFriendlyOrderErrorMessage(e);
+            const detail = (typeof isAdmin === 'function' && isAdmin()) ? ` (Kod: ${e && e.code ? e.code : 'yok'})` : '';
+            showToast('❌ Hata: ' + friendly + detail);
         }
     }
     
