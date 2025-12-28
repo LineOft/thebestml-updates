@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.90';
+    const APP_VERSION = '4.2.91';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8868,8 +8868,13 @@
             const loop = async () => {
                 let sinceMs = 0;
                 try {
-                    const last = userChatMessages[userChatMessages.length - 1];
-                    sinceMs = last ? getFirestoreTimeMs(last.createdAt) : 0;
+                    for (let i = userChatMessages.length - 1; i >= 0; i--) {
+                        const m = userChatMessages[i];
+                        const id = (m && typeof m.id === 'string') ? m.id : '';
+                        if (!id || id.startsWith('local:')) continue;
+                        const t = getFirestoreTimeMs(m.createdAt);
+                        if (t > 0) { sinceMs = t; break; }
+                    }
                 } catch (e) {}
 
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
@@ -9663,8 +9668,11 @@
         }
         
         // Önce UI'da göster (optimistic update)
-        const now = new Date();
+        // NOTE: Use a local id so we can replace it with server id/createdAtMs after POST.
+        const localId = 'local:' + String(Math.random()).slice(2) + '-' + Date.now();
+        const now = Date.now();
         const newMessage = {
+            id: localId,
             sender: 'user',
             message: msgText,
             image: imageData,
@@ -9680,13 +9688,27 @@
             const lastMsgPreview = msgText || '📷 Görsel';
 
             if (isSupportWorkerEnabled()) {
-                await workerApiFetch(getSupportApiBase(), '/v1/support/messages', {
+                const sent = await workerApiFetch(getSupportApiBase(), '/v1/support/messages', {
                     method: 'POST',
                     body: {
                         message: msgText || '',
                         image: imageData || ''
                     }
                 });
+
+                // Replace optimistic message with server id/timestamp (prevents poll since() from getting stuck)
+                try {
+                    const serverId = sent && typeof sent.id === 'string' ? sent.id : '';
+                    const serverMs = sent && Number.isFinite(Number(sent.createdAtMs)) ? Number(sent.createdAtMs) : 0;
+                    if (serverId) {
+                        const idx = userChatMessages.findIndex((m) => m && m.id === localId);
+                        if (idx >= 0) {
+                            userChatMessages[idx].id = serverId;
+                            if (serverMs > 0) userChatMessages[idx].createdAt = serverMs;
+                            renderUserChatMessages();
+                        }
+                    }
+                } catch (e) {}
 
                 // Server timestamp + unread durumunu tazele
                 try { await refreshUserChatMessages(true); } catch (e) {}
