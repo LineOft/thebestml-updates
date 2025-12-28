@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.1';
+    const APP_VERSION = '4.3.2';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8207,7 +8207,7 @@
         // APK indirme butonu
         if (modalData.apkButton?.label && modalData.apkButton?.url) {
             html += `
-                <button onclick="window.open('${modalData.apkButton.url}', '_blank')" class="btn btn-primary" style="margin-bottom: 20px; width: 100%;">
+                <button onclick="openExternalUrl('${modalData.apkButton.url}')" class="btn btn-primary" style="margin-bottom: 20px; width: 100%;">
                     📥 ${modalData.apkButton.label}
                 </button>
             `;
@@ -13856,15 +13856,15 @@
         const actionType = step.actionType || 'none';
         
         if (actionType === 'playstore' && step.btnUrl) {
-            return `<button onclick="window.open('${step.btnUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #34a853, #0f9d58); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<button onclick="openExternalUrl('${step.btnUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #34a853, #0f9d58); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
                 <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da Aç'}
             </button>`;
         } else if (actionType === 'download' && step.downloadUrl) {
-            return `<button onclick="window.open('${step.downloadUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<button onclick="openExternalUrl('${step.downloadUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
                 <i class="fas fa-download"></i> ${step.btnText || 'İndir'}
             </button>`;
         } else if (actionType === 'link' && step.btnUrl) {
-            return `<button onclick="window.open('${step.btnUrl}', '_system')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #00b894, #00cec9); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<button onclick="openExternalUrl('${step.btnUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #00b894, #00cec9); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
                 <i class="fas fa-external-link-alt"></i> ${step.btnText || 'Bağlantıya Git'}
             </button>`;
         } else if (actionType === 'modal' && step.modalId) {
@@ -18327,17 +18327,48 @@
     }
 
     // APK İndir
+    // Harici tarayıcıda URL aç (indirmeler için)
+    function openExternalUrl(url) {
+        if (!url) return;
+        try {
+            // Capacitor/Cordova için _system kullan
+            // Android Intent ile harici tarayıcıyı zorla
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
+                window.Capacitor.Plugins.Browser.open({ url: url });
+                return;
+            }
+            
+            // Android WebView için intent URL dene
+            if (/android/i.test(navigator.userAgent)) {
+                const intentUrl = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
+                const opened = window.open(intentUrl, '_system');
+                if (!opened) {
+                    // Fallback: normal _system
+                    window.open(url, '_system');
+                }
+                return;
+            }
+            
+            // iOS ve diğerleri için _system
+            window.open(url, '_system');
+        } catch (e) {
+            console.error('Harici URL açılamadı:', e);
+            // Son çare: _blank
+            window.open(url, '_blank');
+        }
+    }
+
     function downloadAPK() {
         showToast('📥 İndirme başlatılıyor...');
 
         const overrideUrl = window.imguiApkUrlOverride;
         const url = overrideUrl || appConfig.apkUrl;
-        window.open(url, '_blank');
+        openExternalUrl(url);
     }
     
     // Play Store
     function openPlayStore() {
-        window.open(appConfig.playStoreUrl, '_blank');
+        openExternalUrl(appConfig.playStoreUrl);
     }
     
     // Fiyat seçimi

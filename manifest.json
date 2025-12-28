@@ -1,12 +1,13 @@
 {
-    "version": "4.3.1",
-    "buildNumber": 357,
-    "minBuildNumber": 356,
-    "required": true,
+    "version": "4.3.2",
+    "buildNumber": 358,
+    "minBuildNumber": 150,
+    "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Düzeltme: İndirme linkleri artık harici tarayıcıda açılır — indirmeler düzgün çalışır",
         "Hotfix: Kullanıcı destek modalı açıkken 2sn aralıklı polling — mesajlar anlık görünür",
         "Debug: Destek long-poll detaylı console.log eklendi — sorun teşhisi için",
         "Hotfix: Destek long-poll agresif self-heal — sunucu lastMessageAtMs > local ise mesajları zorla yenile",
