@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.99';
+    const APP_VERSION = '4.3.0';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8891,14 +8891,23 @@
             const loop = async () => {
                 let afterCursor = getSupportAfterCursorFromMessages(userChatMessages);
                 let lastSelfHealAt = 0;
+                console.log('💬 User poll loop başladı, cursor:', afterCursor);
 
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
                     try {
+                        console.log('💬 User poll isteği gönderiliyor... cursor:', afterCursor);
                         const res = await workerApiFetch(
                             getSupportApiBase(),
                             '/v1/support/poll?after=' + encodeURIComponent(afterCursor || ''),
                             { timeoutMs: 30000 }
                         );
+                        console.log('💬 User poll yanıtı:', JSON.stringify({
+                            ok: res?.ok,
+                            msgCount: res?.messages?.length || 0,
+                            cursor: res?.cursor,
+                            unreadUser: res?.ticket?.unreadUser,
+                            lastMsgAtMs: res?.ticket?.lastMessageAtMs
+                        }));
                         const ticket = res && res.ticket ? res.ticket : null;
                         const delta = normalizeSupportMessages(res && res.messages ? res.messages : []);
 
@@ -8915,7 +8924,9 @@
                         }
 
                         if (delta.length > 0) {
+                            console.log('💬 Delta mesajlar geldi:', delta.length, 'adet, ilk mesaj:', delta[0]?.sender, delta[0]?.message?.substring(0, 20));
                             userChatMessages = mergeSupportMessages(userChatMessages, delta);
+                            console.log('💬 Merge sonrası toplam mesaj:', userChatMessages.length);
                             // Fallback: compute cursor from merged messages if server didn't provide one
                             if (!serverCursor) {
                                 afterCursor = getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
@@ -8953,8 +8964,10 @@
 
                         const modal = document.getElementById('userChatModal');
                         const isModalOpen = modal && modal.classList.contains('show');
+                        console.log('💬 Modal açık mı:', isModalOpen, 'delta:', delta.length);
 
                         if (isModalOpen) {
+                            console.log('💬 Modal açık, renderUserChatMessages çağrılıyor...');
                             renderUserChatMessages();
                             scrollChatToBottom();
 
@@ -8965,6 +8978,7 @@
                         } else {
                             const adminMsg = delta.find((m) => m && m.sender === 'admin');
                             if (adminMsg) {
+                                console.log('💬 Modal kapalı, toast gösteriliyor');
                                 showToast('💬 Yeni destek mesajı!');
                                 sendNativeNotification('💬 Yeni Destek Mesajı', adminMsg.message || 'Destek ekibinden yeni mesaj');
                             }
