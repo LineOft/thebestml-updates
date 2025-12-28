@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.5';
+    const APP_VERSION = '4.3.6';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18392,23 +18392,25 @@
 
     // APK İndir
     // Harici tarayıcıda URL aç (indirmeler için)
-    function openExternalUrl(url) {
+    async function openExternalUrl(url) {
         if (!url) return;
         console.log('[ExtURL] Harici URL açılıyor:', url);
         
         try {
-            // Android'de her zaman intent URL kullan (harici tarayıcıyı zorla)
+            // Capacitor App plugin ile harici tarayıcıda aç (en güvenilir yöntem)
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+                console.log('[ExtURL] Capacitor App.openUrl kullanılıyor');
+                await window.Capacitor.Plugins.App.openUrl({ url: url });
+                return;
+            }
+            
+            // Capacitor yoksa veya çalışmazsa: Android intent URL
             if (/android/i.test(navigator.userAgent)) {
-                // URL'yi temizle
                 const cleanUrl = url.trim();
                 const scheme = cleanUrl.startsWith('https://') ? 'https' : 'http';
                 const urlWithoutScheme = cleanUrl.replace(/^https?:\/\//, '');
-                
-                // Intent URL oluştur - harici tarayıcıyı açar
                 const intentUrl = `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`;
                 console.log('[ExtURL] Intent URL:', intentUrl);
-                
-                // window.location ile dene (en güvenilir)
                 window.location.href = intentUrl;
                 return;
             }
@@ -18423,7 +18425,15 @@
             window.open(url, '_blank');
         } catch (e) {
             console.error('[ExtURL] Hata:', e);
-            // Son çare
+            // Son çare: intent URL dene
+            try {
+                if (/android/i.test(navigator.userAgent)) {
+                    const scheme = url.startsWith('https://') ? 'https' : 'http';
+                    const urlWithoutScheme = url.replace(/^https?:\/\//, '');
+                    window.location.href = `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`;
+                    return;
+                }
+            } catch (e2) { }
             window.open(url, '_blank');
         }
     }
