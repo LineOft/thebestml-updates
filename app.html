@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.9';
+    const APP_VERSION = '4.3.10';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8204,12 +8204,12 @@
             }
         }
         
-        // APK indirme butonu
+        // APK indirme butonu - v4.3.10 (a link olarak)
         if (modalData.apkButton?.label && modalData.apkButton?.url) {
             html += `
-                <button onclick="openExternalUrl('${modalData.apkButton.url}')" class="btn btn-primary" style="margin-bottom: 20px; width: 100%;">
+                <a href="${modalData.apkButton.url}" target="_blank" rel="noopener" class="btn btn-primary" style="display: block; text-align: center; margin-bottom: 20px; width: 100%; text-decoration: none;">
                     📥 ${modalData.apkButton.label}
-                </button>
+                </a>
             `;
         }
         
@@ -13851,22 +13851,23 @@
         }
     }
     
-    // Adım butonunu render et
+    // Adım butonunu render et - v4.3.10 (a link olarak)
     function renderStepButton(step) {
         const actionType = step.actionType || 'none';
+        const btnStyle = 'display: inline-block; margin-top: 8px; padding: 8px 16px; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; text-decoration: none;';
         
         if (actionType === 'playstore' && step.btnUrl) {
-            return `<button onclick="openExternalUrl('${step.btnUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #34a853, #0f9d58); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<a href="${step.btnUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #34a853, #0f9d58);">
                 <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da Aç'}
-            </button>`;
+            </a>`;
         } else if (actionType === 'download' && step.downloadUrl) {
-            return `<button onclick="openExternalUrl('${step.downloadUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<a href="${step.downloadUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #667eea, #764ba2);">
                 <i class="fas fa-download"></i> ${step.btnText || 'İndir'}
-            </button>`;
+            </a>`;
         } else if (actionType === 'link' && step.btnUrl) {
-            return `<button onclick="openExternalUrl('${step.btnUrl}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #00b894, #00cec9); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
+            return `<a href="${step.btnUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #00b894, #00cec9);">
                 <i class="fas fa-external-link-alt"></i> ${step.btnText || 'Bağlantıya Git'}
-            </button>`;
+            </a>`;
         } else if (actionType === 'modal' && step.modalId) {
             return `<button onclick="openModal('${step.modalId}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #e17055, #d63031); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
                 <i class="fas fa-info-circle"></i> ${step.btnText || 'Detaylar'}
