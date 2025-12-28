@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.94';
+    const APP_VERSION = '4.2.95';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -17405,16 +17405,22 @@
         if (banner) banner.remove();
         
         try {
+            const manifest = await fetchRemoteManifestNoCache();
+            const targetVersion = (manifest && manifest.version) ? manifest.version : null;
+
             const ts = Date.now();
             const r = Math.random().toString(36).slice(2);
 
-            // Öncelik raw (rate-limit yok), fallback API
+            // Öncelik: jsDelivr (genelde daha hızlı), sonra raw, sonra API
             const appUrls = [
+                `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=${ts}&r=${r}`,
                 `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=${ts}&r=${r}`,
                 `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${ts}&r=${r}`
             ];
 
             let appHtml = null;
+            let downloadedVersion = null;
+
             for (const url of appUrls) {
                 try {
                     const isApi = url.includes('api.github.com');
@@ -17425,35 +17431,38 @@
                             : { 'Cache-Control': 'no-store, no-cache, max-age=0', 'Pragma': 'no-cache' }
                     });
                     if (!res.ok) continue;
-                    appHtml = await res.text();
+
+                    const html = await res.text();
+                    if (html.length < 5000 || html.indexOf('APP_VERSION') === -1) continue;
+
+                    const match = html.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+                    const v = match ? match[1] : null;
+                    if (!v) continue;
+
+                    // GitHub raw bazen eski blob döndürebiliyor; hedef sürümden eskiyse kabul etme.
+                    if (targetVersion && compareVersions(v, targetVersion) < 0) {
+                        continue;
+                    }
+
+                    appHtml = html;
+                    downloadedVersion = v;
                     break;
                 } catch (e) {
                     // sıradakine geç
                 }
             }
 
-            if (!appHtml) throw new Error('Güncelleme indirilemedi');
-            
-            // İçerik kontrolü
-            if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {
-                throw new Error('Geçersiz güncelleme içeriği');
-            }
-            
-            // Sürüm çıkar
-            const match = appHtml.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
-            const downloadedVersion = match ? match[1] : 'Bilinmiyor';
-            
-            // OTA cache'e kaydet
+            if (!appHtml || !downloadedVersion) throw new Error('Güncelleme indirilemedi');
+
             localStorage.setItem('ota_app_html', appHtml);
             localStorage.setItem('ota_app_version', downloadedVersion);
-            
+
             showToast('✅ v' + downloadedVersion + ' başarıyla güncellendi!');
-            
-            // Güncellemeyi uygula - index.html'e yönlendir
+
             setTimeout(() => {
                 window.location.href = 'index.html';
             }, 1500);
-            
+
         } catch(e) {
             console.error('Güncelleme hatası:', e);
             showToast('❌ Güncelleme hatası: ' + e.message);
@@ -17485,11 +17494,13 @@
                 const ts = Date.now();
                 const r = Math.random().toString(36).slice(2);
                 const appUrls = [
+                    `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/app.html?t=${ts}&r=${r}`,
                     `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/app.html?t=${ts}&r=${r}`,
                     `https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=${ts}&r=${r}`
                 ];
 
                 let appHtml = null;
+                let downloadedVersion = null;
                 for (const url of appUrls) {
                     try {
                         const isApi = url.includes('api.github.com');
@@ -17500,28 +17511,27 @@
                                 : { 'Cache-Control': 'no-store, no-cache, max-age=0', 'Pragma': 'no-cache' }
                         });
                         if (!res.ok) continue;
-                        appHtml = await res.text();
+                        const html = await res.text();
+                        if (html.length < 5000 || html.indexOf('APP_VERSION') === -1) continue;
+
+                        const match = html.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+                        const v = match ? match[1] : null;
+                        if (!v) continue;
+                        if (manifest.version && compareVersions(v, manifest.version) < 0) continue;
+
+                        appHtml = html;
+                        downloadedVersion = v;
                         break;
                     } catch (e) {
                         // sıradakine geç
                     }
                 }
 
-                if (!appHtml) throw new Error('Güncelleme indirilemedi');
-                
-                // İçerik kontrolü
-                if (appHtml.length < 5000 || appHtml.indexOf('APP_VERSION') === -1) {
-                    throw new Error('Geçersiz güncelleme içeriği');
-                }
-                
-                // Sürüm çıkar
-                const match = appHtml.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
-                const downloadedVersion = match ? match[1] : manifest.version;
-                
-                // OTA cache'e kaydet
+                if (!appHtml || !downloadedVersion) throw new Error('Güncelleme indirilemedi');
+
                 localStorage.setItem('ota_app_html', appHtml);
                 localStorage.setItem('ota_app_version', downloadedVersion);
-                
+
                 showToast('✅ v' + downloadedVersion + ' yüklendi! Yeniden başlatılıyor...');
                 
                 // Güncellemeyi uygula - index.html'e yönlendir (o cache'den yükler)

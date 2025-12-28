@@ -102,6 +102,7 @@
 
     <script>
         var GITHUB = 'https://raw.githubusercontent.com/LineOft/thebestml-updates/main/';
+        var JSDELIVR = 'https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/';
         var CACHE_KEY = 'ota_app_html';
         var VERSION_KEY = 'ota_app_version';
         var MIN_VERSION = '3.14.90'; // Bu versiyondan düşükse cache temizle
@@ -174,6 +175,93 @@
             }
             return false;
         }
+
+        function extractAppVersion(html) {
+            try {
+                var m = String(html || '').match(/APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]/);
+                return m ? m[1] : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function isValidAppHtml(html) {
+            return !!(html && html.length > 5000 && html.indexOf('APP_VERSION') !== -1);
+        }
+
+        function noStoreHeaders(isApi) {
+            if (isApi) {
+                return {
+                    'Cache-Control': 'no-cache',
+                    'Accept': 'application/vnd.github.v3.raw'
+                };
+            }
+            return {
+                'Cache-Control': 'no-store, no-cache, max-age=0',
+                'Pragma': 'no-cache'
+            };
+        }
+
+        function fetchTextWithNoCache(url) {
+            var isApi = url.indexOf('api.github.com') !== -1;
+            return fetch(url, { cache: 'no-store', headers: noStoreHeaders(isApi) })
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+        }
+
+        function fetchJsonWithNoCache(url) {
+            var isApi = url.indexOf('api.github.com') !== -1;
+            return fetch(url, { cache: 'no-store', headers: noStoreHeaders(isApi) })
+                .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                .then(function(t) { return JSON.parse(t); });
+        }
+
+        function fetchManifestNoCache() {
+            var ts = Date.now();
+            var r = Math.random().toString(36).slice(2);
+
+            var urls = [
+                JSDELIVR + 'manifest.json?t=' + ts + '&r=' + r,
+                GITHUB + 'manifest.json?t=' + ts + '&r=' + r,
+                'https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?t=' + ts + '&r=' + r
+            ];
+
+            var i = 0;
+            function next() {
+                if (i >= urls.length) return Promise.reject(new Error('Manifest alınamadı'));
+                var url = urls[i++];
+                return fetchJsonWithNoCache(url).catch(function() { return next(); });
+            }
+            return next();
+        }
+
+        function downloadLatestAppHtml(serverVersion) {
+            var ts = Date.now();
+            var r = Math.random().toString(36).slice(2);
+
+            var urls = [
+                JSDELIVR + 'app.html?t=' + ts + '&r=' + r,
+                GITHUB + 'app.html?t=' + ts + '&r=' + r,
+                'https://api.github.com/repos/LineOft/thebestml-updates/contents/app.html?t=' + ts + '&r=' + r
+            ];
+
+            var i = 0;
+            function tryNext() {
+                if (i >= urls.length) return Promise.reject(new Error('Güncelleme indirilemedi'));
+                var url = urls[i++];
+                return fetchTextWithNoCache(url)
+                    .then(function(html) {
+                        if (!isValidAppHtml(html)) throw new Error('Geçersiz içerik');
+                        var v = extractAppVersion(html);
+                        if (!v) throw new Error('Sürüm okunamadı');
+                        // CDN bazen eski blob döndürebiliyor; manifest sürümünden eskiyse kabul etme.
+                        if (serverVersion && isNewer(serverVersion, v)) throw new Error('Stale içerik (' + v + ')');
+                        return { html: html, version: v };
+                    })
+                    .catch(function() { return tryNext(); });
+            }
+
+            return tryNext();
+        }
         
         function init() {
             console.log('[OTA] Başlatılıyor...');
@@ -186,11 +274,7 @@
             console.log('[OTA] Cache versiyonu:', cachedVersion);
             
             // Manifest kontrol
-            fetch(GITHUB + 'manifest.json?t=' + Date.now(), { cache: 'no-store' })
-                .then(function(r) { 
-                    if (!r.ok) throw new Error('HTTP ' + r.status);
-                    return r.json(); 
-                })
+            fetchManifestNoCache()
                 .then(function(manifest) {
                     progress(30);
                     var serverVersion = manifest.version || '0';
@@ -203,21 +287,13 @@
                         status('Güncelleme indiriliyor...');
                         progress(50);
                         
-                        fetch(GITHUB + 'app.html?t=' + Date.now(), { cache: 'no-store' })
-                            .then(function(r) { 
-                                if (!r.ok) throw new Error('HTTP ' + r.status);
-                                return r.text(); 
-                            })
-                            .then(function(html) {
+                        downloadLatestAppHtml(serverVersion)
+                            .then(function(result) {
                                 progress(80);
-                                if (html && html.length > 5000) {
-                                    localStorage.setItem(CACHE_KEY, html);
-                                    localStorage.setItem(VERSION_KEY, serverVersion);
-                                    console.log('[OTA] Cache güncellendi: v' + serverVersion);
-                                    loadApp(html);
-                                } else {
-                                    throw new Error('Geçersiz içerik');
-                                }
+                                localStorage.setItem(CACHE_KEY, result.html);
+                                localStorage.setItem(VERSION_KEY, result.version);
+                                console.log('[OTA] Cache güncellendi: v' + result.version);
+                                loadApp(result.html);
                             })
                             .catch(function(e) {
                                 console.error('[OTA] İndirme hatası:', e);
@@ -238,16 +314,11 @@
                         } else {
                             // Cache boş, indir
                             status('İlk yükleme...');
-                            fetch(GITHUB + 'app.html?t=' + Date.now(), { cache: 'no-store' })
-                                .then(function(r) { return r.text(); })
-                                .then(function(html) {
-                                    if (html && html.length > 5000) {
-                                        localStorage.setItem(CACHE_KEY, html);
-                                        localStorage.setItem(VERSION_KEY, serverVersion);
-                                        loadApp(html);
-                                    } else {
-                                        throw new Error('Geçersiz içerik');
-                                    }
+                            downloadLatestAppHtml(serverVersion)
+                                .then(function(result) {
+                                    localStorage.setItem(CACHE_KEY, result.html);
+                                    localStorage.setItem(VERSION_KEY, result.version);
+                                    loadApp(result.html);
                                 })
                                 .catch(function(e) {
                                     showError('Yükleme hatası: ' + e.message);
