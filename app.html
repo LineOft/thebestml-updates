@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.93';
+    const APP_VERSION = '4.2.94';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -8678,6 +8678,20 @@
         }));
     }
 
+    function getSupportAfterCursorFromMessages(messages) {
+        try {
+            const arr = Array.isArray(messages) ? messages : [];
+            for (let i = arr.length - 1; i >= 0; i--) {
+                const m = arr[i];
+                const id = (m && typeof m.id === 'string') ? m.id : '';
+                if (!id || id.startsWith('local:')) continue;
+                const ms = getFirestoreTimeMs(m.createdAt);
+                if (ms > 0) return String(ms) + ':' + id;
+            }
+        } catch (e) {}
+        return '';
+    }
+
     function delay(ms) {
         return new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.floor(ms || 0))));
     }
@@ -8866,26 +8880,15 @@
             };
 
             const loop = async () => {
-                let sinceMs = 0;
-                try {
-                    for (let i = userChatMessages.length - 1; i >= 0; i--) {
-                        const m = userChatMessages[i];
-                        const id = (m && typeof m.id === 'string') ? m.id : '';
-                        if (!id || id.startsWith('local:')) continue;
-                        const t = getFirestoreTimeMs(m.createdAt);
-                        if (t > 0) { sinceMs = t; break; }
-                    }
-                } catch (e) {}
+                let afterCursor = getSupportAfterCursorFromMessages(userChatMessages);
 
                 while (supportUserPollToken === token && currentUser && isSupportWorkerEnabled()) {
                     try {
-                        // Safety window: Cloudflare edge clocks can skew. Rewind since a bit; mergeSupportMessages dedupes by id.
-                        const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 15000);
-                            const res = await workerApiFetch(
-                                getSupportApiBase(),
-                                '/v1/support/poll?since=' + encodeURIComponent(String(sinceParam)),
-                                { timeoutMs: 30000 }
-                            );
+                        const res = await workerApiFetch(
+                            getSupportApiBase(),
+                            '/v1/support/poll?after=' + encodeURIComponent(afterCursor || ''),
+                            { timeoutMs: 30000 }
+                        );
                         const ticket = res && res.ticket ? res.ticket : null;
                         const delta = normalizeSupportMessages(res && res.messages ? res.messages : []);
 
@@ -8897,9 +8900,8 @@
 
                         if (delta.length > 0) {
                             userChatMessages = mergeSupportMessages(userChatMessages, delta);
-                            const lastDelta = delta[delta.length - 1];
-                            const lastMs = getFirestoreTimeMs(lastDelta && lastDelta.createdAt);
-                            if (lastMs > sinceMs) sinceMs = lastMs;
+                            const serverCursor = (res && typeof res.cursor === 'string') ? res.cursor : '';
+                            afterCursor = serverCursor || getSupportAfterCursorFromMessages(userChatMessages) || afterCursor;
                         }
 
                         const modal = document.getElementById('userChatModal');
@@ -9963,20 +9965,13 @@
                 await markAdminSupportSeen(chatId, true);
 
                 const loop = async () => {
-                    let sinceMs = 0;
-                    try {
-                        const msgs = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
-                        const lastMsg = msgs[msgs.length - 1];
-                        sinceMs = lastMsg ? getFirestoreTimeMs(lastMsg.createdAt) : 0;
-                    } catch (e) {}
+                    let afterCursor = getSupportAfterCursorFromMessages(lastAdminChatMessages);
 
                     while (supportAdminPollToken === token && isSupportWorkerEnabled() && currentAdminChatId === chatId) {
                         try {
-                            // Safety window: Cloudflare edge clocks can skew. Rewind since a bit; mergeSupportMessages dedupes by id.
-                            const sinceParam = Math.max(0, (Number(sinceMs) || 0) - 15000);
                             const res = await workerApiFetch(
                                 getSupportApiBase(),
-                                '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?since=' + encodeURIComponent(String(sinceParam)),
+                                '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/poll?after=' + encodeURIComponent(afterCursor || ''),
                                 { timeoutMs: 30000 }
                             );
 
@@ -10003,9 +9998,8 @@
                                 const merged = mergeSupportMessages(existing, delta);
                                 renderAdminChatMessages(merged);
 
-                                const lastDelta = delta[delta.length - 1];
-                                const lastMs = getFirestoreTimeMs(lastDelta && lastDelta.createdAt);
-                                if (lastMs > sinceMs) sinceMs = lastMs;
+                                const serverCursor = (res && typeof res.cursor === 'string') ? res.cursor : '';
+                                afterCursor = serverCursor || getSupportAfterCursorFromMessages(lastAdminChatMessages) || afterCursor;
                             }
 
                             const msgs = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
