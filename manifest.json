@@ -1,12 +1,14 @@
 {
     "version": "4.2.74",
-    "buildNumber": 326,
+    "buildNumber": 327,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Performans: Üye listesi (admin panel) realtime dinleme kapatıldı, tek seferlik yükleme yapar (Spark kota tasarrufu)",
+        "Performans: Admin metrikleri için pahalı taramalar kaldırıldı (Spark kota tasarrufu)",
         "Performans: Firestore kota tüketimini azaltmak için online/presence heartbeat ve destek sohbeti yenileme (polling) optimize edildi",
         "Düzeltme: Sipariş oluştururken görülen 'Quota exceeded' hatası için dekont otomatik sıkıştırma + daha açıklayıcı hata mesajı eklendi",
         "Düzeltme: Aylık özet sipariş silme artık arşiv kaydını da siler (listede kalma sorunu giderildi)",

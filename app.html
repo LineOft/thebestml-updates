@@ -10540,17 +10540,14 @@
                 const d = statsDoc.data() || {};
                 const ms = Number(d.totalAppMs);
                 if (Number.isFinite(ms) && ms > 0) metrics.totalAppMs = ms;
+
+                // Spark kotasını korumak için pahalı koleksiyon taramalarını kullanma.
+                // Bu sayılar incrementAdminStatField ile birikiyor.
+                const approved = Number(d.approvedOrdersCount);
+                if (Number.isFinite(approved) && approved > 0) metrics.approvedOrders = Math.floor(approved);
+                const claimed = Number(d.claimedChatsCount);
+                if (Number.isFinite(claimed) && claimed > 0) metrics.claimedChats = Math.floor(claimed);
             }
-        } catch (e) {}
-
-        try {
-            const snap = await db.collection('orders').where('approvedBy', '==', safeEmail).get();
-            metrics.approvedOrders = snap.size || 0;
-        } catch (e) {}
-
-        try {
-            const snap = await db.collection('chats').where('claimedByEmail', '==', safeEmail).get();
-            metrics.claimedChats = snap.size || 0;
         } catch (e) {}
 
         return metrics;
@@ -13788,130 +13785,128 @@
         container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">⏳ Yükleniyor...</div>';
         
         try {
+            // Spark (ücretsiz) kotayı korumak için: tüm üyeleri realtime dinleme KAPALI.
+            // Üye listesini sadece istek anında tek sefer çek.
             stopUsersRealtimeListener();
 
-            usersRealtimeListener = db.collection('users').onSnapshot((usersSnapshot) => {
-                countEl.textContent = usersSnapshot.size;
-                if (onlineCountEl) onlineCountEl.textContent = '0';
+            const usersSnapshot = await db.collection('users').get();
+            countEl.textContent = usersSnapshot.size;
+            if (onlineCountEl) onlineCountEl.textContent = '0';
 
-                if (usersSnapshot.empty) {
-                    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Henüz üye yok</div>';
-                    return;
+            if (usersSnapshot.empty) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #aaa;">Henüz üye yok</div>';
+                return;
+            }
+
+            const now = new Date();
+
+            // Kullanıcıları admin ve normal olarak ayır
+            let adminUsers = [];
+            let normalUsers = [];
+            let onlineCount = 0;
+
+            usersSnapshot.forEach(doc => {
+                const user = doc.data();
+                const userId = doc.id;
+                const email = user.email || 'E-posta yok';
+
+                // Kurucu/Admin kontrolü
+                const isUserOwner = isOwnerEmail(email);
+                const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
+
+                if (isUserOnline(user)) onlineCount++;
+
+                const userData = {
+                    userId,
+                    email,
+                    user,
+                    isAdmin: isUserAdmin,
+                    isOwner: isUserOwner
+                };
+
+                if (isUserAdmin) {
+                    adminUsers.push(userData);
+                } else {
+                    normalUsers.push(userData);
+                }
+            });
+
+            if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
+
+            // HTML oluştur
+            let usersHtml = '';
+
+            // Önce adminleri göster
+            [...adminUsers, ...normalUsers].forEach(({ userId, email, user, isAdmin: isUserAdmin, isOwner: isUserOwner }) => {
+                const keys = user.keys || [];
+
+                // Aktif key sayısı
+                const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
+                const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
+
+                // Durum belirleme
+                let statusBadge = '';
+                let statusIcon = '';
+                if (activeKeys.length > 0) {
+                    statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTİF</span>`;
+                    statusIcon = '🟢';
+                } else if (expiredKeys.length > 0) {
+                    statusBadge = `<span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">DOLDU</span>`;
+                    statusIcon = '🟠';
+                } else {
+                    statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENİ</span>`;
+                    statusIcon = '⚪';
                 }
 
-                const now = new Date();
+                // Kurucu/Admin badge - Kurucu ve Admin için farklı etiket
+                let roleBadge = '';
+                if (isUserOwner) {
+                    roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👑 KURUCU</span>`;
+                } else if (isUserAdmin) {
+                    roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👮 ADMİN</span>`;
+                }
 
-                // Kullanıcıları admin ve normal olarak ayır
-                let adminUsers = [];
-                let normalUsers = [];
-                let onlineCount = 0;
+                // Kayıt tarihi
+                const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleDateString('tr-TR') : 'Bilinmiyor';
 
-                usersSnapshot.forEach(doc => {
-                    const user = doc.data();
-                    const userId = doc.id;
-                    const email = user.email || 'E-posta yok';
+                const online = isUserOnline(user);
+                const lastLoginDate = toDate(user.lastLogin) || toDate(user.lastLoginAt);
+                const lastLoginText = formatTrDateTime(lastLoginDate);
 
-                    // Kurucu/Admin kontrolü
-                    const isUserOwner = isOwnerEmail(email);
-                    const isUserAdmin = isUserOwner || adminEmails.includes(email.toLowerCase());
+                const onlineOrLastLogin = online
+                    ? `<span style="color: #4CAF50; font-weight: bold;">🟢 ÇEVRİMİÇİ</span>`
+                    : `<span style="color: #888;">🕒 Son giriş: ${lastLoginText}</span>`;
 
-                    if (isUserOnline(user)) onlineCount++;
+                // Kurucu/Admin için özel border
+                let cardStyle = 'background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                if (isUserOwner) {
+                    cardStyle = 'background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                } else if (isUserAdmin) {
+                    cardStyle = 'background: rgba(156,39,176,0.15); border: 1px solid rgba(156,39,176,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
+                }
 
-                    const userData = {
-                        userId,
-                        email,
-                        user,
-                        isAdmin: isUserAdmin,
-                        isOwner: isUserOwner
-                    };
-
-                    if (isUserAdmin) {
-                        adminUsers.push(userData);
-                    } else {
-                        normalUsers.push(userData);
-                    }
-                });
-
-                if (onlineCountEl) onlineCountEl.textContent = String(onlineCount);
-
-                // HTML oluştur
-                let usersHtml = '';
-
-                // Önce adminleri göster
-                [...adminUsers, ...normalUsers].forEach(({ userId, email, user, isAdmin: isUserAdmin, isOwner: isUserOwner }) => {
-                    const keys = user.keys || [];
-
-                    // Aktif key sayısı
-                    const activeKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() > now);
-                    const expiredKeys = keys.filter(k => k.expiresAt && k.expiresAt.toDate() <= now);
-
-                    // Durum belirleme
-                    let statusBadge = '';
-                    let statusIcon = '';
-                    if (activeKeys.length > 0) {
-                        statusBadge = `<span style="background: #4CAF50; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">AKTİF</span>`;
-                        statusIcon = '🟢';
-                    } else if (expiredKeys.length > 0) {
-                        statusBadge = `<span style="background: #FF9800; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">DOLDU</span>`;
-                        statusIcon = '🟠';
-                    } else {
-                        statusBadge = `<span style="background: #9E9E9E; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px;">YENİ</span>`;
-                        statusIcon = '⚪';
-                    }
-
-                    // Kurucu/Admin badge - Kurucu ve Admin için farklı etiket
-                    let roleBadge = '';
-                    if (isUserOwner) {
-                        roleBadge = `<span style="background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👑 KURUCU</span>`;
-                    } else if (isUserAdmin) {
-                        roleBadge = `<span style="background: linear-gradient(135deg, #9C27B0, #7B1FA2); color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold;">👮 ADMİN</span>`;
-                    }
-
-                    // Kayıt tarihi
-                    const createdAt = user.createdAt ? user.createdAt.toDate().toLocaleDateString('tr-TR') : 'Bilinmiyor';
-
-                    const online = isUserOnline(user);
-                    const lastLoginDate = toDate(user.lastLogin) || toDate(user.lastLoginAt);
-                    const lastLoginText = formatTrDateTime(lastLoginDate);
-
-                    const onlineOrLastLogin = online
-                        ? `<span style="color: #4CAF50; font-weight: bold;">🟢 ÇEVRİMİÇİ</span>`
-                        : `<span style="color: #888;">🕒 Son giriş: ${lastLoginText}</span>`;
-
-                    // Kurucu/Admin için özel border
-                    let cardStyle = 'background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                    if (isUserOwner) {
-                        cardStyle = 'background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                    } else if (isUserAdmin) {
-                        cardStyle = 'background: rgba(156,39,176,0.15); border: 1px solid rgba(156,39,176,0.4); border-radius: 10px; padding: 12px; margin-bottom: 8px; transition: all 0.2s;';
-                    }
-
-                    usersHtml += `
-                        <div style="${cardStyle}" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;" onclick="openUserDetail('${userId}')">>
-                                    <span style="font-size: 18px;">${isUserOwner ? '👑' : (isUserAdmin ? '👮' : statusIcon)}</span>
-                                    <div style="min-width: 0;">
-                                        <div style="font-size: 13px; color: #fff; word-break: break-all;">${email}</div>
-                                        <div style="font-size: 11px; color: #888; margin-top: 2px;">📅 ${createdAt} • 🔑 ${activeKeys.length} aktif, ${expiredKeys.length} dolmuş • ${onlineOrLastLogin}</div>
-                                    </div>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    ${roleBadge}
-                                    ${!isUserAdmin && !isUserOwner ? statusBadge : ''}
-                                    ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Üyeyi Sil">🗑️</button>` : ''}
-                                    <span style="color: #666;" onclick="openUserDetail('${userId}')">›</span>
+                usersHtml += `
+                    <div style="${cardStyle}" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer;" onclick="openUserDetail('${userId}')">>
+                                <span style="font-size: 18px;">${isUserOwner ? '👑' : (isUserAdmin ? '👮' : statusIcon)}</span>
+                                <div style="min-width: 0;">
+                                    <div style="font-size: 13px; color: #fff; word-break: break-all;">${email}</div>
+                                    <div style="font-size: 11px; color: #888; margin-top: 2px;">📅 ${createdAt} • 🔑 ${activeKeys.length} aktif, ${expiredKeys.length} dolmuş • ${onlineOrLastLogin}</div>
                                 </div>
                             </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                ${roleBadge}
+                                ${!isUserAdmin && !isUserOwner ? statusBadge : ''}
+                                ${isOwner() && !isUserAdmin && !isUserOwner ? `<button onclick="event.stopPropagation(); deleteUser('${userId}', '${email}')" style="background: #f44336; border: none; color: #fff; padding: 4px 8px; border-radius: 5px; font-size: 10px; cursor: pointer; margin-left: 4px;" title="Üyeyi Sil">🗑️</button>` : ''}
+                                <span style="color: #666;" onclick="openUserDetail('${userId}')">›</span>
+                            </div>
                         </div>
-                    `;
-                });
-
-                container.innerHTML = usersHtml;
-            }, (e) => {
-                console.error('Üye dinleme hatası:', e);
-                container.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
+                    </div>
+                `;
             });
+
+            container.innerHTML = usersHtml;
         } catch (e) {
             console.error('Üye yükleme hatası:', e);
             container.innerHTML = `<div style="color: #f44336; text-align: center; padding: 20px;">Hata: ${e.message}</div>`;
