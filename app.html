@@ -2940,7 +2940,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.75';
+    const APP_VERSION = '4.2.76';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4367,7 +4367,7 @@
         const estimated = (remoteRuntimeConfig && remoteRuntimeConfig.maintenanceEstimatedTime) || '';
 
         const html = `
-            <div id="remoteMaintenanceScreen" style="min-height: 100vh; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px;">
+            <div id="remoteMaintenanceScreen" style="position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e, #16213e); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999999;">
                 <div style="max-width: 420px; width: 100%; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 16px; padding: 22px; text-align: center;">
                     <div style="font-size: 54px; margin-bottom: 10px;">🔧</div>
                     <h1 style="color: #fff; margin-bottom: 12px; font-size: 22px;">${title}</h1>
@@ -4379,8 +4379,12 @@
             </div>
         `;
 
-        // Uygulama root alanına bas
-        document.body.innerHTML = html;
+        try {
+            document.body.insertAdjacentHTML('beforeend', html);
+        } catch (e) {
+            // Fallback: en azından body'yi boş bırakmayalım
+            try { document.body.innerHTML = html; } catch (e2) {}
+        }
     }
 
     function hideRemoteMaintenanceScreen() {
