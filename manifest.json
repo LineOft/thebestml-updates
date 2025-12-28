@@ -1,12 +1,14 @@
 {
-    "version": "4.2.79",
-    "buildNumber": 335,
+    "version": "4.2.80",
+    "buildNumber": 336,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Düzeltme: Admin panel sipariş yönetimi Cloudflare Worker/D1 ile uyumlu (bekleyen liste + detay + onay/red)",
+        "Düzeltme: Worker sipariş gönderiminde paket/alanlar string'e zorlanır + hata detayları (HTTP/payload) gösterilir",
         "Düzeltme: Sipariş gönderimi Cloudflare Worker/D1 üzerinden (Firestore kotadan bağımsız)",
         "Acil: Bakım modu aktif (trafik kesme) + zorunlu güncelleme",
         "Acil: Firestore kota dolunca GitHub config ile bakım kilidi (trafik kesme)",
