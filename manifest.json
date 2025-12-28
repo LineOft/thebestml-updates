@@ -1,12 +1,13 @@
 {
-    "version": "4.3.3",
-    "buildNumber": 359,
+    "version": "4.3.4",
+    "buildNumber": 360,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Düzeltme: OTA manifest fetch XMLHttpRequest ile yeniden yazıldı — WebView uyumluluğu artırıldı",
         "Düzeltme: OTA manifest ek CDN kaynağı (jsDelivr) + detaylı hata mesajları",
         "Düzeltme: İndirme linkleri artık harici tarayıcıda açılır — indirmeler düzgün çalışır",
         "Hotfix: Kullanıcı destek modalı açıkken 2sn aralıklı polling — mesajlar anlık görünür",
