@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.87';
+    const APP_VERSION = '4.2.88';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -11704,6 +11704,37 @@
             return false;
         }
     }
+
+    // Worker/D1 admin allowlist senkronu (owner-only endpoint). Best-effort.
+    async function syncAdminToWorkerAllowlist(email, shouldBeAdmin) {
+        try {
+            const base = getOrdersApiBase() || getSupportApiBase();
+            if (!base) return false;
+            if (!currentUser) return false;
+            if (!isOwner()) return false; // Worker endpoint owner-only
+
+            const normalized = normalizeEmail(email);
+            if (!normalized) return false;
+
+            if (shouldBeAdmin) {
+                await workerApiFetch(base, '/v1/admin/admins', {
+                    method: 'POST',
+                    body: { email: normalized },
+                    timeoutMs: 15000
+                });
+            } else {
+                // Not encoding email here; Worker parses path parts and normalizes.
+                await workerApiFetch(base, '/v1/admin/admins/' + normalized, {
+                    method: 'DELETE',
+                    timeoutMs: 15000
+                });
+            }
+            return true;
+        } catch (e) {
+            // sessiz: Firestore tarafı çalışsa bile Worker senkronu anlık hata verebilir
+            return false;
+        }
+    }
     
     // Admin ekle (ADMIN YÖNETİMİ YETKİSİ GEREKLİ)
     async function addAdmin(email, permissions = ['orders', 'support', 'members_view']) {
@@ -11736,6 +11767,8 @@
             adminEmails.push(email);
             
             if (await saveAdminList()) {
+                // Worker/D1 tarafına da yaz (admin panelden eklenen adminler otomatik tanınsın)
+                syncAdminToWorkerAllowlist(email, true);
                 showToast('✅ ' + email + ' admin yapıldı!');
                 return true;
             }
@@ -11768,6 +11801,8 @@
             adminEmails = adminEmails.filter(e => e !== email);
             
             if (await saveAdminList()) {
+                // Worker/D1 tarafından da kaldır
+                syncAdminToWorkerAllowlist(email, false);
                 showToast('✅ ' + email + ' artık admin değil');
                 loadAdminListUI();
                 return true;
