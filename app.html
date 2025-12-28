@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.6';
+    const APP_VERSION = '4.3.7';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18391,51 +18391,87 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç (indirmeler için)
+    // Harici tarayıcıda URL aç (indirmeler için) - v4.3.7
     async function openExternalUrl(url) {
         if (!url) return;
         console.log('[ExtURL] Harici URL açılıyor:', url);
         
+        const isAndroid = /android/i.test(navigator.userAgent);
+        
+        // Android için Intent URL oluştur
+        function createIntentUrl(targetUrl) {
+            const cleanUrl = targetUrl.trim();
+            const scheme = cleanUrl.startsWith('https://') ? 'https' : 'http';
+            const urlWithoutScheme = cleanUrl.replace(/^https?:\/\//, '');
+            return `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;package=com.android.chrome;end`;
+        }
+        
+        // YÖNTEM 1: Android için doğrudan Intent URL (en güvenilir)
+        if (isAndroid) {
+            console.log('[ExtURL] Android tespit edildi, Intent URL deneniyor');
+            
+            // Önce Chrome'a yönlendir
+            const intentUrl = createIntentUrl(url);
+            console.log('[ExtURL] Intent URL:', intentUrl);
+            
+            // iframe ile dene (WebView'ı bypass eder)
+            try {
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = intentUrl;
+                document.body.appendChild(iframe);
+                
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 2000);
+                
+                // 500ms bekle, açılmazsa alternatif dene
+                setTimeout(async () => {
+                    // Capacitor App plugin dene
+                    if (window.Capacitor?.Plugins?.App?.openUrl) {
+                        try {
+                            console.log('[ExtURL] Capacitor fallback deneniyor');
+                            await window.Capacitor.Plugins.App.openUrl({ url: url });
+                        } catch (e) {
+                            console.log('[ExtURL] Capacitor hata:', e);
+                        }
+                    }
+                }, 500);
+                
+                return;
+            } catch (e) {
+                console.log('[ExtURL] iframe yöntemi başarısız:', e);
+            }
+            
+            // iframe başarısız olursa location.href dene
+            try {
+                window.location.href = intentUrl;
+                return;
+            } catch (e) {
+                console.log('[ExtURL] location.href başarısız:', e);
+            }
+        }
+        
+        // YÖNTEM 2: Capacitor App plugin
         try {
-            // Capacitor App plugin ile harici tarayıcıda aç (en güvenilir yöntem)
-            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+            if (window.Capacitor?.Plugins?.App?.openUrl) {
                 console.log('[ExtURL] Capacitor App.openUrl kullanılıyor');
                 await window.Capacitor.Plugins.App.openUrl({ url: url });
                 return;
             }
-            
-            // Capacitor yoksa veya çalışmazsa: Android intent URL
-            if (/android/i.test(navigator.userAgent)) {
-                const cleanUrl = url.trim();
-                const scheme = cleanUrl.startsWith('https://') ? 'https' : 'http';
-                const urlWithoutScheme = cleanUrl.replace(/^https?:\/\//, '');
-                const intentUrl = `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`;
-                console.log('[ExtURL] Intent URL:', intentUrl);
-                window.location.href = intentUrl;
-                return;
-            }
-            
-            // iOS için
-            if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
-                window.open(url, '_system');
-                return;
-            }
-            
-            // Diğerleri için
-            window.open(url, '_blank');
         } catch (e) {
-            console.error('[ExtURL] Hata:', e);
-            // Son çare: intent URL dene
-            try {
-                if (/android/i.test(navigator.userAgent)) {
-                    const scheme = url.startsWith('https://') ? 'https' : 'http';
-                    const urlWithoutScheme = url.replace(/^https?:\/\//, '');
-                    window.location.href = `intent://${urlWithoutScheme}#Intent;scheme=${scheme};action=android.intent.action.VIEW;end`;
-                    return;
-                }
-            } catch (e2) { }
-            window.open(url, '_blank');
+            console.error('[ExtURL] Capacitor hata:', e);
         }
+        
+        // YÖNTEM 3: iOS için
+        if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+            window.open(url, '_system');
+            return;
+        }
+        
+        // YÖNTEM 4: Son çare - yeni pencere
+        console.log('[ExtURL] Fallback: window.open');
+        window.open(url, '_blank');
     }
 
     function downloadAPK() {
