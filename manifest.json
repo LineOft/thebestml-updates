@@ -1,12 +1,13 @@
 {
-    "version": "4.2.74",
-    "buildNumber": 330,
+    "version": "4.2.75",
+    "buildNumber": 331,
     "minBuildNumber": 150,
-    "required": false,
+    "required": true,
     "releaseDate": "2025-12-28",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "Acil: Bakım modu aktif (trafik kesme) + zorunlu güncelleme",
         "Acil: Firestore kota dolunca GitHub config ile bakım kilidi (trafik kesme)",
         "Stabilite: Dekont Storage yüklemesi hata verirse otomatik alternatif (base64) yönteme düşer",
         "Performans: Dekontlar artık Firebase Storage'a yüklenir, Firestore'da sadece URL tutulur (Spark kota tasarrufu)",

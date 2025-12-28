@@ -2940,7 +2940,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.2.74';
+    const APP_VERSION = '4.2.75';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -4396,6 +4396,17 @@
             }
         } catch (e) {}
     };
+
+    // Sayfa açılır açılmaz bakım aktifse ekranı bas (auth beklemeden).
+    // Auth callback'i izinli ekip/owner için ekranı zaten kaldırır.
+    (async () => {
+        try {
+            await loadRemoteRuntimeConfig();
+            if (isRemoteMaintenanceEnabled()) {
+                showRemoteMaintenanceScreen();
+            }
+        } catch (e) {}
+    })();
     // ========== ACİL BAKIM SON ==========
     
     auth.onAuthStateChanged(async (user) => {
