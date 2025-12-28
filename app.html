@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.8';
+    const APP_VERSION = '4.3.9';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18391,52 +18391,43 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç (indirmeler için) - v4.3.8
+    // Harici tarayıcıda URL aç (indirmeler için) - v4.3.9
     function openExternalUrl(url) {
         if (!url) return;
-        console.log('[ExtURL] Harici URL açılıyor:', url);
+        console.log('[ExtURL] v4.3.9 - URL:', url);
         
-        const isAndroid = /android/i.test(navigator.userAgent);
-        
-        // Android için Intent URL oluştur
-        function getIntentUrl(targetUrl) {
-            const cleanUrl = targetUrl.trim();
-            const scheme = cleanUrl.startsWith('https://') ? 'https' : 'http';
-            const urlWithoutScheme = cleanUrl.replace(/^https?:\/\//, '');
-            // Varsayılan tarayıcıya yönlendir (package belirtmeden)
-            return 'intent://' + urlWithoutScheme + '#Intent;scheme=' + scheme + ';action=android.intent.action.VIEW;end';
-        }
-        
-        // YÖNTEM 1: Capacitor App plugin (varsa)
-        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
-            console.log('[ExtURL] Capacitor App.openUrl deneniyor');
-            window.Capacitor.Plugins.App.openUrl({ url: url })
-                .then(function() {
-                    console.log('[ExtURL] Capacitor başarılı');
-                })
-                .catch(function(e) {
-                    console.log('[ExtURL] Capacitor hata, Intent deneniyor:', e);
-                    if (isAndroid) {
-                        window.location.href = getIntentUrl(url);
-                    } else {
-                        window.open(url, '_blank');
-                    }
-                });
+        // En basit yöntem: <a> elementi oluştur ve tıkla
+        try {
+            var link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(function() {
+                document.body.removeChild(link);
+            }, 100);
+            console.log('[ExtURL] <a> click yapıldı');
             return;
+        } catch (e) {
+            console.log('[ExtURL] <a> hata:', e);
         }
         
-        // YÖNTEM 2: Android için Intent URL
-        if (isAndroid) {
-            console.log('[ExtURL] Intent URL kullanılıyor');
-            var intentUrl = getIntentUrl(url);
-            console.log('[ExtURL] Intent:', intentUrl);
-            window.location.href = intentUrl;
-            return;
+        // Fallback: window.open
+        try {
+            var win = window.open(url, '_blank');
+            if (win) {
+                console.log('[ExtURL] window.open başarılı');
+                return;
+            }
+        } catch (e) {
+            console.log('[ExtURL] window.open hata:', e);
         }
         
-        // YÖNTEM 3: iOS ve diğerleri
-        console.log('[ExtURL] window.open kullanılıyor');
-        window.open(url, '_blank');
+        // Son çare: location
+        console.log('[ExtURL] location.href kullanılıyor');
+        window.location.href = url;
     }
 
     function downloadAPK() {
