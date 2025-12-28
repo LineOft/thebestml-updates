@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.12';
+    const APP_VERSION = '4.3.13';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -13851,23 +13851,26 @@
         }
     }
     
-    // Adım butonunu render et - v4.3.10 (a link olarak)
+    // Adım butonunu render et - v4.3.13 (onclick ile openExternalUrl)
     function renderStepButton(step) {
         const actionType = step.actionType || 'none';
         const btnStyle = 'display: inline-block; margin-top: 8px; padding: 8px 16px; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; text-decoration: none;';
         
         if (actionType === 'playstore' && step.btnUrl) {
-            return `<a href="${step.btnUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #34a853, #0f9d58);">
+            const url = step.btnUrl.replace(/'/g, "\\'");
+            return `<button onclick="openExternalUrl('${url}')" style="${btnStyle} background: linear-gradient(135deg, #34a853, #0f9d58);">
                 <i class="fab fa-google-play"></i> ${step.btnText || 'Play Store\'da Aç'}
-            </a>`;
+            </button>`;
         } else if (actionType === 'download' && step.downloadUrl) {
-            return `<a href="${step.downloadUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #667eea, #764ba2);">
+            const url = step.downloadUrl.replace(/'/g, "\\'");
+            return `<button onclick="openExternalUrl('${url}')" style="${btnStyle} background: linear-gradient(135deg, #667eea, #764ba2);">
                 <i class="fas fa-download"></i> ${step.btnText || 'İndir'}
-            </a>`;
+            </button>`;
         } else if (actionType === 'link' && step.btnUrl) {
-            return `<a href="${step.btnUrl}" target="_blank" rel="noopener" style="${btnStyle} background: linear-gradient(135deg, #00b894, #00cec9);">
+            const url = step.btnUrl.replace(/'/g, "\\'");
+            return `<button onclick="openExternalUrl('${url}')" style="${btnStyle} background: linear-gradient(135deg, #00b894, #00cec9);">
                 <i class="fas fa-external-link-alt"></i> ${step.btnText || 'Bağlantıya Git'}
-            </a>`;
+            </button>`;
         } else if (actionType === 'modal' && step.modalId) {
             return `<button onclick="openModal('${step.modalId}')" style="margin-top: 8px; padding: 8px 16px; background: linear-gradient(135deg, #e17055, #d63031); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">
                 <i class="fas fa-info-circle"></i> ${step.btnText || 'Detaylar'}
@@ -18392,10 +18395,20 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç - v4.3.12 AndroidBridge
+    // Harici tarayıcıda URL aç - v4.3.13 Debug + AndroidBridge
     function openExternalUrl(url) {
-        if (!url) return;
-        console.log('[ExtURL] v4.3.12 - URL:', url);
+        if (!url) {
+            alert('HATA: URL boş!');
+            return;
+        }
+        
+        // DEBUG: Fonksiyon çağrıldı mı?
+        alert('openExternalUrl çağrıldı!\nURL: ' + url.substring(0, 50) + '...');
+        console.log('[ExtURL] v4.3.13 - URL:', url);
+        
+        // AndroidBridge var mı kontrol et
+        var bridgeStatus = 'AndroidBridge: ' + (typeof AndroidBridge !== 'undefined' ? 'VAR' : 'YOK');
+        console.log('[ExtURL] ' + bridgeStatus);
         
         // Yöntem 1: AndroidBridge (Native Java)
         if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrl) {
@@ -18405,6 +18418,7 @@
                 return;
             } catch (e) {
                 console.log('[ExtURL] AndroidBridge hata:', e);
+                alert('AndroidBridge hatası: ' + e.message);
             }
         }
         
@@ -18431,6 +18445,7 @@
         }
         
         // Son çare: location
+        alert('Tüm yöntemler başarısız, location.href kullanılıyor');
         console.log('[ExtURL] location.href kullanılıyor');
         window.location.href = url;
     }
