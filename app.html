@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.21';
+    const APP_VERSION = '4.3.22';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18557,6 +18557,19 @@
         // Son çare: Native intercept'i tetiklemek için çoklu yöntem
         try { showToast('⏭️ Harici tarayıcı deneniyor...'); } catch (e) {}
         if (window.__extUrlDbg) window.__extUrlDbg('Fallback başlatılıyor...');
+
+        // Yöntem 0: Android Intent URL scheme (EN GARANTİLİ)
+        // Bu WebView'in standart davranışıdır ve her zaman çalışır
+        try {
+            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 0: Intent URL scheme');
+            // URL'yi intent:// formatına çevir
+            var intentUrl = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
+            if (window.__extUrlDbg) window.__extUrlDbg('Intent URL: ' + intentUrl);
+            window.location.href = intentUrl;
+            await new Promise(r => setTimeout(r, 800));
+        } catch (e) {
+            if (window.__extUrlDbg) window.__extUrlDbg('Intent URL hata: ' + (e && e.message ? e.message : String(e)));
+        }
 
         // Yöntem A: Dinamik <a> elementi oluşturup click() - shouldOverrideUrlLoading güvenilir tetikler
         try {
