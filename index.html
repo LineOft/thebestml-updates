@@ -262,6 +262,26 @@
 
             return tryNext();
         }
+
+        function tryUpdateFromAppHtmlProbe(cachedVersion, cachedHtml) {
+            // Manifest cache (raw/CDN) bazen geriden gelebiliyor.
+            // Bu durumda bile güncellemeyi kaçırmamak için app.html'den sürümü okuruz.
+            return downloadLatestAppHtml(null)
+                .then(function(result) {
+                    try {
+                        if (result && result.version && isNewer(result.version, cachedVersion)) {
+                            localStorage.setItem(CACHE_KEY, result.html);
+                            localStorage.setItem(VERSION_KEY, result.version);
+                            console.log('[OTA] (Probe) Cache güncellendi: v' + result.version);
+                            return { updated: true, html: result.html, version: result.version };
+                        }
+                    } catch (e) {}
+                    return { updated: false, html: cachedHtml, version: cachedVersion };
+                })
+                .catch(function() {
+                    return { updated: false, html: cachedHtml, version: cachedVersion };
+                });
+        }
         
         function init() {
             console.log('[OTA] Başlatılıyor...');
@@ -326,13 +346,18 @@
                                 }
                             });
                     } else {
-                        // Güncel
-                        console.log('[OTA] Uygulama güncel');
+                        // Manifest "güncel" dese bile app.html probe ile kontrol et
+                        console.log('[OTA] Uygulama güncel (manifest)');
                         status('Yükleniyor...');
                         progress(80);
-                        
+
                         if (cachedHtml && cachedHtml.length > 5000) {
-                            loadApp(cachedHtml);
+                            // Arka planda bir kez daha app.html versiyonunu probe et
+                            status('Kontrol ediliyor...');
+                            tryUpdateFromAppHtmlProbe(cachedVersion, cachedHtml)
+                                .then(function(r) {
+                                    loadApp(r && r.html ? r.html : cachedHtml);
+                                });
                         } else {
                             // Cache boş, indir
                             status('İlk yükleme...');
