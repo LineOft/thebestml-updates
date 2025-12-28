@@ -1,14 +1,16 @@
 {
     "currentVersion": "4.2.78",
-    "forceUpdate": true,
+    "forceUpdate": false,
     "key": "THEBEST2024",
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "playStoreUrl": "https://play.google.com/store/apps/details?id=com.mobile.legends",
-    "announcement": "🔧 Acil Bakım Modu Aktif",
-    "maintenanceMode": true,
+    "announcement": "✅ Sistem aktif",
+    "maintenanceMode": false,
     "maintenanceTitle": "🔧 Sistem Bakımda",
-    "maintenanceMessage": "Firestore kota dolduğu için sistem geçici olarak durduruldu. Kota yenilendikten sonra tekrar açılacak.",
+    "maintenanceMessage": "",
     "maintenanceEstimatedTime": "",
     "maintenanceAllowEmails": ["onurtenk0@gmail.com"],
-    "updateMessage": "Acil: Firestore kota doldu. Trafiği kesmek için bakım modu aktif edildi (Firestore bağımsız/GitHub config). Performans: Dekontlar Firebase Storage'a yüklenir; Firestore'da base64 yerine URL tutulur. (Not: Bu OTA içerik güncellemesidir; APK bağlantısı değişmemiş olabilir.)"
+    "ordersApiBase": "https://cheatstore-orders.cheatstoreonur.workers.dev",
+    "supportApiBase": "https://cheatstore-orders.cheatstoreonur.workers.dev",
+    "updateMessage": "Sistem aktif. Sipariş + destek Cloudflare Worker/D1 üzerinden çalışır. (Bakım modu kapatıldı.)"
 }

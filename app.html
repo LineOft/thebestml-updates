@@ -3429,6 +3429,32 @@
         }
     }
 
+    // Cloudflare Worker device token register (FCM -> D1)
+    async function registerDeviceTokenOnWorker(tokenValue, platformName = 'web') {
+        try {
+            if (!tokenValue) return false;
+            if (!currentUser) return false;
+            // Make sure remote config is loaded (contains ordersApiBase)
+            try { await loadRemoteRuntimeConfig(); } catch (e) {}
+
+            const base = getOrdersApiBase();
+            if (!base) return false;
+
+            await workerApiFetch(base, '/v1/devices/register', {
+                method: 'POST',
+                body: {
+                    token: tokenValue,
+                    platform: platformName
+                }
+            });
+
+            return true;
+        } catch (e) {
+            console.log('registerDeviceTokenOnWorker hata:', e?.message || e);
+            return false;
+        }
+    }
+
     async function sendPushToAdmins(title, body, data = {}) {
         if (!PUSH_SERVER.url || !PUSH_SERVER.apiKey) {
             console.log('Push server yapılandırılmamış');
@@ -4024,16 +4050,73 @@
         showToast('⏳ Sipariş gönderiliyor...');
         
         try {
+            // Prefer Cloudflare Worker API (Firestore-free)
+            try { await loadRemoteRuntimeConfig(); } catch (e) {}
+            const ordersApiBase = getOrdersApiBase();
+
             // Sipariş objesi
             const requestedPoints = normalizeNonNegativeInt((document.getElementById('unifiedLoyaltyUsePoints') || {}).value, 0);
             const baseAmount = parsePriceToAmount(currentPaymentOrder.price);
 
+            // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
+            // Worker API için de aynı dekont URL/base64 alanları kullanılır.
+            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())), userId: currentUser.uid });
+
+            // Worker modu: sadakat puanı şimdilik devre dışı (Firestore bağımlı)
+            if (ordersApiBase) {
+                if (requestedPoints > 0) {
+                    showToast('⚠️ Sadakat puanı şu an kullanılamıyor');
+                    return;
+                }
+
+                const payload = {
+                    userId: currentUser.uid,
+                    email: currentUser.email,
+                    userEmail: currentUser.email,
+                    type: currentPaymentOrder.type || 'purchase',
+                    game: currentPaymentOrder.game || '',
+                    cheat: currentPaymentOrder.cheat || '',
+                    package: currentPaymentOrder.package,
+                    packageName: currentPaymentOrder.packageName,
+                    price: currentPaymentOrder.price,
+                    baseAmount: baseAmount,
+                    payableAmount: baseAmount,
+                    loyaltyUsedPoints: 0,
+                    loyaltyDiscountAmount: 0,
+                    days: currentPaymentOrder.days,
+                    dekontUrl: receipt.dekontUrl || null,
+                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekont: receipt.dekontBase64 || null,
+                    paymentMethod: 'havale',
+                    status: 'pending'
+                };
+
+                // Süre uzatma için ek alanlar
+                if (currentPaymentOrder.type === 'extension') {
+                    payload.keyCode = currentPaymentOrder.keyCode;
+                    payload.keyId = currentPaymentOrder.keyId;
+                    payload.currentExpiry = currentPaymentOrder.currentExpiry;
+                    payload.newExpiry = currentPaymentOrder.newExpiry;
+                    payload.extensionDays = currentPaymentOrder.days;
+                }
+
+                await workerApiFetch(ordersApiBase, '/v1/orders', { method: 'POST', body: payload });
+
+                closeModal('unifiedHavaleModal');
+                showOrderSuccessModal();
+                showToast('✅ Siparişiniz alındı!');
+                currentPaymentOrder = null;
+                return;
+            }
+
+            // Firestore fallback
             const userRef = db.collection('users').doc(currentUser.uid);
             const orderRef = db.collection('orders').doc();
             let pointsUsed = 0;
 
             // Dekontu mümkünse Storage'a yükle (Firestore kota/limit tasarrufu)
-            const receipt = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
+            // (Yukarıda üretildi; Firestore için orderId'yi gerçek doc id ile yenileyelim)
+            const receiptFs = await prepareReceiptForOrder(dekontFile, { orderId: orderRef.id, userId: currentUser.uid });
 
             await db.runTransaction(async (tx) => {
                 const userSnap = await tx.get(userRef);
@@ -4062,10 +4145,10 @@
                     loyaltyUsedPoints: pointsUsed,
                     loyaltyDiscountAmount: pointsUsed,
                     days: currentPaymentOrder.days,
-                    dekontUrl: receipt.dekontUrl || null,
-                    dekontStoragePath: receipt.dekontStoragePath || null,
+                    dekontUrl: receiptFs.dekontUrl || null,
+                    dekontStoragePath: receiptFs.dekontStoragePath || null,
                     // Storage yoksa geri uyumluluk için base64 alanı dolabilir
-                    dekont: receipt.dekontBase64 || null,
+                    dekont: receiptFs.dekontBase64 || null,
                     paymentMethod: 'havale',
                     status: 'pending',
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -4116,6 +4199,7 @@
     // Firebase Auth State
     let currentUser = null;
     let orderListener = null; // Real-time listener
+    let orderPollingInterval = null; // Worker API polling
 
     // Presence / Online durum takibi
     // NOT: Firestore kota tüketimini azaltmak için heartbeat sadece admin/owner için çalışır.
@@ -4327,6 +4411,7 @@
                 const res = await fetch(getRemoteRuntimeConfigUrl(), { cache: 'no-store' });
                 if (res && res.ok) {
                     remoteRuntimeConfig = await res.json();
+                    try { applyWorkerApiConfigFromRemote(); } catch (e) {}
                 }
             } catch (e) {
                 remoteRuntimeConfig = remoteRuntimeConfig || null;
@@ -4337,6 +4422,81 @@
         })();
 
         return remoteRuntimeConfigPromise;
+    }
+
+    // Cloudflare Worker API (orders + support) base URLs
+    var workerApiConfig = {
+        ordersApiBase: '',
+        supportApiBase: ''
+    };
+
+    function normalizeApiBase(url) {
+        const s = String(url || '').trim();
+        if (!s) return '';
+        return s.replace(/\/+$/g, '');
+    }
+
+    function applyWorkerApiConfigFromRemote() {
+        try {
+            if (!remoteRuntimeConfig) return;
+            if (remoteRuntimeConfig.ordersApiBase) {
+                workerApiConfig.ordersApiBase = normalizeApiBase(remoteRuntimeConfig.ordersApiBase);
+            }
+            if (remoteRuntimeConfig.supportApiBase) {
+                workerApiConfig.supportApiBase = normalizeApiBase(remoteRuntimeConfig.supportApiBase);
+            }
+            // Backward compatible: supportApiBase defaults to ordersApiBase
+            if (!workerApiConfig.supportApiBase && workerApiConfig.ordersApiBase) {
+                workerApiConfig.supportApiBase = workerApiConfig.ordersApiBase;
+            }
+        } catch (e) {}
+    }
+
+    function getOrdersApiBase() {
+        return normalizeApiBase(workerApiConfig.ordersApiBase);
+    }
+
+    function getSupportApiBase() {
+        return normalizeApiBase(workerApiConfig.supportApiBase || workerApiConfig.ordersApiBase);
+    }
+
+    async function workerApiFetch(baseUrl, path, options) {
+        const base = normalizeApiBase(baseUrl);
+        if (!base) throw new Error('api_not_configured');
+        const opts = options || {};
+        const method = (opts.method || 'GET').toUpperCase();
+
+        const headers = Object.assign({
+            'Content-Type': 'application/json'
+        }, opts.headers || {});
+
+        // Firebase Auth -> Worker Bearer token
+        if (currentUser) {
+            try {
+                const token = await currentUser.getIdToken();
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+            } catch (e) {}
+        }
+
+        const res = await fetch(base + path, {
+            method,
+            headers,
+            body: (opts.body && method !== 'GET') ? JSON.stringify(opts.body) : undefined
+        });
+
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (e) { json = { raw: text }; }
+
+        if (!res.ok) {
+            const msg = (json && (json.error || json.detail)) ? (json.error || json.detail) : ('http_' + res.status);
+            const err = new Error(String(msg));
+            err.httpStatus = res.status;
+            err.payload = json;
+            throw err;
+        }
+
+        return json;
     }
 
     function isRemoteMaintenanceEnabled() {
@@ -4751,6 +4911,62 @@
     async function startOrderListener() {
         if (!currentUser || isAdmin()) return;
         stopOrderListener();
+
+        // Prefer Worker API polling (Firestore-free)
+        try { await loadRemoteRuntimeConfig(); } catch (e) {}
+        const ordersApiBase = getOrdersApiBase();
+        if (ordersApiBase) {
+            // Bildirim gönderilen sipariş ID'lerini takip et
+            const notifiedOrders = JSON.parse(localStorage.getItem('notifiedOrders') || '[]');
+
+            async function pollOnce() {
+                const data = await workerApiFetch(ordersApiBase, '/v1/orders/me', { method: 'GET' });
+                const orders = (data && data.orders) ? data.orders : [];
+                (orders || []).forEach(async (order) => {
+                    try {
+                        const orderId = order && (order.id || order.orderId);
+                        if (!orderId) return;
+                        const notifKey = orderId + '_' + (order.status || '');
+                        if (notifiedOrders.includes(notifKey)) return;
+
+                        if (order.status === 'approved') {
+                            showNotification('🎉 Siparişiniz onaylandı! Key: ' + (order.keyCode || ''), 'success');
+                            await showFullNotification({
+                                title: '🎉 Siparişiniz Onaylandı!',
+                                message: `Paketiniz aktif edildi! Key: ${order.keyCode || ''}`,
+                                type: 'order',
+                                keyCode: order.keyCode || null,
+                                showPopup: true,
+                                playSound: true,
+                                showNative: true,
+                                vibrate: true,
+                                updateBadge: true
+                            });
+                            notifiedOrders.push(notifKey);
+                            localStorage.setItem('notifiedOrders', JSON.stringify(notifiedOrders));
+                        } else if (order.status === 'rejected') {
+                            showNotification('❌ Siparişiniz reddedildi: ' + (order.rejectReason || 'Sebep belirtilmedi'), 'error');
+                            await showFullNotification({
+                                title: '❌ Sipariş Reddedildi',
+                                message: order.rejectReason || 'Sebep belirtilmedi',
+                                type: 'warning',
+                                showPopup: true,
+                                playSound: true,
+                                showNative: true,
+                                vibrate: true,
+                                updateBadge: true
+                            });
+                            notifiedOrders.push(notifKey);
+                            localStorage.setItem('notifiedOrders', JSON.stringify(notifiedOrders));
+                        }
+                    } catch (e) {}
+                });
+            }
+
+            try { await pollOnce(); } catch (e) {}
+            orderPollingInterval = setInterval(() => { pollOnce().catch(() => {}); }, 8000);
+            return;
+        }
         
         // Bildirim gönderilen sipariş ID'lerini takip et
         const notifiedOrders = JSON.parse(localStorage.getItem('notifiedOrders') || '[]');
@@ -5243,8 +5459,20 @@
                         console.log('🔔 ========== FCM TOKEN ALINDI ==========');
                         console.log('🔔 Token (ilk 50 karakter):', token.value.substring(0, 50) + '...');
                         fcmToken = token.value;
-                        
-                        // Token'ı Firestore'a kaydet
+
+                        // Cloudflare Worker (orders/support) push registry (Firestore bağımsız olmalı)
+                        if (currentUser && fcmToken) {
+                            try {
+                                await registerDeviceTokenOnWorker(fcmToken, 'android');
+                                showToast('✅ Bildirimler aktif!');
+                            } catch (e) {
+                                console.log('🔔 Worker token register başarısız:', e?.message || e);
+                            }
+                        } else {
+                            console.log('🔔 ⚠️ Worker token kaydı atlandı - currentUser yok');
+                        }
+
+                        // Token'ı Firestore'a kaydet (best-effort, opsiyonel)
                         if (currentUser && fcmToken && db) {
                             try {
                                 console.log('🔔 Token Firestore\'a kaydediliyor... UID:', currentUser.uid);
@@ -5257,7 +5485,6 @@
                                     fcmLastUpdate: new Date().toISOString()
                                 }, { merge: true });
                                 console.log('🔔 ✅ FCM token Firestore\'a BAŞARIYLA kaydedildi!');
-                                showToast('✅ Bildirimler aktif!');
 
                                 // Server-side topic subscription: toplu bildirim için kritik
                                 // Firestore'dan tüm users taramaya gerek kalmaz.
@@ -5268,8 +5495,6 @@
                             } catch(e) {
                                 console.error('🔔 ❌ FCM token kaydetme hatası:', e);
                             }
-                        } else {
-                            console.log('🔔 ⚠️ Token kaydedilemedi - currentUser veya db yok');
                         }
                     } catch(outerErr) {
                         console.log('🔔 Token listener hatası:', outerErr.message);
@@ -8191,6 +8416,10 @@
     let currentAdminChatId = null;
     let adminChatListener = null;
 
+    // Worker mode: support polling
+    let supportUserPollInterval = null;
+    let supportAdminPollInterval = null;
+
     // Destek: durum (açık/kapalı) + görüldü
     let supportPresenceInterval = null;
     let lastUserSupportSeenUpdateAt = 0;
@@ -8215,8 +8444,29 @@
         return 0;
     }
 
+    function isSupportWorkerEnabled() {
+        try {
+            return !!getSupportApiBase();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function normalizeSupportMessages(messages) {
+        return (Array.isArray(messages) ? messages : []).map((m) => ({
+            sender: (m && m.sender === 'admin') ? 'admin' : 'user',
+            message: (m && typeof m.message === 'string') ? m.message : '',
+            image: (m && typeof m.image === 'string') ? m.image : '',
+            adminRole: (m && typeof m.adminRole === 'string') ? m.adminRole : '',
+            adminName: (m && typeof m.adminName === 'string') ? m.adminName : '',
+            createdAt: (m && (m.createdAtMs || m.createdAt)) ? (m.createdAtMs || m.createdAt) : 0
+        }));
+    }
+
     async function setUserSupportPresence(isOpen) {
         try {
+            // Presence is Firestore-only (disabled in Worker mode)
+            if (isSupportWorkerEnabled()) return;
             if (!currentUser || !db) return;
             const payload = {
                 userSupportOpen: !!isOpen,
@@ -8243,10 +8493,17 @@
 
     async function markUserSupportSeen(force = false) {
         try {
-            if (!currentUser || !db) return;
             const now = Date.now();
             if (!force && (now - lastUserSupportSeenUpdateAt) < 4000) return;
             lastUserSupportSeenUpdateAt = now;
+
+            if (isSupportWorkerEnabled()) {
+                if (!currentUser) return;
+                await workerApiFetch(getSupportApiBase(), '/v1/support/me/seen', { method: 'POST', body: {} });
+                return;
+            }
+
+            if (!currentUser || !db) return;
 
             await db.collection('chats').doc(currentUser.uid).set({
                 unreadUser: 0,
@@ -8257,10 +8514,17 @@
 
     async function markAdminSupportSeen(chatId, force = false) {
         try {
-            if (!chatId || !db) return;
             const now = Date.now();
             if (!force && (now - lastAdminSupportSeenUpdateAt) < 4000) return;
             lastAdminSupportSeenUpdateAt = now;
+
+            if (isSupportWorkerEnabled()) {
+                if (!chatId) return;
+                await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/seen', { method: 'POST', body: {} });
+                return;
+            }
+
+            if (!chatId || !db) return;
 
             await db.collection('chats').doc(chatId).set({
                 unreadAdmin: 0,
@@ -8292,6 +8556,17 @@
         if (!currentUser) return;
 
         try {
+            if (isSupportWorkerEnabled()) {
+                const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(chatId) + '/claim', { method: 'POST', body: {} });
+                const didClaim = !!(res && res.claimed);
+                showToast(didClaim ? '✅ Sohbet devralındı' : '⚠️ Sohbet zaten devralınmış');
+                if (didClaim) {
+                    try { await incrementAdminStatField('claimedChatsCount', 1); } catch (e) {}
+                }
+                loadAdminChats();
+                return;
+            }
+
             const ref = db.collection('chats').doc(chatId);
             let didClaim = false;
 
@@ -8330,6 +8605,51 @@
         stopChatListener();
         
         console.log('💬 Chat dinleyici başlatılıyor... UID:', currentUser.uid);
+
+        if (isSupportWorkerEnabled()) {
+            const poll = async () => {
+                try {
+                    const res = await workerApiFetch(getSupportApiBase(), '/v1/support/me');
+                    const ticket = res && res.ticket ? res.ticket : null;
+
+                    const oldCount = userChatMessages.length;
+                    userChatMessages = normalizeSupportMessages(res && res.messages ? res.messages : []);
+
+                    updateChatBadge(ticket ? (ticket.unreadUser || 0) : 0);
+                    userChatLastAdminSeenAtMs = ticket && ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
+                    userChatLastUserSeenAtMs = ticket && ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
+
+                    const modal = document.getElementById('userChatModal');
+                    const isModalOpen = modal && modal.classList.contains('show');
+
+                    if (isModalOpen) {
+                        renderUserChatMessages();
+                        scrollChatToBottom();
+
+                        const lastMsg = userChatMessages[userChatMessages.length - 1];
+                        if ((ticket && (ticket.unreadUser || 0) > 0) || (lastMsg && lastMsg.sender === 'admin')) {
+                            markUserSupportSeen();
+                        }
+                    }
+
+                    updateSidebarBadges();
+
+                    if (userChatMessages.length > oldCount && ticket && (ticket.unreadUser || 0) > 0) {
+                        const lastMsg = userChatMessages[userChatMessages.length - 1];
+                        if (lastMsg && lastMsg.sender === 'admin' && !isModalOpen) {
+                            showToast('💬 Yeni destek mesajı!');
+                            sendNativeNotification('💬 Yeni Destek Mesajı', lastMsg.message || 'Destek ekibinden yeni mesaj');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Chat polling hatası:', e);
+                }
+            };
+
+            poll();
+            supportUserPollInterval = setInterval(poll, 8000);
+            return;
+        }
         
         chatListener = db.collection('chats').doc(currentUser.uid)
             .onSnapshot((doc) => {
@@ -8414,6 +8734,14 @@
         if (adminChatListener) {
             adminChatListener();
             adminChatListener = null;
+        }
+        if (supportUserPollInterval) {
+            clearInterval(supportUserPollInterval);
+            supportUserPollInterval = null;
+        }
+        if (supportAdminPollInterval) {
+            clearInterval(supportAdminPollInterval);
+            supportAdminPollInterval = null;
         }
     }
     
@@ -8667,6 +8995,34 @@
     // Chat mesajlarını yenile
     async function refreshUserChatMessages(silent = false) {
         try {
+            if (isSupportWorkerEnabled()) {
+                if (!currentUser) return;
+                const res = await workerApiFetch(getSupportApiBase(), '/v1/support/me');
+                const ticket = res && res.ticket ? res.ticket : null;
+
+                const newMessages = normalizeSupportMessages(res && res.messages ? res.messages : []);
+                const hasNewMessages = newMessages.length !== userChatMessages.length;
+                userChatMessages = newMessages;
+
+                userChatLastAdminSeenAtMs = ticket && ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
+                userChatLastUserSeenAtMs = ticket && ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
+
+                updateChatBadge(ticket ? (ticket.unreadUser || 0) : 0);
+                updateSidebarBadges();
+
+                if (!silent) {
+                    console.log('💬 Modal açıldı, mesajlar yüklendi:', userChatMessages.length);
+                } else if (hasNewMessages) {
+                    console.log('💬 Yeni mesaj algılandı, güncelleniyor...');
+                }
+
+                renderUserChatMessages();
+                if (hasNewMessages) {
+                    scrollChatToBottom('userChatMessages');
+                }
+                return;
+            }
+
             const chatDoc = await db.collection('chats').doc(currentUser.uid).get();
             if (chatDoc.exists) {
                 const chatData = chatDoc.data() || {};
@@ -8714,6 +9070,8 @@
             dateObj = createdAt.toDate();
         } else if (createdAt instanceof Date) {
             dateObj = createdAt;
+        } else if (typeof createdAt === 'number') {
+            dateObj = new Date(createdAt);
         } else if (typeof createdAt === 'string') {
             dateObj = new Date(createdAt);
         }
@@ -8779,6 +9137,10 @@
 
     function ensureAdminChatUserProfilePhotoLoaded() {
         const uid = currentAdminChatUserId;
+        if (isSupportWorkerEnabled()) {
+            currentAdminChatUserPhoto = '';
+            return;
+        }
         if (!uid || !db) return;
 
         if (Object.prototype.hasOwnProperty.call(supportProfilePhotoCache, uid)) {
@@ -8968,7 +9330,11 @@
         if (!confirm('Tüm mesajlar silinecek. Emin misiniz?')) return;
         
         try {
-            await db.collection('chats').doc(currentUser.uid).delete();
+            if (isSupportWorkerEnabled()) {
+                await workerApiFetch(getSupportApiBase(), '/v1/support/me', { method: 'DELETE' });
+            } else {
+                await db.collection('chats').doc(currentUser.uid).delete();
+            }
             userChatMessages = [];
             renderUserChatMessages();
             showToast('✅ Sohbet temizlendi');
@@ -9029,10 +9395,26 @@
         clearUserFile(); // Dosya önizlemeyi temizle
         
         try {
+            const lastMsgPreview = msgText || '📷 Görsel';
+
+            if (isSupportWorkerEnabled()) {
+                await workerApiFetch(getSupportApiBase(), '/v1/support/messages', {
+                    method: 'POST',
+                    body: {
+                        message: msgText || '',
+                        image: imageData || ''
+                    }
+                });
+
+                // Server timestamp + unread durumunu tazele
+                try { await refreshUserChatMessages(true); } catch (e) {}
+                input.disabled = false;
+                input.focus();
+                return;
+            }
+
             const chatRef = db.collection('chats').doc(currentUser.uid);
             const chatDoc = await chatRef.get();
-            
-            const lastMsgPreview = msgText || '📷 Görsel';
             
             if (chatDoc.exists) {
                 // Mevcut sohbete ekle
@@ -9082,6 +9464,8 @@
         if (direct) return direct;
         if (supportEmailCache[chatId]) return supportEmailCache[chatId];
 
+        if (isSupportWorkerEnabled()) return '';
+
         try {
             const u = await db.collection('users').doc(chatId).get();
             if (u && u.exists) {
@@ -9112,6 +9496,60 @@
         const countBadge = document.getElementById('adminChatCount');
         
         try {
+            if (isSupportWorkerEnabled()) {
+                const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats');
+                const tickets = (res && Array.isArray(res.tickets)) ? res.tickets : [];
+
+                let totalUnread = 0;
+                let html = '';
+
+                if (!tickets.length) {
+                    html = '<div style="text-align: center; padding: 20px; color: #666;">Henüz mesaj yok</div>';
+                } else {
+                    for (const t of tickets) {
+                        if (!canCurrentAdminSeeChat(t)) continue;
+
+                        const unread = t.unreadAdmin || 0;
+                        totalUnread += unread;
+                        const lastTime = t.lastMessageAtMs ? new Date(t.lastMessageAtMs).toLocaleString('tr-TR') : '';
+
+                        const claimedByEmail = normalizeEmail(t.claimedByEmail || '');
+                        const isClaimed = !!claimedByEmail;
+                        const isClaimedByMe = isClaimed && (claimedByEmail === normalizeEmail(currentUser?.email));
+
+                        const claimInfo = isClaimed
+                            ? `<div style="margin-top: 6px; font-size: 10px; color: rgba(255,255,255,0.55);">🤝 Devralındı${isClaimedByMe ? ' (Sizde)' : (isOwner() && claimedByEmail ? `: ${escapeHtml(claimedByEmail)}` : '')}</div>`
+                            : '';
+
+                        const claimButton = (!isClaimed)
+                            ? `<button onclick="event.stopPropagation(); claimSupportChat('${t.id}')" style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: #fff; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">🤝 Devral</button>`
+                            : '';
+
+                        const displayEmail = t.userEmail || t.id;
+
+                        html += `
+                            <div onclick="openAdminChat('${t.id}')" style="background: ${unread > 0 ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.05)'}; border-radius: 10px; padding: 12px; margin-bottom: 8px; cursor: pointer; border-left: 3px solid ${unread > 0 ? '#00BCD4' : 'transparent'};">
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                                    <div style="font-weight: bold; color: #fff;">👤 ${escapeHtml(displayEmail)}</div>
+                                    <div style="display:flex; align-items:center; gap: 6px;">
+                                        ${unread > 0 ? `<span style="background: #f44336; color: #fff; padding: 2px 8px; border-radius: 10px; font-size: 11px;">${unread}</span>` : ''}
+                                        ${claimButton}
+                                    </div>
+                                </div>
+                                <div style="color: #aaa; font-size: 12px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.lastMessage || '')}</div>
+                                ${claimInfo}
+                                <div style="color: #666; font-size: 10px; margin-top: 5px;">${lastTime}</div>
+                            </div>
+                        `;
+                    }
+                }
+
+                container.innerHTML = html;
+                countBadge.textContent = totalUnread;
+                countBadge.style.display = totalUnread > 0 ? 'inline' : 'none';
+                return;
+            }
+
             const snapshot = await db.collection('chats')
                 .orderBy('lastMessageAt', 'desc')
                 .get();
@@ -9184,6 +9622,70 @@
         currentAdminChatUserPhoto = '';
         
         try {
+            if (isSupportWorkerEnabled()) {
+                const loadAndRender = async () => {
+                    const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(chatId));
+                    const ticket = res && res.ticket ? res.ticket : null;
+                    if (!ticket) {
+                        showToast('❌ Sohbet bulunamadı');
+                        return null;
+                    }
+
+                    if (!canCurrentAdminSeeChat(ticket)) {
+                        showToast('🔒 Bu sohbet başka bir admin tarafından devralındı');
+                        currentAdminChatId = null;
+                        loadAdminChats();
+                        return null;
+                    }
+
+                    const displayEmail = ticket.userEmail || chatId;
+                    document.getElementById('adminChatTitle').textContent = '💬 ' + displayEmail;
+                    document.getElementById('adminChatUserInfo').textContent = 'Kullanıcı ID: ' + chatId;
+
+                    currentAdminChatLastUserSeenAtMs = ticket.lastUserSeenAtMs ? Number(ticket.lastUserSeenAtMs) : 0;
+                    currentAdminChatLastAdminSeenAtMs = ticket.lastAdminSeenAtMs ? Number(ticket.lastAdminSeenAtMs) : 0;
+
+                    renderAdminChatMessages(normalizeSupportMessages(res && res.messages ? res.messages : []));
+                    return ticket;
+                };
+
+                const ticket = await loadAndRender();
+                if (!ticket) return;
+
+                await markAdminSupportSeen(chatId, true);
+
+                if (supportAdminPollInterval) {
+                    clearInterval(supportAdminPollInterval);
+                    supportAdminPollInterval = null;
+                }
+
+                supportAdminPollInterval = setInterval(async () => {
+                    try {
+                        const t = await loadAndRender();
+                        if (!t) {
+                            clearInterval(supportAdminPollInterval);
+                            supportAdminPollInterval = null;
+                            return;
+                        }
+
+                        const msgs = Array.isArray(lastAdminChatMessages) ? lastAdminChatMessages : [];
+                        const lastMsg = msgs[msgs.length - 1];
+                        if (lastMsg && lastMsg.sender === 'user') {
+                            markAdminSupportSeen(chatId);
+                        }
+                    } catch (e) {
+                        console.log('Admin chat polling hatası:', e?.message || e);
+                    }
+                }, 8000);
+
+                openModal('adminChatModal');
+                setTimeout(() => {
+                    document.getElementById('adminChatInput').focus();
+                }, 300);
+                loadAdminChats();
+                return;
+            }
+
             const chatDoc = await db.collection('chats').doc(chatId).get();
             if (!chatDoc.exists) {
                 showToast('❌ Sohbet bulunamadı');
@@ -9370,7 +9872,11 @@
         if (!confirm('Bu kullanıcının tüm mesajları silinecek. Emin misiniz?')) return;
         
         try {
-            await db.collection('chats').doc(currentAdminChatId).delete();
+            if (isSupportWorkerEnabled()) {
+                await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(currentAdminChatId), { method: 'DELETE' });
+            } else {
+                await db.collection('chats').doc(currentAdminChatId).delete();
+            }
             closeModal('adminChatModal');
             loadAdminChats();
             showToast('✅ Sohbet temizlendi');
@@ -9420,6 +9926,36 @@
         clearAdminFile(); // Dosya önizlemeyi temizle
         
         try {
+            // Admin rolünü belirle
+            const adminRoles = {
+                'onurtenk0@gmail.com': { role: 'Kurucu', name: 'Onur' },
+                'developer@cheatstore.com': { role: 'Developer', name: 'Developer' },
+                'support@cheatstore.com': { role: 'Support', name: 'Destek' }
+            };
+            const adminInfo = adminRoles[currentUser.email] || { role: 'Admin', name: 'Yönetici' };
+
+            if (isSupportWorkerEnabled()) {
+                await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(currentAdminChatId) + '/messages', {
+                    method: 'POST',
+                    body: {
+                        message: msgText || '',
+                        image: imageData || '',
+                        adminRole: adminInfo.role,
+                        adminName: adminInfo.name
+                    }
+                });
+
+                showToast('✅ Mesaj gönderildi');
+                try {
+                    const res = await workerApiFetch(getSupportApiBase(), '/v1/admin/support/chats/' + encodeURIComponent(currentAdminChatId));
+                    renderAdminChatMessages(normalizeSupportMessages(res && res.messages ? res.messages : []));
+                } catch (e) {}
+
+                input.disabled = false;
+                input.focus();
+                return;
+            }
+
             const chatRef = db.collection('chats').doc(currentAdminChatId);
             const chatDoc = await chatRef.get();
             
@@ -9431,13 +9967,8 @@
             
             const now = new Date();
             
-            // Admin rolünü belirle
-            const adminRoles = {
-                'onurtenk0@gmail.com': { role: 'Kurucu', name: 'Onur' },
-                'developer@cheatstore.com': { role: 'Developer', name: 'Developer' },
-                'support@cheatstore.com': { role: 'Support', name: 'Destek' }
-            };
-            const adminInfo = adminRoles[currentUser.email] || { role: 'Admin', name: 'Yönetici' };
+            // Admin rolünü belirle (Firestore fallback)
+            const adminInfoFb = adminInfo;
             
             const newMessage = {
                 sender: 'admin',
@@ -9445,8 +9976,8 @@
                 image: imageData,
                 createdAt: now,
                 read: false,
-                adminRole: adminInfo.role,
-                adminName: adminInfo.name,
+                adminRole: adminInfoFb.role,
+                adminName: adminInfoFb.name,
                 adminEmail: currentUser.email
             };
             
@@ -9467,7 +9998,7 @@
                 const chatData = chatDoc.data() || {};
                 const targetEmail = chatData.userEmail || '';
                 const targetUserId = chatData.userId || currentAdminChatId;
-                await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfo);
+                await sendSupportReplyNotificationToUser(targetUserId, targetEmail, lastMsgPreview, adminInfoFb);
             } catch (e) {}
             
             showToast('✅ Mesaj gönderildi');
@@ -9484,7 +10015,8 @@
     // Chat scroll helper
     function scrollChatToBottom(containerId) {
         setTimeout(() => {
-            const container = document.getElementById(containerId);
+            const id = containerId || 'userChatMessages';
+            const container = document.getElementById(id);
             if (container) {
                 container.scrollTop = container.scrollHeight;
             }
