@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.2';
+    const APP_VERSION = '4.3.3';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -17372,12 +17372,16 @@
 
         const urls = [
             `https://raw.githubusercontent.com/LineOft/thebestml-updates/main/manifest.json?t=${ts}&r=${r}`,
+            // Fallback: jsDelivr CDN (daha hızlı, cached)
+            `https://cdn.jsdelivr.net/gh/LineOft/thebestml-updates@main/manifest.json?t=${ts}&r=${r}`,
             // Fallback: GitHub API (rate-limit olabilir)
             `https://api.github.com/repos/LineOft/thebestml-updates/contents/manifest.json?_t=${ts}&r=${r}`
         ];
 
+        let lastError = null;
         for (const url of urls) {
             try {
+                console.log('[OTA] Manifest deneniyor:', url.split('?')[0]);
                 const isApi = url.includes('api.github.com');
                 const res = await fetch(url, {
                     cache: 'no-store',
@@ -17392,16 +17396,26 @@
                         }
                 });
 
-                if (!res.ok) continue;
+                if (!res.ok) {
+                    console.log('[OTA] HTTP hatası:', res.status);
+                    lastError = 'HTTP ' + res.status;
+                    continue;
+                }
 
                 // API'de raw accept kullanıyoruz; body JSON text olur
                 const text = await res.text();
                 const manifest = JSON.parse(text);
-                if (manifest && manifest.version) return manifest;
+                if (manifest && manifest.version) {
+                    console.log('[OTA] Manifest başarıyla alındı:', manifest.version);
+                    return manifest;
+                }
             } catch (e) {
+                console.log('[OTA] Hata:', e.message);
+                lastError = e.message;
                 // sıradakine geç
             }
         }
+        console.error('[OTA] Tüm kaynaklar başarısız. Son hata:', lastError);
         return null;
     }
 
@@ -17572,8 +17586,11 @@
 
         try {
             // Önce manifest'i kontrol et
+            console.log('[OTA] refreshApp başladı...');
             const manifest = await fetchRemoteManifestNoCache();
-            if (!manifest) throw new Error('Manifest alınamadı');
+            if (!manifest) {
+                throw new Error('Manifest alınamadı. İnternet bağlantınızı kontrol edin.');
+            }
             
             console.log('[OTA] Manifest sürümü:', manifest.version);
             console.log('[OTA] Mevcut APP_VERSION:', APP_VERSION);
