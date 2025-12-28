@@ -1,12 +1,13 @@
 {
-    "version": "4.3.17",
-    "buildNumber": 373,
+    "version": "4.3.18",
+    "buildNumber": 374,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-29",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "v4.3.18: Harici tarayıcı açma için native WebView intercept + JS son çare yönlendirme (APK güncellemesi gerekebilir)",
         "Hotfix: ExternalBrowser custom plugin JS erişimi (registerPlugin) düzeltildi — harici tarayıcı açılır",
         "Düzeltme: iframe + Intent URL yöntemiyle harici tarayıcı açma (Chrome'a yönlendirir)",
         "Düzeltme: OTA manifest fetch XMLHttpRequest ile yeniden yazıldı — WebView uyumluluğu artırıldı",
