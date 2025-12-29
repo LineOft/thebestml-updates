@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.26';
+    const APP_VERSION = '4.3.27';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -19055,23 +19055,37 @@
         }
     }
     
-    // Telegram
+    // Telegram - Harici tarayıcıda açılır
     function openTelegram() {
         const telegramUrl = 'https://t.me/CheatsStoreTR';
         showToast('📩 Telegram açılıyor...');
         
+        // Önce Telegram deep link dene
         const startTime = Date.now();
-        window.location.href = 'tg://resolve?domain=CheatsStoreTR';
+        
+        // Telegram app deep link için iframe yöntemi (sayfa değişmesin)
+        try {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = 'tg://resolve?domain=CheatsStoreTR';
+            document.body.appendChild(iframe);
+            setTimeout(() => { try { document.body.removeChild(iframe); } catch(e){} }, 100);
+        } catch(e) {}
         
         setTimeout(() => {
             if (Date.now() - startTime < 2500) {
                 if (confirm('📱 Telegram uygulaması bulunamadı!\n\nTelegram\'ı Play Store\'dan indirmek ister misiniz?')) {
-                    window.open('https://play.google.com/store/apps/details?id=org.telegram.messenger', '_blank');
+                    openExternalUrl('https://play.google.com/store/apps/details?id=org.telegram.messenger');
                 } else {
-                    window.open(telegramUrl, '_blank');
+                    openExternalUrl(telegramUrl);
                 }
             }
         }, 2000);
+    }
+    
+    // Telegram destek - openTelegram ile aynı
+    function openTelegramSupport() {
+        openTelegram();
     }
     
     // Sertifika ayarları
