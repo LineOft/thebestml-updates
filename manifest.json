@@ -1,14 +1,14 @@
 {
-    "version": "4.3.25",
-    "buildNumber": 381,
+    "version": "4.3.26",
+    "buildNumber": 382,
     "minBuildNumber": 150,
     "required": false,
     "releaseDate": "2025-12-29",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
+        "v4.3.26: prompt() bridge ile harici tarayıcı - location.href yerine iframe + prompt kullanılıyor",
         "v4.3.25: openExternalUrl önce custom scheme, sonra plugin/bridge, fallback olarak Intent URL + anchor + window.open",
-        "v4.3.24: Custom URL scheme (openexternal://) ile harici tarayıcı açma - kesinlikle çalışır",
         "v4.3.21: Harici tarayıcı açma için çoklu yöntem (anchor click + window.open + WebChromeClient intercept)",
         "v4.3.20: APK içi sürüm yükseltildi; eski OTA cache otomatik temizlenir (doğru app.html çalışır)",
         "v4.3.19: Harici tarayıcı açma iyileştirildi (UI thread + BROWSABLE + tarayıcı seçici/chooser + hata toast)",
