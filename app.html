@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.23';
+    const APP_VERSION = '4.3.24';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18532,18 +18532,20 @@
         try { inFrame = (window.top && window.top !== window.self); } catch (e) { inFrame = true; }
         if (window.__extUrlDbg) window.__extUrlDbg('v=' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'unknown') + ' iframe=' + (inFrame ? 'EVET' : 'HAYIR') + ' | Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' registerPlugin=' + (hasRegisterPlugin ? 'VAR' : 'YOK') + ' ExternalBrowser=' + (hasExternalBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
 
-        // ===== EN GARANTİLİ YÖNTEM: prompt() ile native iletişim =====
-        // Bu WebView'in temel özelliğidir ve HER ZAMAN çalışır
+        // ===== EN GARANTİLİ YÖNTEM: Custom URL Scheme =====
+        // Bu WebView'de kesinlikle shouldOverrideUrlLoading'i tetikler
         try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem PROMPT: prompt() ile native bridge');
-            var promptResult = prompt('OPEN_URL:' + url);
-            if (window.__extUrlDbg) window.__extUrlDbg('prompt() sonucu: ' + promptResult);
-            if (promptResult === 'OK') {
-                if (window.__extUrlDbg) window.__extUrlDbg('prompt() başarılı!');
-                return; // Başarılı, diğer yöntemleri deneme
-            }
+            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem CUSTOM SCHEME: openexternal:// ile native yönlendirme');
+            // Custom scheme URL oluştur
+            var customSchemeUrl = 'openexternal://' + url;
+            if (window.__extUrlDbg) window.__extUrlDbg('Custom URL: ' + customSchemeUrl);
+            // location.href ile git - bu kesinlikle shouldOverrideUrlLoading'i tetikler
+            window.location.href = customSchemeUrl;
+            // Biraz bekle ve dön
+            await new Promise(r => setTimeout(r, 500));
+            return;
         } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('prompt() hata: ' + (e && e.message ? e.message : String(e)));
+            if (window.__extUrlDbg) window.__extUrlDbg('Custom scheme hata: ' + (e && e.message ? e.message : String(e)));
         }
 
         // Yöntem 1: Custom Capacitor plugin (harici tarayıcı garantisi)
