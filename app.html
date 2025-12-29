@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.29';
+    const APP_VERSION = '4.3.30';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18413,30 +18413,7 @@
     }
 
     // APK İndir
-    // Harici tarayıcıda URL aç - v4.3.15 (Capacitor ExternalBrowser plugin -> AndroidBridge)
-    (function initExtUrlDebugPanel() {
-        try {
-            if (document.getElementById('extUrlDebugPanel')) return;
-            const panel = document.createElement('div');
-            panel.id = 'extUrlDebugPanel';
-            panel.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:99999;background:rgba(0,0,0,0.75);color:#fff;padding:8px 10px;border-radius:10px;font-size:11px;line-height:1.3;max-height:25vh;overflow:auto;display:none;';
-            panel.innerHTML = '<div style="font-weight:700;margin-bottom:4px;">ExtURL Debug</div><div id="extUrlDebugBody"></div>';
-            document.body.appendChild(panel);
-
-            window.__extUrlDbg = function(msg) {
-                try {
-                    panel.style.display = 'block';
-                    const body = document.getElementById('extUrlDebugBody');
-                    if (!body) return;
-                    const line = document.createElement('div');
-                    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
-                    body.appendChild(line);
-                    while (body.childNodes.length > 30) body.removeChild(body.firstChild);
-                    panel.scrollTop = panel.scrollHeight;
-                } catch (e) {}
-            };
-        } catch (e) {}
-    })();
+    // Harici tarayıcıda URL aç - v4.3.30
 
     // Inline onclick bazı WebView/DOM durumlarında hiç tetiklenmeyebiliyor.
     // Bu yüzden capture-phase event delegation ile her dokunuşu yakalıyoruz.
@@ -18457,7 +18434,6 @@
                 const target = e && e.target && e.target.closest ? e.target.closest('[data-ext-url],[data-ext-action]') : null;
                 if (!target) return;
 
-                if (window.__extUrlDbg) window.__extUrlDbg('EVENT yakalandı');
                 try { if (typeof showToast === 'function') showToast('🔗 Açılıyor...'); } catch (err) {}
 
                 // Görsel feedback
@@ -18473,13 +18449,11 @@
                 if (!shouldFireNow()) return;
 
                 if (target.dataset.extUrl) {
-                    if (window.__extUrlDbg) window.__extUrlDbg('ext-url: ' + target.dataset.extUrl);
                     void openExternalUrl(target.dataset.extUrl);
                     return;
                 }
 
                 const action = target.dataset.extAction;
-                if (window.__extUrlDbg) window.__extUrlDbg('ext-action: ' + action);
                 if (action === 'download-apk') {
                     try { downloadAPK(); } catch (err) {}
                     return;
@@ -18492,7 +18466,6 @@
 
             document.addEventListener('click', handle, true);
             document.addEventListener('touchend', handle, { capture: true, passive: false });
-            if (window.__extUrlDbg) window.__extUrlDbg('Delegation aktif');
         } catch (e) {}
     })();
 
@@ -18501,7 +18474,6 @@
             const cap = window.Capacitor;
             if (!cap) return null;
 
-            // Capacitor standard: custom plugins are accessed via registerPlugin()
             if (typeof cap.registerPlugin === 'function') {
                 if (!window.__extUrlExternalBrowserProxy) {
                     try { window.__extUrlExternalBrowserProxy = cap.registerPlugin('ExternalBrowser'); } catch (e) { window.__extUrlExternalBrowserProxy = null; }
@@ -18509,7 +18481,6 @@
                 return window.__extUrlExternalBrowserProxy;
             }
 
-            // Legacy/global fallback
             if (cap.Plugins && cap.Plugins.ExternalBrowser) return cap.Plugins.ExternalBrowser;
         } catch (e) {}
         return null;
@@ -18518,70 +18489,48 @@
     async function openExternalUrl(url) {
         if (!url) {
             try { showToast('❌ URL boş'); } catch (e) {}
-            if (window.__extUrlDbg) window.__extUrlDbg('URL boş');
             return;
         }
 
         const hasCapacitor = !!window.Capacitor;
-        const hasRegisterPlugin = !!(hasCapacitor && typeof window.Capacitor.registerPlugin === 'function');
         const externalBrowserPlugin = getExternalBrowserPlugin();
         const hasExternalBrowserPlugin = !!(externalBrowserPlugin && typeof externalBrowserPlugin.open === 'function');
         const hasAndroidBridge = !!(typeof AndroidBridge !== 'undefined' && AndroidBridge && typeof AndroidBridge.openUrl === 'function');
 
-        if (window.__extUrlDbg) window.__extUrlDbg('openExternalUrl: ' + url);
-        if (window.__extUrlDbg) window.__extUrlDbg('Capacitor=' + (hasCapacitor ? 'VAR' : 'YOK') + ' ExternalBrowser=' + (hasExternalBrowserPlugin ? 'VAR' : 'YOK') + ' AndroidBridge=' + (hasAndroidBridge ? 'VAR' : 'YOK'));
-
         // ===== YÖNTEM 1: prompt() BRIDGE - EN GARANTİLİ =====
-        // WebChromeClient.onJsPrompt tarafından yakalanır
         try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 1: prompt() bridge');
             var result = window.prompt('OPEN_URL:' + url, '');
-            if (result === 'OK') {
-                if (window.__extUrlDbg) window.__extUrlDbg('prompt bridge başarılı');
-                return;
-            }
-        } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('prompt bridge hata: ' + (e && e.message ? e.message : String(e)));
-        }
+            if (result === 'OK') return;
+        } catch (e) {}
 
         // ===== YÖNTEM 2: AndroidBridge =====
         if (hasAndroidBridge) {
             try {
-                if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 2: AndroidBridge.openUrl');
                 AndroidBridge.openUrl(url);
                 return;
-            } catch (e) {
-                if (window.__extUrlDbg) window.__extUrlDbg('AndroidBridge hata: ' + (e && e.message ? e.message : String(e)));
-            }
+            } catch (e) {}
         }
 
         // ===== YÖNTEM 3: Capacitor ExternalBrowser Plugin =====
         if (hasExternalBrowserPlugin) {
             try {
-                if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 3: ExternalBrowser.open');
                 await externalBrowserPlugin.open({ url: url });
                 return;
-            } catch (e) {
-                if (window.__extUrlDbg) window.__extUrlDbg('ExternalBrowser hata: ' + (e && e.message ? e.message : String(e)));
-            }
+            } catch (e) {}
         }
 
         // ===== YÖNTEM 4: Gizli iframe ile custom scheme =====
         try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 4: iframe custom scheme');
             var iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             iframe.src = 'openexternal://' + url;
             document.body.appendChild(iframe);
             setTimeout(function() { try { document.body.removeChild(iframe); } catch(e){} }, 1000);
             await new Promise(r => setTimeout(r, 300));
-        } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('iframe custom scheme hata: ' + (e && e.message ? e.message : String(e)));
-        }
+        } catch (e) {}
 
         // ===== YÖNTEM 5: Intent URL scheme =====
         try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 5: Intent URL');
             var intentUrl = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
             var iframe2 = document.createElement('iframe');
             iframe2.style.display = 'none';
@@ -18589,23 +18538,17 @@
             document.body.appendChild(iframe2);
             setTimeout(function() { try { document.body.removeChild(iframe2); } catch(e){} }, 1000);
             await new Promise(r => setTimeout(r, 300));
-        } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('Intent URL hata: ' + (e && e.message ? e.message : String(e)));
-        }
+        } catch (e) {}
 
         // ===== YÖNTEM 6: window.open =====
         try {
-            if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 6: window.open');
             var win = window.open(url, '_system');
             if (win) return;
-        } catch (e) {
-            if (window.__extUrlDbg) window.__extUrlDbg('window.open hata: ' + (e && e.message ? e.message : String(e)));
-        }
+        } catch (e) {}
 
         // Son mesaj
         try { showToast('⚠️ Tarayıcı açılamadı, URL kopyalandı'); } catch (e) {}
         try { navigator.clipboard.writeText(url); } catch (e) {}
-        if (window.__extUrlDbg) window.__extUrlDbg('Tüm yöntemler denendi');
     }
 
     function downloadAPK() {
