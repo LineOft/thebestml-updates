@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.28';
+    const APP_VERSION = '4.3.29';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12832,10 +12832,11 @@
         }
     }
     
-    // Dinamik APK indirme
+    // Dinamik APK indirme - Harici tarayıcıda aç
     function downloadDynamicApk(url) {
         if (url) {
-            window.open(url, '_blank');
+            showToast('📥 İndirme başlatılıyor...');
+            openExternalUrl(url);
         } else {
             showToast('⚠️ İndirme linki bulunamadı!');
         }
