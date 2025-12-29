@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.24';
+    const APP_VERSION = '4.3.17';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -18575,10 +18575,8 @@
         if (window.__extUrlDbg) window.__extUrlDbg('Fallback başlatılıyor...');
 
         // Yöntem 0: Android Intent URL scheme (EN GARANTİLİ)
-        // Bu WebView'in standart davranışıdır ve her zaman çalışır
         try {
             if (window.__extUrlDbg) window.__extUrlDbg('Yöntem 0: Intent URL scheme');
-            // URL'yi intent:// formatına çevir
             var intentUrl = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;action=android.intent.action.VIEW;end';
             if (window.__extUrlDbg) window.__extUrlDbg('Intent URL: ' + intentUrl);
             window.location.href = intentUrl;
@@ -18587,7 +18585,7 @@
             if (window.__extUrlDbg) window.__extUrlDbg('Intent URL hata: ' + (e && e.message ? e.message : String(e)));
         }
 
-        // Yöntem A: Dinamik <a> elementi oluşturup click() - shouldOverrideUrlLoading güvenilir tetikler
+        // Yöntem A: Dinamik <a> elementi oluşturup click()
         try {
             if (window.__extUrlDbg) window.__extUrlDbg('Yöntem A: Dinamik anchor click');
             var a = document.createElement('a');
@@ -18598,7 +18596,6 @@
             document.body.appendChild(a);
             a.click();
             setTimeout(function() { try { document.body.removeChild(a); } catch(e){} }, 100);
-            // Biraz bekle, eğer sayfa hala buradaysa sonraki yöntemi dene
             await new Promise(r => setTimeout(r, 500));
         } catch (e) {
             if (window.__extUrlDbg) window.__extUrlDbg('Anchor click hata: ' + (e && e.message ? e.message : String(e)));
