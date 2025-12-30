@@ -2964,7 +2964,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.31';
+    const APP_VERSION = '4.3.32';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -7895,6 +7895,7 @@
                         </div>
                         <div style="display: flex; gap: 5px;">
                             <button onclick="previewSavedModal('${id}')" style="background: #2196F3; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">👁️</button>
+                            <button onclick="duplicateSetupModal('${id}')" style="background: #9C27B0; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">📋</button>
                             <button onclick="editSetupModal('${id}')" style="background: #FF9800; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">✏️</button>
                             <button onclick="deleteSetupModal('${id}')" style="background: #f44336; border: none; color: #fff; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px;">🗑️</button>
                         </div>
@@ -7956,6 +7957,58 @@
     // Modal düzenleme
     function editSetupModal(modalId) {
         openSetupModalEditor(modalId);
+    }
+    
+    // Modal kopyalama
+    function duplicateSetupModal(modalId) {
+        if (!setupModals[modalId]) {
+            showToast('❌ Modal bulunamadı');
+            return;
+        }
+        
+        const original = setupModals[modalId];
+        
+        // Yeni ID için kullanıcıdan input al
+        const newId = prompt('Yeni modal ID girin:', modalId + '_copy');
+        if (!newId || newId.trim() === '') {
+            showToast('❌ Geçersiz ID');
+            return;
+        }
+        
+        const trimmedId = newId.trim().replace(/\s+/g, '_');
+        
+        if (setupModals[trimmedId]) {
+            showToast('❌ Bu ID zaten kullanılıyor');
+            return;
+        }
+        
+        // Deep copy
+        const copied = JSON.parse(JSON.stringify(original));
+        copied.title = (copied.title || modalId) + ' (Kopya)';
+        
+        // Editöre yükle
+        editingModalId = null; // Yeni modal olarak
+        editingModalSteps = [...(copied.steps || [])];
+        
+        document.getElementById('setupModalEditorTitle').textContent = '📋 Kopyalanan Modal';
+        document.getElementById('setupModalId').value = trimmedId;
+        document.getElementById('setupModalId').disabled = false;
+        document.getElementById('setupModalTitle').value = copied.title || '';
+        document.getElementById('setupModalIntroVideo').value = copied.introVideo || '';
+        document.getElementById('setupModalApkLabel').value = copied.apkButton?.label || '';
+        document.getElementById('setupModalApkUrl').value = copied.apkButton?.url || '';
+        document.getElementById('setupModalCompatibility').value = (copied.compatibility || []).join('\n');
+        document.getElementById('setupModalGuideTitle').value = copied.guideSection?.title || '';
+        document.getElementById('setupModalGuideVideo').value = copied.guideSection?.video || '';
+        document.getElementById('setupModalGuideDesc').value = copied.guideSection?.description || '';
+        document.getElementById('setupModalWarnings').value = (copied.warnings || []).join('\n');
+        document.getElementById('setupModalSuccessTitle').value = copied.successMessage?.title || 'Kurulum Tamamlandı!';
+        document.getElementById('setupModalSuccessDesc').value = copied.successMessage?.description || '';
+        
+        renderSetupModalSteps();
+        openModal('setupModalEditorModal');
+        
+        showToast('📋 Modal kopyalandı - değişiklikleri yapıp kaydedin');
     }
     
     // Adımları render et
