@@ -1,9 +1,9 @@
 {
-    "version": "4.3.27",
-    "buildNumber": 383,
+    "version": "4.3.31",
+    "buildNumber": 386,
     "minBuildNumber": 150,
     "required": false,
-    "releaseDate": "2025-12-29",
+    "releaseDate": "2025-12-30",
     "fileSize": 6.4,
     "apkUrl": "https://github.com/LineOft/thebestml-updates/releases/download/v4.2.41/GameStore_v4.2.41_debug.apk",
     "changelog": [
