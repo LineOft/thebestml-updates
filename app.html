@@ -3068,7 +3068,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.40';
+    const APP_VERSION = '4.3.41';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -14312,7 +14312,7 @@
             return;
         }
         
-        // Oyun kartı render fonksiyonu (Optimized)
+        // Oyun kartı render fonksiyonu (Optimized + Collapsible Cheats)
         const renderGameItem = (game) => {
             const cheats = game.cheats || {};
             const cheatIds = Object.keys(cheats).sort((a, b) => (cheats[a].sortOrder ?? 999) - (cheats[b].sortOrder ?? 999));
@@ -14349,8 +14349,8 @@
             }
             
             return `
-                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.06); contain: layout style;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.06); contain: layout style; overflow: hidden;">
+                    <div onclick="toggleAdminGameCheats('${game.id}')" style="display: flex; align-items: center; gap: 8px; padding: 10px; cursor: pointer; background: rgba(255,255,255,0.02);">
                         ${game.image ? `<img src="${game.image}" loading="lazy" decoding="async" style="width: 36px; height: 36px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                         <div style="flex: 1; min-width: 0;">
                             <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
@@ -14359,14 +14359,19 @@
                             </div>
                             <div style="font-size: 10px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${game.desc || 'Açıklama yok'}</div>
                         </div>
-                        <div style="display: flex; gap: 3px; flex-shrink: 0;">
+                        <div style="display: flex; gap: 3px; flex-shrink: 0; align-items: center;">
                             <button onclick="event.stopPropagation(); openGameModal('${game.id}')" style="background: #2196F3; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;">✏️</button>
                             <button onclick="event.stopPropagation(); deleteGame('${game.id}')" style="background: #f44336; border: none; color: #fff; padding: 4px 6px; border-radius: 5px; font-size: 9px; cursor: pointer;">🗑️</button>
+                            <div id="admin-game-toggle-${game.id}" style="width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; margin-left: 4px; transition: transform 0.2s; transform: rotate(-90deg);">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg>
+                            </div>
                         </div>
                     </div>
-                    <div style="padding-left: 8px; border-left: 2px solid rgba(255,255,255,0.08);">
-                        ${cheatsHtml}
-                        <button onclick="openCheatModal('${game.id}')" style="width: 100%; margin-top: 6px; background: rgba(33,150,243,0.15); border: 1px dashed rgba(33,150,243,0.4); color: #2196F3; padding: 5px; border-radius: 5px; font-size: 10px; cursor: pointer;">➕ Hile Ekle</button>
+                    <div id="admin-game-cheats-${game.id}" style="max-height: 0; overflow: hidden; transition: max-height 0.25s ease; padding-left: 10px; padding-right: 10px; border-left: 3px solid rgba(33,150,243,0.3); margin-left: 10px;">
+                        <div style="padding-top: 8px; padding-bottom: 8px;">
+                            ${cheatsHtml}
+                            <button onclick="event.stopPropagation(); openCheatModal('${game.id}')" style="width: 100%; margin-top: 6px; background: rgba(33,150,243,0.15); border: 1px dashed rgba(33,150,243,0.4); color: #2196F3; padding: 5px; border-radius: 5px; font-size: 10px; cursor: pointer;">➕ Hile Ekle</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -14451,6 +14456,31 @@
         } else {
             content.style.maxHeight = content.scrollHeight + 'px';
             if (toggle) toggle.style.transform = 'rotate(0deg)';
+        }
+    }
+    
+    // Admin oyun hileleri aç/kapat
+    function toggleAdminGameCheats(gameId) {
+        const content = document.getElementById('admin-game-cheats-' + gameId);
+        const toggle = document.getElementById('admin-game-toggle-' + gameId);
+        if (!content) return;
+        
+        const isOpen = content.style.maxHeight && content.style.maxHeight !== '0px';
+        
+        if (isOpen) {
+            content.style.maxHeight = '0';
+            if (toggle) toggle.style.transform = 'rotate(-90deg)';
+        } else {
+            content.style.maxHeight = content.scrollHeight + 'px';
+            if (toggle) toggle.style.transform = 'rotate(0deg)';
+            
+            // Parent kategori content'in height'ını güncelle
+            setTimeout(() => {
+                const catContent = content.closest('.admin-category-content');
+                if (catContent && catContent.style.maxHeight !== '0px') {
+                    catContent.style.maxHeight = catContent.scrollHeight + 'px';
+                }
+            }, 50);
         }
     }
     
