@@ -106,18 +106,31 @@
     </script>
 </head>
 <style>
+    /* PERFORMANCE: Global optimizations */
     * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { scroll-behavior: auto; }
     body { 
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
         background: #0a0a12;
         min-height: 100vh; 
         color: #fff; 
         overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
         /* Safe area için padding */
         padding-top: env(safe-area-inset-top, 0px);
         padding-bottom: env(safe-area-inset-bottom, 0px);
         padding-left: env(safe-area-inset-left, 0px);
         padding-right: env(safe-area-inset-right, 0px);
+    }
+    /* PERFORMANCE: Optimize scrollable containers */
+    [style*="overflow-y: auto"], [style*="overflow:auto"] {
+        -webkit-overflow-scrolling: touch;
+        will-change: scroll-position;
+    }
+    /* PERFORMANCE: Image rendering */
+    img {
+        image-rendering: -webkit-optimize-contrast;
+        content-visibility: auto;
     }
     
     /* 🏪 Game Store - Hile Mağazası Teması */
@@ -567,8 +580,11 @@
     }
     .category-content.collapsed { max-height: 0; opacity: 0; padding-top: 0; }
     
-    /* GAME CARDS - Modern Design */
-    .game-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    /* GAME CARDS - Modern Design + Performance Optimized */
+    .game-grid { 
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;
+        contain: layout style;
+    }
     .game-card { 
         background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
         border: 1px solid rgba(255,255,255,0.1); 
@@ -576,25 +592,27 @@
         padding: 16px 12px; 
         display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; 
         cursor: pointer; 
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
         position: relative;
         overflow: hidden;
+        contain: layout style paint;
+        will-change: transform;
+        transform: translateZ(0);
     }
     .game-card::before {
         content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
         background: linear-gradient(90deg, #4CAF50, #8BC34A);
-        opacity: 0; transition: opacity 0.3s ease;
+        opacity: 0; transition: opacity 0.2s ease;
     }
-    .game-card:active { transform: scale(0.96); }
+    .game-card:active { transform: scale(0.96) translateZ(0); }
     .game-card:active::before { opacity: 1; }
     .game-icon { 
         width: 70px; height: 70px; border-radius: 18px; object-fit: cover; 
         box-shadow: 0 8px 25px rgba(0,0,0,0.4);
         border: 2px solid rgba(255,255,255,0.1);
-        transition: transform 0.3s ease;
+        transform: translateZ(0);
+        content-visibility: auto;
     }
-    .game-card:active .game-icon { transform: scale(1.05); }
     .game-info { flex: 1; width: 100%; }
     .game-name { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #fff; }
     .game-desc { color: #999; font-size: 11px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
@@ -3050,7 +3068,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.39';
+    const APP_VERSION = '4.3.40';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12517,8 +12535,17 @@
         }
     }
     
-    // Ana sayfadaki oyunları dinamik olarak render et
+    // Ana sayfadaki oyunları dinamik olarak render et (Optimized)
+    let _renderHomeGamesRAF = null;
     function renderHomeGames() {
+        // Debounce with requestAnimationFrame
+        if (_renderHomeGamesRAF) {
+            cancelAnimationFrame(_renderHomeGamesRAF);
+        }
+        _renderHomeGamesRAF = requestAnimationFrame(_renderHomeGamesImpl);
+    }
+    
+    function _renderHomeGamesImpl() {
         const grid = document.getElementById('homeGamesGrid');
         if (!grid) {
             console.error('homeGamesGrid elementi bulunamadı!');
@@ -12551,7 +12578,7 @@
             
             const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22 rx=%2215%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🎮</text></svg>`;
             
-            // Oyun kartı HTML oluştur
+            // Oyun kartı HTML oluştur (Optimized)
             const renderGameCard = (game) => {
                 const cheats = game.cheats || {};
                 const cheatCount = Object.keys(cheats).filter(id => cheats[id]?.status === 'active').length;
@@ -12559,7 +12586,7 @@
                 
                 return `
                     <div class="game-card" onclick="openGameDetail('${game.id}')">
-                        <img src="${imgSrc || fallbackSvg}" alt="${game.name}" class="game-icon" onerror="this.src='${fallbackSvg}'">
+                        <img src="${imgSrc || fallbackSvg}" alt="${game.name}" class="game-icon" loading="lazy" decoding="async" onerror="this.src='${fallbackSvg}'">
                         <div class="game-info">
                             <div class="game-name">${game.name || 'Oyun'}</div>
                             <div class="game-desc">${game.desc || 'Oyun hileleri'}</div>
@@ -14243,7 +14270,16 @@
     
     // ==================== LİSTE GÖRÜNTÜLEME ====================
     
+    // Debounce for loadGameCheatList
+    let _loadGameCheatListRAF = null;
     function loadGameCheatList() {
+        if (_loadGameCheatListRAF) {
+            cancelAnimationFrame(_loadGameCheatListRAF);
+        }
+        _loadGameCheatListRAF = requestAnimationFrame(_loadGameCheatListImpl);
+    }
+    
+    function _loadGameCheatListImpl() {
         const container = document.getElementById('gameCheatList');
         if (!container) return;
         
@@ -14276,7 +14312,7 @@
             return;
         }
         
-        // Oyun kartı render fonksiyonu
+        // Oyun kartı render fonksiyonu (Optimized)
         const renderGameItem = (game) => {
             const cheats = game.cheats || {};
             const cheatIds = Object.keys(cheats).sort((a, b) => (cheats[a].sortOrder ?? 999) - (cheats[b].sortOrder ?? 999));
@@ -14293,8 +14329,8 @@
                 const priceCount = cheat.prices?.length || 0;
                 
                 cheatsHtml += `
-                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        ${cheat.image ? `<img src="${cheat.image}" style="width: 28px; height: 28px; border-radius: 6px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 18px;">🛡️</span>'}
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); contain: layout style;">
+                        ${cheat.image ? `<img src="${cheat.image}" loading="lazy" decoding="async" style="width: 28px; height: 28px; border-radius: 6px; object-fit: cover;" onerror="this.style.display='none'">` : '<span style="font-size: 18px;">🛡️</span>'}
                         <div style="flex: 1; min-width: 0;">
                             <div style="color: #2196F3; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cheatStatus} ${cheat.name} <span style="color: #666;">${cheat.version || ''}</span></div>
                             <div style="font-size: 9px; color: #555;">${featureCount}öz • ${priceCount}fyt ${hasSetup ? '• ✅Krlm' : ''} ${hasVideo ? '• 🎬' : ''}</div>
@@ -14313,9 +14349,9 @@
             }
             
             return `
-                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 10px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,0.06); contain: layout style;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                        ${game.image ? `<img src="${game.image}" style="width: 36px; height: 36px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
+                        ${game.image ? `<img src="${game.image}" loading="lazy" decoding="async" style="width: 36px; height: 36px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'">` : ''}
                         <div style="flex: 1; min-width: 0;">
                             <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                                 <span style="color: #4CAF50; font-weight: bold; font-size: 12px;">${statusBadge} ${game.name}</span>
