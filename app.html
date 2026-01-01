@@ -3050,7 +3050,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.37';
+    const APP_VERSION = '4.3.38';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12584,8 +12584,8 @@
             // Mobil Oyunlar
             if (mobileGames.length > 0) {
                 html += `
-                    <div class="category-section" id="category-mobile">
-                        <div class="category-header mobile" onclick="toggleCategory('mobile')">
+                    <div class="category-section collapsed" id="category-mobile">
+                        <div class="category-header mobile collapsed" onclick="toggleCategory('mobile')">
                             <div class="category-icon-wrapper mobile">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <rect x="5" y="1" width="14" height="22" rx="3" fill="none" stroke="white" stroke-width="2"/>
@@ -12606,7 +12606,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="category-content" id="category-mobile-content">
+                        <div class="category-content collapsed" id="category-mobile-content" style="max-height:0">
                             <div class="game-grid">
                                 ${mobileGames.map(renderGameCard).join('')}
                             </div>
@@ -12618,8 +12618,8 @@
             // Bilgisayar Oyunları
             if (pcGames.length > 0) {
                 html += `
-                    <div class="category-section" id="category-pc">
-                        <div class="category-header pc" onclick="toggleCategory('pc')">
+                    <div class="category-section collapsed" id="category-pc">
+                        <div class="category-header pc collapsed" onclick="toggleCategory('pc')">
                             <div class="category-icon-wrapper pc">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke="white" stroke-width="2"/>
@@ -12640,7 +12640,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="category-content" id="category-pc-content">
+                        <div class="category-content collapsed" id="category-pc-content" style="max-height:0">
                             <div class="game-grid">
                             ${pcGames.map(renderGameCard).join('')}
                         </div>
@@ -12672,7 +12672,7 @@
         }
     }
     
-    // Kategori aç/kapat
+    // Kategori aç/kapat (accordion - sadece bir tane açık kalabilir)
     function toggleCategory(categoryId) {
         const section = document.getElementById('category-' + categoryId);
         const content = document.getElementById('category-' + categoryId + '-content');
@@ -12683,7 +12683,22 @@
         const isCollapsed = section.classList.contains('collapsed');
         
         if (isCollapsed) {
-            // Aç
+            // Önce diğer tüm kategorileri kapat
+            document.querySelectorAll('.category-section').forEach(otherSection => {
+                if (otherSection.id !== 'category-' + categoryId) {
+                    const otherId = otherSection.id.replace('category-', '');
+                    const otherContent = document.getElementById('category-' + otherId + '-content');
+                    const otherHeader = otherSection.querySelector('.category-header');
+                    if (otherContent && !otherSection.classList.contains('collapsed')) {
+                        otherContent.style.maxHeight = '0';
+                        otherSection.classList.add('collapsed');
+                        otherHeader?.classList.add('collapsed');
+                        otherContent.classList.add('collapsed');
+                    }
+                }
+            });
+            
+            // Bu kategoriyi aç
             section.classList.remove('collapsed');
             header.classList.remove('collapsed');
             content.classList.remove('collapsed');
