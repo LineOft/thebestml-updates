@@ -2372,7 +2372,7 @@
     <div class="section">
         <div class="section-title">🎮 Oyunlar</div>
         
-        <div class="game-grid" id="homeGamesGrid">
+        <div id="homeGamesGrid">
             <!-- Dinamik olarak yüklenecek -->
             <div style="text-align: center; padding: 30px; color: #888;">
                 <div style="font-size: 30px; margin-bottom: 10px;">⏳</div>
@@ -3050,7 +3050,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.36';
+    const APP_VERSION = '4.3.37';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12585,7 +12585,7 @@
             if (mobileGames.length > 0) {
                 html += `
                     <div class="category-section" id="category-mobile">
-                        <div class="category-header" onclick="toggleCategory('mobile')">
+                        <div class="category-header mobile" onclick="toggleCategory('mobile')">
                             <div class="category-icon-wrapper mobile">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <rect x="5" y="1" width="14" height="22" rx="3" fill="none" stroke="white" stroke-width="2"/>
@@ -12619,7 +12619,7 @@
             if (pcGames.length > 0) {
                 html += `
                     <div class="category-section" id="category-pc">
-                        <div class="category-header" onclick="toggleCategory('pc')">
+                        <div class="category-header pc" onclick="toggleCategory('pc')">
                             <div class="category-icon-wrapper pc">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke="white" stroke-width="2"/>
