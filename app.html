@@ -518,15 +518,62 @@
     .section { margin-bottom: 25px; }
     .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
     
-    /* GAME CARDS */
-    .game-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .game-card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; cursor: pointer; transition: all 0.3s ease; }
-    .game-card:active { transform: scale(0.98); border-color: #4CAF50; }
-    .game-icon { width: 60px; height: 60px; border-radius: 14px; object-fit: cover; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-    .game-info { flex: 1; }
-    .game-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-    .game-desc { color: #aaa; font-size: 11px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .game-badge { background: linear-gradient(135deg, #4CAF50, #45a049); padding: 3px 8px; border-radius: 20px; font-size: 9px; font-weight: bold; display: inline-block; margin-top: 6px; }
+    /* GAME CATEGORIES */
+    .category-section { margin-bottom: 30px; }
+    .category-header { 
+        display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding: 14px 18px; 
+        background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+        border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    }
+    .category-header.mobile { border-left: 4px solid #4CAF50; }
+    .category-header.pc { border-left: 4px solid #2196F3; }
+    .category-icon { font-size: 28px; }
+    .category-title { font-size: 17px; font-weight: 700; flex: 1; }
+    .category-header.mobile .category-title { color: #4CAF50; }
+    .category-header.pc .category-title { color: #2196F3; }
+    .category-count { 
+        background: rgba(255,255,255,0.1); padding: 5px 12px; border-radius: 20px; 
+        font-size: 12px; font-weight: 600; color: #fff;
+    }
+    
+    /* GAME CARDS - Modern Design */
+    .game-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .game-card { 
+        background: linear-gradient(145deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+        border: 1px solid rgba(255,255,255,0.1); 
+        border-radius: 20px; 
+        padding: 16px 12px; 
+        display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; 
+        cursor: pointer; 
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        position: relative;
+        overflow: hidden;
+    }
+    .game-card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, #4CAF50, #8BC34A);
+        opacity: 0; transition: opacity 0.3s ease;
+    }
+    .game-card:active { transform: scale(0.96); }
+    .game-card:active::before { opacity: 1; }
+    .game-icon { 
+        width: 70px; height: 70px; border-radius: 18px; object-fit: cover; 
+        box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+        border: 2px solid rgba(255,255,255,0.1);
+        transition: transform 0.3s ease;
+    }
+    .game-card:active .game-icon { transform: scale(1.05); }
+    .game-info { flex: 1; width: 100%; }
+    .game-name { font-size: 14px; font-weight: 700; margin-bottom: 6px; color: #fff; }
+    .game-desc { color: #999; font-size: 11px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 8px; }
+    .game-badge { 
+        background: linear-gradient(135deg, #4CAF50, #2E7D32); 
+        padding: 5px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; 
+        display: inline-block; color: #fff;
+        box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+    }
     .game-arrow { display: none; }
     
     /* PAGE SYSTEM */
@@ -2973,7 +3020,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.34';
+    const APP_VERSION = '4.3.35';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12498,11 +12545,11 @@
             // Mobil Oyunlar
             if (mobileGames.length > 0) {
                 html += `
-                    <div class="category-section" style="margin-bottom: 25px;">
-                        <div class="category-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid rgba(76, 175, 80, 0.3);">
-                            <span style="font-size: 24px;">📱</span>
-                            <span style="font-size: 18px; font-weight: bold; color: #4CAF50;">Mobil Oyunlar</span>
-                            <span style="background: rgba(76, 175, 80, 0.2); color: #4CAF50; padding: 3px 10px; border-radius: 12px; font-size: 12px;">${mobileGames.length}</span>
+                    <div class="category-section">
+                        <div class="category-header mobile">
+                            <span class="category-icon">📱</span>
+                            <span class="category-title">Mobil Oyunlar</span>
+                            <span class="category-count">${mobileGames.length} Oyun</span>
                         </div>
                         <div class="game-grid">
                             ${mobileGames.map(renderGameCard).join('')}
@@ -12514,11 +12561,11 @@
             // Bilgisayar Oyunları
             if (pcGames.length > 0) {
                 html += `
-                    <div class="category-section" style="margin-bottom: 25px;">
-                        <div class="category-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid rgba(33, 150, 243, 0.3);">
-                            <span style="font-size: 24px;">💻</span>
-                            <span style="font-size: 18px; font-weight: bold; color: #2196F3;">Bilgisayar Oyunları</span>
-                            <span style="background: rgba(33, 150, 243, 0.2); color: #2196F3; padding: 3px 10px; border-radius: 12px; font-size: 12px;">${pcGames.length}</span>
+                    <div class="category-section">
+                        <div class="category-header pc">
+                            <span class="category-icon">💻</span>
+                            <span class="category-title">Bilgisayar Oyunları</span>
+                            <span class="category-count">${pcGames.length} Oyun</span>
                         </div>
                         <div class="game-grid">
                             ${pcGames.map(renderGameCard).join('')}
@@ -12530,10 +12577,10 @@
             // Hiç aktif oyun yoksa
             if (mobileGames.length === 0 && pcGames.length === 0) {
                 html = `
-                    <div style="text-align: center; padding: 30px; color: #888;">
-                        <div style="font-size: 50px; margin-bottom: 15px;">🎮</div>
-                        <div style="font-size: 16px; margin-bottom: 10px;">Henüz oyun eklenmemiş</div>
-                        <div style="font-size: 13px; color: #666;">Admin panelden yeni oyun ekleyebilirsiniz</div>
+                    <div style="text-align: center; padding: 40px 20px; color: #888;">
+                        <div style="font-size: 60px; margin-bottom: 20px; opacity: 0.5;">🎮</div>
+                        <div style="font-size: 18px; margin-bottom: 10px; font-weight: 600;">Henüz oyun eklenmemiş</div>
+                        <div style="font-size: 14px; color: #666;">Admin panelden yeni oyun ekleyebilirsiniz</div>
                     </div>
                 `;
             }
