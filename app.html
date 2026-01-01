@@ -2038,6 +2038,15 @@
                 <input type="text" id="gamePlayStoreInput" class="auth-input" placeholder="https://play.google.com/store/apps/details?id=...">
             </div>
             
+            <!-- Oyun Kategorisi -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Kategori *</label>
+                <select id="gameCategoryInput" class="auth-input" style="color: #fff;">
+                    <option value="mobile">📱 Mobil Oyunlar</option>
+                    <option value="pc">💻 Bilgisayar Oyunları</option>
+                </select>
+            </div>
+            
             <!-- Oyun Durumu -->
             <div style="margin-bottom: 20px;">
                 <label style="display: block; font-size: 13px; color: #aaa; margin-bottom: 5px;">Durum</label>
@@ -2964,7 +2973,7 @@
         playStoreUrl: 'https://play.google.com/store/apps/details?id=com.mobile.legends'
     };
     
-    const APP_VERSION = '4.3.33';
+    const APP_VERSION = '4.3.34';
     function toggleProfilePanel() {
         const sidebar = document.getElementById('profileSidebar');
         const overlay = document.getElementById('profileOverlay');
@@ -12440,34 +12449,39 @@
         }
         
         try {
-            let html = '';
             // Oyunları sortOrder'a göre sırala
             const gameIds = Object.keys(gamesData || {}).sort((a, b) => {
                 const orderA = gamesData[a].sortOrder ?? 999;
                 const orderB = gamesData[b].sortOrder ?? 999;
                 return orderA - orderB;
             });
-            let activeGames = 0;
             
-            console.log('Render edilecek oyun sayısı:', gameIds.length);
+            // Kategorilere ayır
+            const mobileGames = [];
+            const pcGames = [];
             
             gameIds.forEach(gameId => {
                 const game = gamesData[gameId];
-                if (!game || game.status !== 'active') return; // Sadece aktif oyunları göster
-                activeGames++;
+                if (!game || game.status !== 'active') return;
                 
+                const category = game.category || 'mobile';
+                if (category === 'pc') {
+                    pcGames.push({ id: gameId, ...game });
+                } else {
+                    mobileGames.push({ id: gameId, ...game });
+                }
+            });
+            
+            const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22 rx=%2215%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🎮</text></svg>`;
+            
+            // Oyun kartı HTML oluştur
+            const renderGameCard = (game) => {
                 const cheats = game.cheats || {};
                 const cheatCount = Object.keys(cheats).filter(id => cheats[id]?.status === 'active').length;
+                const imgSrc = game.image && game.image.startsWith('data:') ? game.image : (game.image || '');
                 
-                // Resim - base64 veya URL olabilir
-                const imgSrc = game.image && game.image.startsWith('data:') 
-                    ? game.image 
-                    : (game.image || '');
-                
-                const fallbackSvg = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23333%22 width=%22100%22 height=%22100%22 rx=%2215%22/><text x=%2250%22 y=%2260%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2230%22>🎮</text></svg>`;
-                
-                html += `
-                    <div class="game-card" onclick="openGameDetail('${gameId}')">
+                return `
+                    <div class="game-card" onclick="openGameDetail('${game.id}')">
                         <img src="${imgSrc || fallbackSvg}" alt="${game.name}" class="game-icon" onerror="this.src='${fallbackSvg}'">
                         <div class="game-info">
                             <div class="game-name">${game.name || 'Oyun'}</div>
@@ -12477,10 +12491,44 @@
                         <div class="game-arrow">›</div>
                     </div>
                 `;
-            });
+            };
+            
+            let html = '';
+            
+            // Mobil Oyunlar
+            if (mobileGames.length > 0) {
+                html += `
+                    <div class="category-section" style="margin-bottom: 25px;">
+                        <div class="category-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid rgba(76, 175, 80, 0.3);">
+                            <span style="font-size: 24px;">📱</span>
+                            <span style="font-size: 18px; font-weight: bold; color: #4CAF50;">Mobil Oyunlar</span>
+                            <span style="background: rgba(76, 175, 80, 0.2); color: #4CAF50; padding: 3px 10px; border-radius: 12px; font-size: 12px;">${mobileGames.length}</span>
+                        </div>
+                        <div class="game-grid">
+                            ${mobileGames.map(renderGameCard).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Bilgisayar Oyunları
+            if (pcGames.length > 0) {
+                html += `
+                    <div class="category-section" style="margin-bottom: 25px;">
+                        <div class="category-title" style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid rgba(33, 150, 243, 0.3);">
+                            <span style="font-size: 24px;">💻</span>
+                            <span style="font-size: 18px; font-weight: bold; color: #2196F3;">Bilgisayar Oyunları</span>
+                            <span style="background: rgba(33, 150, 243, 0.2); color: #2196F3; padding: 3px 10px; border-radius: 12px; font-size: 12px;">${pcGames.length}</span>
+                        </div>
+                        <div class="game-grid">
+                            ${pcGames.map(renderGameCard).join('')}
+                        </div>
+                    </div>
+                `;
+            }
             
             // Hiç aktif oyun yoksa
-            if (activeGames === 0) {
+            if (mobileGames.length === 0 && pcGames.length === 0) {
                 html = `
                     <div style="text-align: center; padding: 30px; color: #888;">
                         <div style="font-size: 50px; margin-bottom: 15px;">🎮</div>
@@ -12491,7 +12539,7 @@
             }
             
             grid.innerHTML = html;
-            console.log('Oyunlar render edildi, aktif:', activeGames);
+            console.log('Oyunlar render edildi - Mobil:', mobileGames.length, 'PC:', pcGames.length);
         } catch(e) {
             console.error('renderHomeGames hatası:', e);
             grid.innerHTML = `
@@ -13317,6 +13365,7 @@
             document.getElementById('gameImageData').value = game.image || '';
             document.getElementById('gameDescInput').value = game.desc || '';
             document.getElementById('gamePlayStoreInput').value = game.playStore || '';
+            document.getElementById('gameCategoryInput').value = game.category || 'mobile';
             document.getElementById('gameStatusInput').value = game.status || 'active';
             
             // Mevcut görsel varsa göster
@@ -13333,6 +13382,7 @@
             document.getElementById('gameNameInput').value = '';
             document.getElementById('gameDescInput').value = '';
             document.getElementById('gamePlayStoreInput').value = '';
+            document.getElementById('gameCategoryInput').value = 'mobile';
             document.getElementById('gameStatusInput').value = 'active';
             document.getElementById('gameImagePreview').innerHTML = '';
         }
@@ -13377,6 +13427,7 @@
         const image = document.getElementById('gameImageData').value.trim();
         const desc = document.getElementById('gameDescInput').value.trim();
         const playStore = document.getElementById('gamePlayStoreInput').value.trim();
+        const category = document.getElementById('gameCategoryInput').value;
         const status = document.getElementById('gameStatusInput').value;
         
         if (!name) { showToast('❌ Oyun adı girin'); return; }
@@ -13398,6 +13449,7 @@
             name, 
             image: finalImage, 
             desc, playStore, status,
+            category: category || 'mobile',
             cheats: gamesData[newGameId]?.cheats || {}
         };
         
